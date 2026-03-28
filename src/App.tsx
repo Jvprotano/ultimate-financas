@@ -1,23 +1,23 @@
-import { RotateCcw } from 'lucide-react'
-import { useFinancas } from './hooks/useFinancas'
-import { SalaryInput } from './components/SalaryInput'
-import { DeductionsManager } from './components/DeductionsManager'
-import { CostManager } from './components/CostManager'
-import { BudgetModelSelector } from './components/BudgetModelSelector'
-import { DiversificationSelector } from './components/DiversificationSelector'
-import { Summary } from './components/Summary'
-import { Charts } from './components/Charts'
-import { EmergencyFund } from './components/EmergencyFund'
+import { RotateCcw } from "lucide-react";
+import { useFinancas } from "./hooks/useFinancas";
+import { SalaryInput } from "./components/SalaryInput";
+import { DeductionsManager } from "./components/DeductionsManager";
+import { CostManager } from "./components/CostManager";
+import { BudgetModelSelector } from "./components/BudgetModelSelector";
+import { DiversificationSelector } from "./components/DiversificationSelector";
+import { Summary } from "./components/Summary";
+import { Charts } from "./components/Charts";
+import { EmergencyFund } from "./components/EmergencyFund";
 
 function App() {
-  const f = useFinancas()
+  const f = useFinancas();
 
   const handleReset = () => {
-    if (window.confirm('Tem certeza que deseja limpar todos os dados?')) {
-      localStorage.clear()
-      window.location.reload()
+    if (window.confirm("Tem certeza que deseja limpar todos os dados?")) {
+      localStorage.clear();
+      window.location.reload();
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-dark-bg">
@@ -30,8 +30,12 @@ function App() {
                 <span className="text-white font-bold text-sm">UF</span>
               </div>
               <div>
-                <h1 className="text-lg font-bold text-dark-text leading-tight">Ultimate Financas</h1>
-                <p className="text-[11px] text-dark-text-muted leading-tight">Planejamento Salarial & Investimentos</p>
+                <h1 className="text-lg font-bold text-dark-text leading-tight">
+                  Ultimate Financas
+                </h1>
+                <p className="text-[11px] text-dark-text-muted leading-tight">
+                  Planejamento Salarial & Investimentos
+                </p>
               </div>
             </div>
             <button
@@ -120,13 +124,13 @@ function App() {
       <footer className="border-t border-dark-border mt-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <p className="text-center text-xs text-dark-text-muted">
-            Ultimate Financas — Todos os dados sao salvos apenas no seu navegador.
-            Nenhuma informacao e enviada para servidores externos.
+            Ultimate Finanças — Todos os dados sao salvos apenas no seu
+            navegador. Nenhuma informacao e enviada para servidores externos.
           </p>
         </div>
       </footer>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
