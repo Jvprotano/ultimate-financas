@@ -16,6 +16,12 @@ export type CostCategory =
   | 'dividas'
   | 'outros'
 
+export interface WantItem {
+  id: string
+  name: string
+  percentage: number
+}
+
 export interface DeductionItem {
   id: string
   name: string
@@ -47,11 +53,19 @@ export interface DiversificationSlice {
   color: string
 }
 
+export interface BudgetBucket {
+  target: number
+  actual: number
+  diff: number
+  percentage: number
+}
+
 export interface FinanceState {
   salaryGross: number
   salaryNet: number
   useGrossSalary: boolean
   costs: CostItem[]
+  wants: WantItem[]
   deductions: DeductionItem[]
   selectedModelId: string
   diversification: DiversificationSlice[]

@@ -38,7 +38,6 @@ export function CostManager({ costs, addCost, removeCost, totalCosts }: Props) {
     setShowSuggestions(false)
   }
 
-  // Common quick-add suggestions
   const quickSuggestions: { cat: CostCategory; items: string[] }[] = [
     { cat: 'moradia', items: ['Aluguel', 'Condominio', 'IPTU'] },
     { cat: 'contas', items: ['Energia', 'Internet', 'Celular', 'Streaming'] },
@@ -48,7 +47,18 @@ export function CostManager({ costs, addCost, removeCost, totalCosts }: Props) {
   ]
 
   return (
-    <Card title="Custos Mensais" icon={<Receipt size={18} />} accentColor="bg-rose-500">
+    <Card
+      title="Custos Mensais"
+      icon={<Receipt size={18} />}
+      accentColor="bg-rose-500"
+      collapsible
+      storageKey="costs"
+      headerExtra={
+        totalCosts > 0 ? (
+          <span className="text-sm font-bold text-rose-400">{formatCurrency(totalCosts)}</span>
+        ) : undefined
+      }
+    >
       <div className="space-y-4">
         {/* Quick suggestions toggle */}
         <button

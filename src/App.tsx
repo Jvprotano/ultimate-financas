@@ -3,7 +3,9 @@ import { useFinancas } from "./hooks/useFinancas";
 import { SalaryInput } from "./components/SalaryInput";
 import { DeductionsManager } from "./components/DeductionsManager";
 import { CostManager } from "./components/CostManager";
+import { WantsManager } from "./components/WantsManager";
 import { BudgetModelSelector } from "./components/BudgetModelSelector";
+import { BudgetOverview } from "./components/BudgetOverview";
 import { DiversificationSelector } from "./components/DiversificationSelector";
 import { Summary } from "./components/Summary";
 import { Charts } from "./components/Charts";
@@ -57,19 +59,47 @@ function App() {
         <Summary
           salaryNet={f.salaryNet}
           totalDeductions={f.totalDeductions}
+          benefitDeductions={f.benefitDeductions}
+          investmentDeductions={f.investmentDeductions}
           availableForBudget={f.availableForBudget}
           totalCosts={f.totalCosts}
+          totalWants={f.totalWantsAmount}
           balanceAfterCosts={f.balanceAfterCosts}
         />
 
-        {/* Input Section - 2 columns on large screens */}
+        {/* Budget Model Selection */}
+        <BudgetModelSelector
+          selectedModelId={f.selectedModelId}
+          setSelectedModelId={f.setSelectedModelId}
+          customModel={f.customModel}
+          setCustomModel={f.setCustomModel}
+        />
+
+        {/* Budget Overview - Hero comparison section */}
+        <BudgetOverview
+          budgetComparison={f.budgetComparison}
+          investmentDeductions={f.investmentDeductions}
+          directInvestmentTarget={f.directInvestmentTarget}
+          unallocatedMoney={f.unallocatedMoney}
+          availableForBudget={f.availableForBudget}
+          selectedModel={f.selectedModel}
+          baseBudgetAllocation={f.baseBudgetAllocation}
+          budgetAllocation={f.budgetAllocation}
+          necessidadesSurplus={f.necessidadesSurplus}
+          surplusToDesejos={f.surplusToDesejos}
+          setSurplusToDesejos={f.setSurplusToDesejos}
+        />
+
+        {/* Input Section - 2 columns */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left Column */}
+          {/* Left Column - Income & Expenses */}
           <div className="space-y-6">
             <SalaryInput
               salaryNet={f.salaryNet}
               setSalaryNet={f.setSalaryNet}
               totalDeductions={f.totalDeductions}
+              benefitDeductions={f.benefitDeductions}
+              investmentDeductions={f.investmentDeductions}
             />
 
             <DeductionsManager
@@ -77,6 +107,7 @@ function App() {
               addDeduction={f.addDeduction}
               removeDeduction={f.removeDeduction}
               totalDeductions={f.totalDeductions}
+              investmentDeductions={f.investmentDeductions}
             />
 
             <CostManager
@@ -87,15 +118,16 @@ function App() {
             />
           </div>
 
-          {/* Right Column */}
+          {/* Right Column - Wants & Investments */}
           <div className="space-y-6">
-            <BudgetModelSelector
-              selectedModelId={f.selectedModelId}
-              setSelectedModelId={f.setSelectedModelId}
-              customModel={f.customModel}
-              setCustomModel={f.setCustomModel}
-              budgetAllocation={f.budgetAllocation}
-              availableForBudget={f.availableForBudget}
+            <WantsManager
+              wants={f.wants}
+              addWant={f.addWant}
+              removeWant={f.removeWant}
+              updateWantPercentage={f.updateWantPercentage}
+              wantAllocations={f.wantAllocations}
+              totalWantsPercentage={f.totalWantsPercentage}
+              desejosAmount={f.budgetAllocation.desejos}
             />
 
             <DiversificationSelector
@@ -105,6 +137,8 @@ function App() {
               removeDiversificationSlice={f.removeDiversificationSlice}
               investmentAllocation={f.investmentAllocation}
               totalInvestment={f.budgetAllocation.investimentos}
+              investmentDeductions={f.investmentDeductions}
+              directInvestmentTarget={f.directInvestmentTarget}
             />
 
             <EmergencyFund totalCosts={f.totalCosts} />
@@ -116,7 +150,9 @@ function App() {
           budgetAllocation={f.budgetAllocation}
           investmentAllocation={f.investmentAllocation}
           costsByCategory={f.costsByCategory}
+          wantAllocations={f.wantAllocations}
           availableForBudget={f.availableForBudget}
+          investmentDeductions={f.investmentDeductions}
         />
       </main>
 

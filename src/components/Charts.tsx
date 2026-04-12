@@ -13,8 +13,11 @@ import {
 } from "recharts";
 import { BarChart3 } from "lucide-react";
 import { Card } from "./Card";
-import type { DiversificationSlice, CostCategory } from "../types";
-import { COST_CATEGORY_LABELS, COST_CATEGORY_COLORS } from "../types/constants";
+import type { DiversificationSlice, CostCategory, WantItem } from "../types";
+import {
+  COST_CATEGORY_LABELS,
+  COST_CATEGORY_COLORS,
+} from "../types/constants";
 import { formatCurrency } from "../utils";
 
 interface Props {
@@ -25,10 +28,13 @@ interface Props {
   };
   investmentAllocation: (DiversificationSlice & { amount: number })[];
   costsByCategory: Map<string, number>;
+  wantAllocations: (WantItem & { amount: number })[];
   availableForBudget: number;
+  investmentDeductions: number;
 }
 
 const BUDGET_COLORS = ["#3b82f6", "#a78bfa", "#34d399"];
+const WANT_COLORS = ["#f472b6", "#fb923c", "#a78bfa", "#38bdf8", "#4ade80", "#e879f9", "#fbbf24", "#22d3ee"];
 
 function CustomTooltip({
   active,
@@ -80,7 +86,9 @@ export function Charts({
   budgetAllocation,
   investmentAllocation,
   costsByCategory,
+  wantAllocations,
   availableForBudget,
+  investmentDeductions,
 }: Props) {
   if (availableForBudget <= 0) return null;
 
@@ -102,9 +110,14 @@ export function Charts({
     },
   ].filter((d) => d.value > 0);
 
-  const investmentData = investmentAllocation
-    .filter((d) => d.amount > 0)
-    .map((d) => ({ name: d.name, value: d.amount, color: d.color }));
+  const investmentData = [
+    ...(investmentDeductions > 0
+      ? [{ name: "Previdencia (fonte)", value: investmentDeductions, color: "#f59e0b" }]
+      : []),
+    ...investmentAllocation
+      .filter((d) => d.amount > 0)
+      .map((d) => ({ name: d.name, value: d.amount, color: d.color })),
+  ];
 
   const costData = Array.from(costsByCategory.entries())
     .map(([cat, value]) => ({
@@ -114,11 +127,24 @@ export function Charts({
     }))
     .sort((a, b) => b.value - a.value);
 
+  const wantData = wantAllocations
+    .filter((w) => w.amount > 0)
+    .map((w, i) => ({
+      name: w.name,
+      value: w.amount,
+      fill: WANT_COLORS[i % WANT_COLORS.length],
+    }))
+    .sort((a, b) => b.value - a.value);
+
+  const allExpenseData = [...costData, ...wantData];
+
   return (
     <Card
       title="Visao Geral"
       icon={<BarChart3 size={18} />}
       accentColor="bg-slate-600"
+      collapsible
+      storageKey="charts"
     >
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {/* Budget Split */}
@@ -151,7 +177,7 @@ export function Charts({
         {investmentData.length > 0 && (
           <div>
             <h3 className="text-sm font-semibold text-dark-text-secondary mb-3 text-center">
-              Diversificacao
+              Diversificacao de Investimentos
             </h3>
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
@@ -175,15 +201,15 @@ export function Charts({
           </div>
         )}
 
-        {/* Costs Breakdown */}
-        {costData.length > 0 && (
+        {/* Expenses Breakdown */}
+        {allExpenseData.length > 0 && (
           <div className="md:col-span-2 xl:col-span-1">
             <h3 className="text-sm font-semibold text-dark-text-secondary mb-3 text-center">
-              Custos por Categoria
+              Gastos por Categoria
             </h3>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart
-                data={costData}
+                data={allExpenseData}
                 layout="vertical"
                 margin={{ left: 10, right: 20, top: 5, bottom: 5 }}
               >
@@ -196,12 +222,12 @@ export function Charts({
                 <YAxis
                   type="category"
                   dataKey="name"
-                  width={90}
+                  width={100}
                   tick={{ fontSize: 11, fill: "#94a3b8" }}
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={20}>
-                  {costData.map((entry, i) => (
+                  {allExpenseData.map((entry, i) => (
                     <Cell key={i} fill={entry.fill} />
                   ))}
                 </Bar>

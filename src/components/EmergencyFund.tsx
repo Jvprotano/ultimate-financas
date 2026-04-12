@@ -12,7 +12,7 @@ export function EmergencyFund({ totalCosts }: Props) {
   const months = [3, 6, 12]
 
   return (
-    <Card title="Reserva de Emergencia" icon={<Shield size={18} />} accentColor="bg-slate-600">
+    <Card title="Reserva de Emergencia" icon={<Shield size={18} />} accentColor="bg-slate-600" collapsible storageKey="emergency">
       <div className="space-y-3">
         <p className="text-xs text-dark-text-muted">
           Baseado nos seus custos mensais, o ideal e ter reservado:

@@ -78,6 +78,11 @@ export const DEFAULT_DIVERSIFICATION: DiversificationSlice[] = [
   { id: "cripto", name: "Criptomoedas", percentage: 10, color: "#a78bfa" },
 ];
 
+/** Deduction types that count as investments */
+export const INVESTMENT_DEDUCTION_TYPES: DeductionType[] = [
+  'previdencia_privada',
+];
+
 export const COST_CATEGORIES: {
   key: CostCategory;
   label: string;
@@ -140,6 +145,7 @@ export const COST_CATEGORIES: {
   },
 ];
 
+
 export const COST_CATEGORY_LABELS: Record<CostCategory, string> =
   Object.fromEntries([
     ["moradia", "Moradia"],
@@ -152,6 +158,7 @@ export const COST_CATEGORY_LABELS: Record<CostCategory, string> =
     ["dividas", "Dividas & Parcelas"],
     ["outros", "Outros"],
   ]) as Record<CostCategory, string>;
+
 
 export const DEDUCTION_TYPE_LABELS: Record<DeductionType, string> = {
   previdencia_privada: "Previdencia Privada",
@@ -173,3 +180,4 @@ export const COST_CATEGORY_COLORS: Record<CostCategory, string> = {
   dividas: "#f97316",
   outros: "#64748b",
 };
+

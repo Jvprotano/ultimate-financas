@@ -1,19 +1,12 @@
 import { PieChart, Play } from "lucide-react";
 import { Card } from "./Card";
 import { BUDGET_MODELS, BUDGET_MODEL_VIDEOS } from "../types/constants";
-import { formatCurrency } from "../utils";
 
 interface Props {
   selectedModelId: string;
   setSelectedModelId: (id: string) => void;
   customModel: { n: number; d: number; i: number };
   setCustomModel: (m: { n: number; d: number; i: number }) => void;
-  budgetAllocation: {
-    necessidades: number;
-    desejos: number;
-    investimentos: number;
-  };
-  availableForBudget: number;
 }
 
 export function BudgetModelSelector({
@@ -21,8 +14,6 @@ export function BudgetModelSelector({
   setSelectedModelId,
   customModel,
   setCustomModel,
-  budgetAllocation,
-  availableForBudget,
 }: Props) {
   const isCustom = selectedModelId === "custom";
 
@@ -38,6 +29,13 @@ export function BudgetModelSelector({
       title="Modelo de Orçamento"
       icon={<PieChart size={18} />}
       accentColor="bg-primary-600"
+      collapsible
+      storageKey="budget-model"
+      headerExtra={
+        <span className="text-sm font-bold text-primary-400">
+          {BUDGET_MODELS.find((m) => m.id === selectedModelId)?.name}
+        </span>
+      }
     >
       <div className="space-y-4">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
@@ -67,7 +65,6 @@ export function BudgetModelSelector({
                   </span>
                 </button>
 
-                {/* YouTube tooltip */}
                 {video && (
                   <a
                     href={video.url}
@@ -90,7 +87,6 @@ export function BudgetModelSelector({
           })}
         </div>
 
-        {/* Video hint */}
         <p className="text-[11px] text-dark-text-muted flex items-center gap-1.5">
           <Play size={10} className="text-rose-500" fill="currentColor" />
           Passe o mouse sobre um modelo para ver o video explicativo no YouTube
@@ -147,42 +143,6 @@ export function BudgetModelSelector({
                 Total: {customTotal}% — deve somar 100%
               </p>
             )}
-          </div>
-        )}
-
-        {availableForBudget > 0 && (
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              {
-                label: "Necessidades",
-                value: budgetAllocation.necessidades,
-                color:
-                  "bg-primary-500/10 border-primary-500/20 text-primary-400",
-              },
-              {
-                label: "Desejos",
-                value: budgetAllocation.desejos,
-                color: "bg-violet-500/10 border-violet-500/20 text-violet-400",
-              },
-              {
-                label: "Investimentos",
-                value: budgetAllocation.investimentos,
-                color:
-                  "bg-emerald-500/10 border-emerald-500/20 text-emerald-400",
-              },
-            ].map(({ label, value, color }) => (
-              <div
-                key={label}
-                className={`px-3 py-3 rounded-xl border ${color}`}
-              >
-                <span className="block text-xs font-medium opacity-80">
-                  {label}
-                </span>
-                <span className="block text-base font-bold mt-0.5">
-                  {formatCurrency(value)}
-                </span>
-              </div>
-            ))}
           </div>
         )}
       </div>
