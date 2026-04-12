@@ -8,6 +8,7 @@ import type {
   CostCategory,
   DeductionType,
   BudgetBucket,
+  SalaryInputMode,
 } from '../types'
 import { BUDGET_MODELS, DEFAULT_DIVERSIFICATION, INVESTMENT_DEDUCTION_TYPES } from '../types/constants'
 
@@ -17,6 +18,10 @@ function uid(): string {
 
 export function useFinancas() {
   const [salaryNet, setSalaryNet] = useLocalStorage<number>('uf_salary_net', 0)
+  const [salaryInputMode, setSalaryInputMode] = useLocalStorage<SalaryInputMode>(
+    'uf_salary_input_mode',
+    'before_payroll_deductions',
+  )
   const [costs, setCosts] = useLocalStorage<CostItem[]>('uf_costs', [])
   const [wants, setWants] = useLocalStorage<WantItem[]>('uf_wants', [])
   const [deductions, setDeductions] = useLocalStorage<DeductionItem[]>('uf_deductions', [])
@@ -136,10 +141,21 @@ export function useFinancas() {
     [totalDeductions, investmentDeductions],
   )
 
-  // Available for budget = salary minus benefit deductions only
+  const paycheckInAccount = useMemo(
+    () =>
+      salaryInputMode === 'before_payroll_deductions'
+        ? Math.max(0, salaryNet - totalDeductions)
+        : salaryNet,
+    [salaryInputMode, salaryNet, totalDeductions],
+  )
+
+  // Budget base excludes payroll benefits, but keeps investment deductions counted as investments
   const availableForBudget = useMemo(
-    () => Math.max(0, salaryNet - benefitDeductions),
-    [salaryNet, benefitDeductions],
+    () =>
+      salaryInputMode === 'before_payroll_deductions'
+        ? Math.max(0, salaryNet - benefitDeductions)
+        : salaryNet + investmentDeductions,
+    [salaryInputMode, salaryNet, benefitDeductions, investmentDeductions],
   )
 
   // Base budget allocation from model percentages
@@ -189,6 +205,22 @@ export function useFinancas() {
     [budgetAllocation.desejos, totalWantsPercentage],
   )
 
+  const totalDiversificationPercentage = useMemo(
+    () => diversification.reduce((sum, slice) => sum + slice.percentage, 0),
+    [diversification],
+  )
+
+  // Direct investment amount = effective investment target minus what's already covered by deductions
+  const directInvestmentTarget = useMemo(
+    () => Math.max(0, budgetAllocation.investimentos - investmentDeductions),
+    [budgetAllocation.investimentos, investmentDeductions],
+  )
+
+  const allocatedDirectInvestment = useMemo(
+    () => (directInvestmentTarget * totalDiversificationPercentage) / 100,
+    [directInvestmentTarget, totalDiversificationPercentage],
+  )
+
   // Budget comparison: planned vs actual for each bucket
   const budgetComparison = useMemo((): Record<string, BudgetBucket> => {
     const nTarget = baseBudgetAllocation.necessidades
@@ -210,18 +242,20 @@ export function useFinancas() {
       },
       investimentos: {
         target: iEffective,
-        actual: investmentDeductions,
-        diff: iEffective - investmentDeductions,
-        percentage: iEffective > 0 ? (investmentDeductions / iEffective) * 100 : 0,
+        actual: investmentDeductions + allocatedDirectInvestment,
+        diff: iEffective - (investmentDeductions + allocatedDirectInvestment),
+        percentage: iEffective > 0 ? ((investmentDeductions + allocatedDirectInvestment) / iEffective) * 100 : 0,
       },
     }
-  }, [baseBudgetAllocation, budgetAllocation, totalCosts, totalWantsAmount, totalWantsPercentage, investmentDeductions])
-
-  // Direct investment amount = effective investment target minus what's already covered by deductions
-  const directInvestmentTarget = useMemo(
-    () => Math.max(0, budgetAllocation.investimentos - investmentDeductions),
-    [budgetAllocation.investimentos, investmentDeductions],
-  )
+  }, [
+    allocatedDirectInvestment,
+    baseBudgetAllocation,
+    budgetAllocation,
+    totalCosts,
+    totalWantsAmount,
+    totalWantsPercentage,
+    investmentDeductions,
+  ])
 
   // Investment allocation (diversification) applies to direct investment target
   const investmentAllocation = useMemo(() => {
@@ -240,10 +274,10 @@ export function useFinancas() {
     return map
   }, [costs])
 
-  // Balance: cash in pocket after all spending
+  // Remaining cash in account after current committed costs, wants and allocated direct investments
   const balanceAfterCosts = useMemo(
-    () => salaryNet - totalDeductions - totalCosts,
-    [salaryNet, totalDeductions, totalCosts],
+    () => paycheckInAccount - totalCosts - totalWantsAmount - allocatedDirectInvestment,
+    [paycheckInAccount, totalCosts, totalWantsAmount, allocatedDirectInvestment],
   )
 
   // Unallocated money = available - costs - investment deductions
@@ -255,6 +289,9 @@ export function useFinancas() {
   return {
     salaryNet,
     setSalaryNet,
+    salaryInputMode,
+    setSalaryInputMode,
+    paycheckInAccount,
     costs,
     addCost,
     removeCost,

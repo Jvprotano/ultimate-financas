@@ -72,6 +72,9 @@ function BucketCard({
   extraInfo,
   hasBonus,
   bonusAmount,
+  actualLabel = 'Atual',
+  underLabel = 'Sobrando',
+  exactLabel = 'Exatamente no limite',
 }: {
   label: string;
   modelPct: number;
@@ -84,6 +87,9 @@ function BucketCard({
   extraInfo?: React.ReactNode;
   hasBonus?: boolean;
   bonusAmount?: number;
+  actualLabel?: string;
+  underLabel?: string;
+  exactLabel?: string;
 }) {
   const isOver = bucket.actual > bucket.target;
   const isUnder = bucket.diff > 0;
@@ -130,7 +136,7 @@ function BucketCard({
         </div>
         <div>
           <span className="block text-[11px] text-dark-text-muted uppercase tracking-wide">
-            Atual
+            {actualLabel}
           </span>
           <span className="block text-base font-bold text-dark-text">
             {formatCurrency(bucket.actual)}
@@ -158,12 +164,12 @@ function BucketCard({
           ) : isUnder ? (
             <>
               <CheckCircle2 size={14} />
-              Sobrando {formatCurrency(bucket.diff)}
+              {underLabel} {formatCurrency(bucket.diff)}
             </>
           ) : (
             <>
               <CheckCircle2 size={14} />
-              Exatamente no limite
+              {exactLabel}
             </>
           )}
         </div>
@@ -201,6 +207,14 @@ export function BudgetOverview({
       accentColor="bg-primary-600"
       collapsible
       storageKey="budget-overview"
+      headerExtra={
+        <div className="text-right leading-tight">
+          <span className="block text-[10px] uppercase tracking-wide text-dark-text-muted">
+            Total
+          </span>
+          <span className="text-sm font-bold text-primary-400">{formatCurrency(availableForBudget)}</span>
+        </div>
+      }
     >
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -242,6 +256,9 @@ export function BudgetOverview({
             icon={<TrendingUp size={18} />}
             hasBonus={surplusForInvestimentos > 0}
             bonusAmount={surplusForInvestimentos}
+            actualLabel="Alocado"
+            underLabel="Falta alocar"
+            exactLabel="Total alocado"
             extraInfo={
               investmentDeductions > 0 ? (
                 <div className="space-y-1.5 text-xs">

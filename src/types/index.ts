@@ -60,6 +60,8 @@ export interface BudgetBucket {
   percentage: number
 }
 
+export type SalaryInputMode = 'before_payroll_deductions' | 'take_home'
+
 export interface FinanceState {
   salaryGross: number
   salaryNet: number

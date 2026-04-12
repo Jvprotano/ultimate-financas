@@ -58,6 +58,8 @@ function App() {
         {/* Summary Cards */}
         <Summary
           salaryNet={f.salaryNet}
+          salaryInputMode={f.salaryInputMode}
+          paycheckInAccount={f.paycheckInAccount}
           totalDeductions={f.totalDeductions}
           benefitDeductions={f.benefitDeductions}
           investmentDeductions={f.investmentDeductions}
@@ -97,9 +99,13 @@ function App() {
             <SalaryInput
               salaryNet={f.salaryNet}
               setSalaryNet={f.setSalaryNet}
+              salaryInputMode={f.salaryInputMode}
+              setSalaryInputMode={f.setSalaryInputMode}
+              paycheckInAccount={f.paycheckInAccount}
               totalDeductions={f.totalDeductions}
               benefitDeductions={f.benefitDeductions}
               investmentDeductions={f.investmentDeductions}
+              availableForBudget={f.availableForBudget}
             />
 
             <DeductionsManager

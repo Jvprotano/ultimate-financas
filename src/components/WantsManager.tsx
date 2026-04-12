@@ -63,6 +63,11 @@ export function WantsManager({
       accentColor="bg-violet-600"
       collapsible
       storageKey="wants"
+      headerExtra={
+        desejosAmount > 0 ? (
+          <span className="text-sm font-bold text-violet-400">{formatCurrency(desejosAmount)}</span>
+        ) : undefined
+      }
     >
       <div className="space-y-4">
         {/* Budget info */}

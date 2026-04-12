@@ -56,7 +56,7 @@ export function Card({
           {icon}
         </div>
         <h2 className="text-lg font-semibold text-dark-text flex-1">{title}</h2>
-        {headerExtra && !collapsed && (
+        {headerExtra && (
           <div onClick={(e) => e.stopPropagation()}>
             {headerExtra}
           </div>
