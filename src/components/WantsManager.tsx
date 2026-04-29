@@ -72,7 +72,7 @@ export function WantsManager({
       <div className="space-y-4">
         {/* Budget info */}
         {desejosAmount > 0 && (
-          <div className="px-3 py-2.5 bg-violet-500/10 rounded-xl border border-violet-500/20">
+          <div className="px-3 py-2.5 bg-violet-500/10 rounded-lg border border-violet-500/20">
             <div className="flex justify-between items-center">
               <span className="text-sm text-violet-400">Orçamento para desejos</span>
               <span className="text-sm font-bold text-violet-400">{formatCurrency(desejosAmount)}</span>
@@ -105,13 +105,13 @@ export function WantsManager({
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Outro desejo..."
-            className="flex-1 px-3 py-2 rounded-xl border border-dark-border bg-dark-input text-dark-text text-sm
+            className="flex-1 px-3 py-2 rounded-lg border border-dark-border bg-dark-input text-dark-text text-sm
               focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500 transition-all"
           />
           <button
             onClick={handleAdd}
             disabled={!newName.trim()}
-            className="flex items-center gap-1 px-3 py-2 rounded-xl bg-violet-600 text-white text-sm font-medium
+            className="flex items-center gap-1 px-3 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium
               hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             <Plus size={16} />

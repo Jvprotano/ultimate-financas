@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { useLocalStorage } from './useLocalStorage'
 import type {
   CostItem,
@@ -9,326 +9,485 @@ import type {
   DeductionType,
   BudgetBucket,
   SalaryInputMode,
+  FinanceScenario,
+  FinanceScenarioData,
+  ScenarioSummary,
 } from '../types'
 import { BUDGET_MODELS, DEFAULT_DIVERSIFICATION, INVESTMENT_DEDUCTION_TYPES } from '../types/constants'
+
+const SCENARIOS_STORAGE_KEY = 'uf_scenarios_v2'
+const ACTIVE_SCENARIO_STORAGE_KEY = 'uf_active_scenario_v2'
 
 function uid(): string {
   return Math.random().toString(36).slice(2, 10)
 }
 
+function nowIso(): string {
+  return new Date().toISOString()
+}
+
+function readJson<T>(key: string, fallback: T): T {
+  try {
+    const item = window.localStorage.getItem(key)
+    return item ? (JSON.parse(item) as T) : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function createDefaultScenario(name = 'Atual'): FinanceScenario {
+  const timestamp = nowIso()
+
+  return {
+    id: uid(),
+    name,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    salaryNet: 0,
+    salaryInputMode: 'before_payroll_deductions',
+    costs: [],
+    wants: [],
+    deductions: [],
+    selectedModelId: '50-30-20',
+    diversification: DEFAULT_DIVERSIFICATION,
+    customModel: { n: 50, d: 30, i: 20 },
+    surplusToDesejos: 50,
+  }
+}
+
+function migrateLegacyScenario(): FinanceScenario {
+  const timestamp = nowIso()
+
+  return {
+    id: uid(),
+    name: 'Atual',
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    salaryNet: readJson<number>('uf_salary_net', 0),
+    salaryInputMode: readJson<SalaryInputMode>('uf_salary_input_mode', 'before_payroll_deductions'),
+    costs: readJson<CostItem[]>('uf_costs', []),
+    wants: readJson<WantItem[]>('uf_wants', []),
+    deductions: readJson<DeductionItem[]>('uf_deductions', []),
+    selectedModelId: readJson<string>('uf_model', '50-30-20'),
+    diversification: readJson<DiversificationSlice[]>('uf_diversification', DEFAULT_DIVERSIFICATION),
+    customModel: readJson<{ n: number; d: number; i: number }>('uf_custom_model', { n: 50, d: 30, i: 20 }),
+    surplusToDesejos: readJson<number>('uf_surplus_desejos', 50),
+  }
+}
+
+function loadInitialScenarios(): FinanceScenario[] {
+  const existing = readJson<FinanceScenario[] | null>(SCENARIOS_STORAGE_KEY, null)
+  if (existing?.length) return existing
+
+  const legacyScenario = migrateLegacyScenario()
+  const hasLegacyData =
+    legacyScenario.salaryNet > 0 ||
+    legacyScenario.costs.length > 0 ||
+    legacyScenario.wants.length > 0 ||
+    legacyScenario.deductions.length > 0
+
+  return hasLegacyData ? [legacyScenario] : [createDefaultScenario('Atual')]
+}
+
+function cloneScenario(source: FinanceScenario, name: string): FinanceScenario {
+  const timestamp = nowIso()
+
+  return {
+    ...structuredClone(source),
+    id: uid(),
+    name,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }
+}
+
+function getSelectedModel(state: FinanceScenarioData) {
+  const model = BUDGET_MODELS.find((m) => m.id === state.selectedModelId) ?? BUDGET_MODELS[0]
+  if (model.id === 'custom') {
+    return {
+      ...model,
+      necessidades: state.customModel.n,
+      desejos: state.customModel.d,
+      investimentos: state.customModel.i,
+    }
+  }
+  return model
+}
+
+function calculateScenario(state: FinanceScenarioData) {
+  const selectedModel = getSelectedModel(state)
+  const totalCosts = state.costs.reduce((sum, c) => sum + c.value, 0)
+  const totalDeductions = state.deductions.reduce((sum, d) => sum + d.value, 0)
+  const investmentDeductions = state.deductions
+    .filter((d) => INVESTMENT_DEDUCTION_TYPES.includes(d.type))
+    .reduce((sum, d) => sum + d.value, 0)
+  const benefitDeductions = totalDeductions - investmentDeductions
+  const paycheckInAccount =
+    state.salaryInputMode === 'before_payroll_deductions'
+      ? Math.max(0, state.salaryNet - totalDeductions)
+      : state.salaryNet
+  const availableForBudget =
+    state.salaryInputMode === 'before_payroll_deductions'
+      ? Math.max(0, state.salaryNet - benefitDeductions)
+      : state.salaryNet + investmentDeductions
+
+  const baseBudgetAllocation = {
+    necessidades: (availableForBudget * selectedModel.necessidades) / 100,
+    desejos: (availableForBudget * selectedModel.desejos) / 100,
+    investimentos: (availableForBudget * selectedModel.investimentos) / 100,
+  }
+
+  const necessidadesSurplus = Math.max(0, baseBudgetAllocation.necessidades - totalCosts)
+  const surplusForDesejos = (necessidadesSurplus * state.surplusToDesejos) / 100
+  const surplusForInvestimentos = necessidadesSurplus - surplusForDesejos
+
+  const budgetAllocation = {
+    necessidades: baseBudgetAllocation.necessidades,
+    desejos: baseBudgetAllocation.desejos + surplusForDesejos,
+    investimentos: baseBudgetAllocation.investimentos + surplusForInvestimentos,
+  }
+
+  const totalWantsPercentage = state.wants.reduce((sum, w) => sum + w.percentage, 0)
+  const wantAllocations = state.wants.map((w) => ({
+    ...w,
+    amount: (budgetAllocation.desejos * w.percentage) / 100,
+  }))
+  const totalWantsAmount = (budgetAllocation.desejos * totalWantsPercentage) / 100
+  const totalDiversificationPercentage = state.diversification.reduce((sum, slice) => sum + slice.percentage, 0)
+  const directInvestmentTarget = Math.max(0, budgetAllocation.investimentos - investmentDeductions)
+  const allocatedDirectInvestment = (directInvestmentTarget * totalDiversificationPercentage) / 100
+
+  const budgetComparison: Record<string, BudgetBucket> = {
+    necessidades: {
+      target: baseBudgetAllocation.necessidades,
+      actual: totalCosts,
+      diff: baseBudgetAllocation.necessidades - totalCosts,
+      percentage: baseBudgetAllocation.necessidades > 0 ? (totalCosts / baseBudgetAllocation.necessidades) * 100 : 0,
+    },
+    desejos: {
+      target: budgetAllocation.desejos,
+      actual: totalWantsAmount,
+      diff: budgetAllocation.desejos - totalWantsAmount,
+      percentage: totalWantsPercentage,
+    },
+    investimentos: {
+      target: budgetAllocation.investimentos,
+      actual: investmentDeductions + allocatedDirectInvestment,
+      diff: budgetAllocation.investimentos - (investmentDeductions + allocatedDirectInvestment),
+      percentage:
+        budgetAllocation.investimentos > 0
+          ? ((investmentDeductions + allocatedDirectInvestment) / budgetAllocation.investimentos) * 100
+          : 0,
+    },
+  }
+
+  const investmentAllocation = state.diversification.map((slice) => ({
+    ...slice,
+    amount: (directInvestmentTarget * slice.percentage) / 100,
+  }))
+
+  const costsByCategory = new Map<string, number>()
+  for (const c of state.costs) {
+    costsByCategory.set(c.category, (costsByCategory.get(c.category) || 0) + c.value)
+  }
+
+  const balanceAfterCosts = paycheckInAccount - totalCosts - totalWantsAmount - allocatedDirectInvestment
+  const unallocatedMoney = availableForBudget - totalCosts - investmentDeductions
+
+  return {
+    selectedModel,
+    totalCosts,
+    totalDeductions,
+    investmentDeductions,
+    benefitDeductions,
+    paycheckInAccount,
+    availableForBudget,
+    baseBudgetAllocation,
+    budgetAllocation,
+    necessidadesSurplus,
+    totalWantsPercentage,
+    wantAllocations,
+    totalWantsAmount,
+    totalDiversificationPercentage,
+    directInvestmentTarget,
+    allocatedDirectInvestment,
+    budgetComparison,
+    investmentAllocation,
+    costsByCategory,
+    balanceAfterCosts,
+    unallocatedMoney,
+  }
+}
+
 export function useFinancas() {
-  const [salaryNet, setSalaryNet] = useLocalStorage<number>('uf_salary_net', 0)
-  const [salaryInputMode, setSalaryInputMode] = useLocalStorage<SalaryInputMode>(
-    'uf_salary_input_mode',
-    'before_payroll_deductions',
+  const [scenarios, setScenarios] = useLocalStorage<FinanceScenario[]>(SCENARIOS_STORAGE_KEY, loadInitialScenarios())
+  const [activeScenarioId, setActiveScenarioId] = useLocalStorage<string>(
+    ACTIVE_SCENARIO_STORAGE_KEY,
+    scenarios[0]?.id ?? '',
   )
-  const [costs, setCosts] = useLocalStorage<CostItem[]>('uf_costs', [])
-  const [wants, setWants] = useLocalStorage<WantItem[]>('uf_wants', [])
-  const [deductions, setDeductions] = useLocalStorage<DeductionItem[]>('uf_deductions', [])
-  const [selectedModelId, setSelectedModelId] = useLocalStorage<string>('uf_model', '50-30-20')
-  const [diversification, setDiversification] = useLocalStorage<DiversificationSlice[]>(
-    'uf_diversification',
-    DEFAULT_DIVERSIFICATION,
+
+  useEffect(() => {
+    if (scenarios.length === 0) {
+      const scenario = createDefaultScenario('Atual')
+      setScenarios([scenario])
+      setActiveScenarioId(scenario.id)
+      return
+    }
+
+    if (!scenarios.some((scenario) => scenario.id === activeScenarioId)) {
+      setActiveScenarioId(scenarios[0].id)
+    }
+  }, [activeScenarioId, scenarios, setActiveScenarioId, setScenarios])
+
+  const activeScenario = scenarios.find((scenario) => scenario.id === activeScenarioId) ?? scenarios[0] ?? createDefaultScenario('Atual')
+  const activeId = activeScenario?.id ?? ''
+
+  const updateActiveScenario = useCallback(
+    (updater: (scenario: FinanceScenario) => FinanceScenario) => {
+      setScenarios((prev) =>
+        prev.map((scenario) =>
+          scenario.id === activeId ? { ...updater(scenario), updatedAt: nowIso() } : scenario,
+        ),
+      )
+    },
+    [activeId, setScenarios],
   )
-  const [customModel, setCustomModel] = useLocalStorage<{ n: number; d: number; i: number }>(
-    'uf_custom_model',
-    { n: 50, d: 30, i: 20 },
+
+  const setScenarioField = useCallback(
+    <K extends keyof FinanceScenarioData>(field: K, value: FinanceScenarioData[K]) => {
+      updateActiveScenario((scenario) => ({ ...scenario, [field]: value }))
+    },
+    [updateActiveScenario],
   )
-  // How much of the necessidades surplus goes to desejos (0-100), rest goes to investimentos
-  const [surplusToDesejos, setSurplusToDesejos] = useLocalStorage<number>('uf_surplus_desejos', 50)
+
+  const createScenario = useCallback(
+    (name = `Cenario ${scenarios.length + 1}`) => {
+      const scenario = createDefaultScenario(name)
+      setScenarios((prev) => [...prev, scenario])
+      setActiveScenarioId(scenario.id)
+    },
+    [scenarios.length, setActiveScenarioId, setScenarios],
+  )
+
+  const duplicateScenario = useCallback(
+    (sourceId = activeId) => {
+      const source = scenarios.find((scenario) => scenario.id === sourceId) ?? activeScenario
+      if (!source) return
+      const scenario = cloneScenario(source, `${source.name} - futuro`)
+      setScenarios((prev) => [...prev, scenario])
+      setActiveScenarioId(scenario.id)
+    },
+    [activeId, activeScenario, scenarios, setActiveScenarioId, setScenarios],
+  )
+
+  const renameScenario = useCallback(
+    (id: string, name: string) => {
+      const trimmed = name.trim()
+      if (!trimmed) return
+      setScenarios((prev) =>
+        prev.map((scenario) =>
+          scenario.id === id ? { ...scenario, name: trimmed, updatedAt: nowIso() } : scenario,
+        ),
+      )
+    },
+    [setScenarios],
+  )
+
+  const removeScenario = useCallback(
+    (id: string) => {
+      if (scenarios.length <= 1) return
+      const remaining = scenarios.filter((scenario) => scenario.id !== id)
+      setScenarios(remaining)
+      if (id === activeId) {
+        setActiveScenarioId(remaining[0]?.id ?? '')
+      }
+    },
+    [activeId, scenarios, setActiveScenarioId, setScenarios],
+  )
 
   // Costs CRUD
   const addCost = useCallback(
     (name: string, value: number, category: CostCategory) => {
-      setCosts((prev) => [...prev, { id: uid(), name, value, category }])
+      updateActiveScenario((scenario) => ({
+        ...scenario,
+        costs: [...scenario.costs, { id: uid(), name, value, category }],
+      }))
     },
-    [setCosts],
+    [updateActiveScenario],
   )
 
   const removeCost = useCallback(
     (id: string) => {
-      setCosts((prev) => prev.filter((c) => c.id !== id))
+      updateActiveScenario((scenario) => ({
+        ...scenario,
+        costs: scenario.costs.filter((c) => c.id !== id),
+      }))
     },
-    [setCosts],
+    [updateActiveScenario],
   )
 
-  // Wants CRUD (percentage-based)
+  // Wants CRUD
   const addWant = useCallback(
     (name: string) => {
-      setWants((prev) => [...prev, { id: uid(), name, percentage: 0 }])
+      updateActiveScenario((scenario) => ({
+        ...scenario,
+        wants: [...scenario.wants, { id: uid(), name, percentage: 0 }],
+      }))
     },
-    [setWants],
+    [updateActiveScenario],
   )
 
   const removeWant = useCallback(
     (id: string) => {
-      setWants((prev) => prev.filter((w) => w.id !== id))
+      updateActiveScenario((scenario) => ({
+        ...scenario,
+        wants: scenario.wants.filter((w) => w.id !== id),
+      }))
     },
-    [setWants],
+    [updateActiveScenario],
   )
 
   const updateWantPercentage = useCallback(
     (id: string, percentage: number) => {
-      setWants((prev) =>
-        prev.map((w) => (w.id === id ? { ...w, percentage: Math.max(0, Math.min(100, percentage)) } : w)),
-      )
+      updateActiveScenario((scenario) => ({
+        ...scenario,
+        wants: scenario.wants.map((w) =>
+          w.id === id ? { ...w, percentage: Math.max(0, Math.min(100, percentage)) } : w,
+        ),
+      }))
     },
-    [setWants],
+    [updateActiveScenario],
   )
 
   // Deductions CRUD
   const addDeduction = useCallback(
     (name: string, value: number, type: DeductionType) => {
-      setDeductions((prev) => [...prev, { id: uid(), name, value, type }])
+      updateActiveScenario((scenario) => ({
+        ...scenario,
+        deductions: [...scenario.deductions, { id: uid(), name, value, type }],
+      }))
     },
-    [setDeductions],
+    [updateActiveScenario],
   )
 
   const removeDeduction = useCallback(
     (id: string) => {
-      setDeductions((prev) => prev.filter((d) => d.id !== id))
+      updateActiveScenario((scenario) => ({
+        ...scenario,
+        deductions: scenario.deductions.filter((d) => d.id !== id),
+      }))
     },
-    [setDeductions],
+    [updateActiveScenario],
   )
 
   // Diversification
   const updateDiversification = useCallback(
     (slices: DiversificationSlice[]) => {
-      setDiversification(slices)
+      setScenarioField('diversification', slices)
     },
-    [setDiversification],
+    [setScenarioField],
   )
 
   const addDiversificationSlice = useCallback(
     (name: string, percentage: number, color: string) => {
-      setDiversification((prev) => [...prev, { id: uid(), name, percentage, color }])
+      updateActiveScenario((scenario) => ({
+        ...scenario,
+        diversification: [...scenario.diversification, { id: uid(), name, percentage, color }],
+      }))
     },
-    [setDiversification],
+    [updateActiveScenario],
   )
 
   const removeDiversificationSlice = useCallback(
     (id: string) => {
-      setDiversification((prev) => prev.filter((s) => s.id !== id))
+      updateActiveScenario((scenario) => ({
+        ...scenario,
+        diversification: scenario.diversification.filter((s) => s.id !== id),
+      }))
     },
-    [setDiversification],
+    [updateActiveScenario],
   )
 
-  // Selected budget model
-  const selectedModel = useMemo(() => {
-    const model = BUDGET_MODELS.find((m) => m.id === selectedModelId)
-    if (!model) return BUDGET_MODELS[0]
-    if (model.id === 'custom') {
-      return { ...model, necessidades: customModel.n, desejos: customModel.d, investimentos: customModel.i }
-    }
-    return model
-  }, [selectedModelId, customModel])
+  const metrics = useMemo(() => calculateScenario(activeScenario), [activeScenario])
 
-  // Totals
-  const totalCosts = useMemo(() => costs.reduce((sum, c) => sum + c.value, 0), [costs])
-  const totalDeductions = useMemo(() => deductions.reduce((sum, d) => sum + d.value, 0), [deductions])
-
-  // Split deductions: investment-type vs benefit-type
-  const investmentDeductions = useMemo(
+  const scenarioSummaries = useMemo<ScenarioSummary[]>(
     () =>
-      deductions
-        .filter((d) => INVESTMENT_DEDUCTION_TYPES.includes(d.type))
-        .reduce((sum, d) => sum + d.value, 0),
-    [deductions],
-  )
+      scenarios.map((scenario) => {
+        const summary = calculateScenario(scenario)
+        const savingsRate =
+          summary.availableForBudget > 0
+            ? (summary.budgetComparison.investimentos.actual / summary.availableForBudget) * 100
+            : 0
 
-  const benefitDeductions = useMemo(
-    () => totalDeductions - investmentDeductions,
-    [totalDeductions, investmentDeductions],
-  )
-
-  const paycheckInAccount = useMemo(
-    () =>
-      salaryInputMode === 'before_payroll_deductions'
-        ? Math.max(0, salaryNet - totalDeductions)
-        : salaryNet,
-    [salaryInputMode, salaryNet, totalDeductions],
-  )
-
-  // Budget base excludes payroll benefits, but keeps investment deductions counted as investments
-  const availableForBudget = useMemo(
-    () =>
-      salaryInputMode === 'before_payroll_deductions'
-        ? Math.max(0, salaryNet - benefitDeductions)
-        : salaryNet + investmentDeductions,
-    [salaryInputMode, salaryNet, benefitDeductions, investmentDeductions],
-  )
-
-  // Base budget allocation from model percentages
-  const baseBudgetAllocation = useMemo(() => {
-    const base = availableForBudget
-    return {
-      necessidades: (base * selectedModel.necessidades) / 100,
-      desejos: (base * selectedModel.desejos) / 100,
-      investimentos: (base * selectedModel.investimentos) / 100,
-    }
-  }, [availableForBudget, selectedModel])
-
-  // Surplus from necessidades: model target minus actual fixed costs
-  const necessidadesSurplus = useMemo(
-    () => Math.max(0, baseBudgetAllocation.necessidades - totalCosts),
-    [baseBudgetAllocation.necessidades, totalCosts],
-  )
-
-  // Effective budget allocation: base + redistributed surplus
-  const budgetAllocation = useMemo(() => {
-    const surplusForDesejos = necessidadesSurplus * surplusToDesejos / 100
-    const surplusForInvestimentos = necessidadesSurplus - surplusForDesejos
-    return {
-      necessidades: baseBudgetAllocation.necessidades,
-      desejos: baseBudgetAllocation.desejos + surplusForDesejos,
-      investimentos: baseBudgetAllocation.investimentos + surplusForInvestimentos,
-    }
-  }, [baseBudgetAllocation, necessidadesSurplus, surplusToDesejos])
-
-  // Wants: percentage-based allocation of effective desejos budget
-  const totalWantsPercentage = useMemo(
-    () => wants.reduce((sum, w) => sum + w.percentage, 0),
-    [wants],
-  )
-
-  const wantAllocations = useMemo(
-    () =>
-      wants.map((w) => ({
-        ...w,
-        amount: (budgetAllocation.desejos * w.percentage) / 100,
-      })),
-    [wants, budgetAllocation.desejos],
-  )
-
-  const totalWantsAmount = useMemo(
-    () => (budgetAllocation.desejos * totalWantsPercentage) / 100,
-    [budgetAllocation.desejos, totalWantsPercentage],
-  )
-
-  const totalDiversificationPercentage = useMemo(
-    () => diversification.reduce((sum, slice) => sum + slice.percentage, 0),
-    [diversification],
-  )
-
-  // Direct investment amount = effective investment target minus what's already covered by deductions
-  const directInvestmentTarget = useMemo(
-    () => Math.max(0, budgetAllocation.investimentos - investmentDeductions),
-    [budgetAllocation.investimentos, investmentDeductions],
-  )
-
-  const allocatedDirectInvestment = useMemo(
-    () => (directInvestmentTarget * totalDiversificationPercentage) / 100,
-    [directInvestmentTarget, totalDiversificationPercentage],
-  )
-
-  // Budget comparison: planned vs actual for each bucket
-  const budgetComparison = useMemo((): Record<string, BudgetBucket> => {
-    const nTarget = baseBudgetAllocation.necessidades
-    const dEffective = budgetAllocation.desejos
-    const iEffective = budgetAllocation.investimentos
-
-    return {
-      necessidades: {
-        target: nTarget,
-        actual: totalCosts,
-        diff: nTarget - totalCosts,
-        percentage: nTarget > 0 ? (totalCosts / nTarget) * 100 : 0,
-      },
-      desejos: {
-        target: dEffective,
-        actual: totalWantsAmount,
-        diff: dEffective - totalWantsAmount,
-        percentage: totalWantsPercentage,
-      },
-      investimentos: {
-        target: iEffective,
-        actual: investmentDeductions + allocatedDirectInvestment,
-        diff: iEffective - (investmentDeductions + allocatedDirectInvestment),
-        percentage: iEffective > 0 ? ((investmentDeductions + allocatedDirectInvestment) / iEffective) * 100 : 0,
-      },
-    }
-  }, [
-    allocatedDirectInvestment,
-    baseBudgetAllocation,
-    budgetAllocation,
-    totalCosts,
-    totalWantsAmount,
-    totalWantsPercentage,
-    investmentDeductions,
-  ])
-
-  // Investment allocation (diversification) applies to direct investment target
-  const investmentAllocation = useMemo(() => {
-    return diversification.map((slice) => ({
-      ...slice,
-      amount: (directInvestmentTarget * slice.percentage) / 100,
-    }))
-  }, [directInvestmentTarget, diversification])
-
-  // Costs grouped by category
-  const costsByCategory = useMemo(() => {
-    const map = new Map<string, number>()
-    for (const c of costs) {
-      map.set(c.category, (map.get(c.category) || 0) + c.value)
-    }
-    return map
-  }, [costs])
-
-  // Remaining cash in account after current committed costs, wants and allocated direct investments
-  const balanceAfterCosts = useMemo(
-    () => paycheckInAccount - totalCosts - totalWantsAmount - allocatedDirectInvestment,
-    [paycheckInAccount, totalCosts, totalWantsAmount, allocatedDirectInvestment],
-  )
-
-  // Unallocated money = available - costs - investment deductions
-  const unallocatedMoney = useMemo(
-    () => availableForBudget - totalCosts - investmentDeductions,
-    [availableForBudget, totalCosts, investmentDeductions],
+        return {
+          id: scenario.id,
+          name: scenario.name,
+          salaryNet: scenario.salaryNet,
+          paycheckInAccount: summary.paycheckInAccount,
+          availableForBudget: summary.availableForBudget,
+          totalCosts: summary.totalCosts,
+          totalWantsAmount: summary.totalWantsAmount,
+          investmentDeductions: summary.investmentDeductions,
+          directInvestmentTarget: summary.directInvestmentTarget,
+          balanceAfterCosts: summary.balanceAfterCosts,
+          savingsRate,
+        }
+      }),
+    [scenarios],
   )
 
   return {
-    salaryNet,
-    setSalaryNet,
-    salaryInputMode,
-    setSalaryInputMode,
-    paycheckInAccount,
-    costs,
+    scenarios,
+    activeScenario,
+    activeScenarioId: activeId,
+    setActiveScenarioId,
+    createScenario,
+    duplicateScenario,
+    renameScenario,
+    removeScenario,
+    scenarioSummaries,
+    salaryNet: activeScenario.salaryNet,
+    setSalaryNet: (value: number) => setScenarioField('salaryNet', value),
+    salaryInputMode: activeScenario.salaryInputMode,
+    setSalaryInputMode: (mode: SalaryInputMode) => setScenarioField('salaryInputMode', mode),
+    paycheckInAccount: metrics.paycheckInAccount,
+    costs: activeScenario.costs,
     addCost,
     removeCost,
-    wants,
+    wants: activeScenario.wants,
     addWant,
     removeWant,
     updateWantPercentage,
-    wantAllocations,
-    totalWantsPercentage,
-    totalWantsAmount,
-    deductions,
+    wantAllocations: metrics.wantAllocations,
+    totalWantsPercentage: metrics.totalWantsPercentage,
+    totalWantsAmount: metrics.totalWantsAmount,
+    deductions: activeScenario.deductions,
     addDeduction,
     removeDeduction,
-    selectedModelId,
-    setSelectedModelId,
-    selectedModel,
-    customModel,
-    setCustomModel,
-    diversification,
+    selectedModelId: activeScenario.selectedModelId,
+    setSelectedModelId: (id: string) => setScenarioField('selectedModelId', id),
+    selectedModel: metrics.selectedModel,
+    customModel: activeScenario.customModel,
+    setCustomModel: (model: { n: number; d: number; i: number }) => setScenarioField('customModel', model),
+    diversification: activeScenario.diversification,
     updateDiversification,
     addDiversificationSlice,
     removeDiversificationSlice,
-    totalCosts,
-    totalDeductions,
-    investmentDeductions,
-    benefitDeductions,
-    availableForBudget,
-    baseBudgetAllocation,
-    budgetAllocation,
-    necessidadesSurplus,
-    surplusToDesejos,
-    setSurplusToDesejos,
-    budgetComparison,
-    directInvestmentTarget,
-    investmentAllocation,
-    costsByCategory,
-    balanceAfterCosts,
-    unallocatedMoney,
+    totalCosts: metrics.totalCosts,
+    totalDeductions: metrics.totalDeductions,
+    investmentDeductions: metrics.investmentDeductions,
+    benefitDeductions: metrics.benefitDeductions,
+    availableForBudget: metrics.availableForBudget,
+    baseBudgetAllocation: metrics.baseBudgetAllocation,
+    budgetAllocation: metrics.budgetAllocation,
+    necessidadesSurplus: metrics.necessidadesSurplus,
+    surplusToDesejos: activeScenario.surplusToDesejos,
+    setSurplusToDesejos: (value: number) => setScenarioField('surplusToDesejos', value),
+    budgetComparison: metrics.budgetComparison,
+    directInvestmentTarget: metrics.directInvestmentTarget,
+    investmentAllocation: metrics.investmentAllocation,
+    costsByCategory: metrics.costsByCategory,
+    balanceAfterCosts: metrics.balanceAfterCosts,
+    unallocatedMoney: metrics.unallocatedMoney,
   }
 }

@@ -87,61 +87,51 @@ export const COST_CATEGORIES: {
   key: CostCategory;
   label: string;
   hint: string;
-  emoji: string;
 }[] = [
   {
     key: "moradia",
     label: "Moradia",
     hint: "Aluguel, condominio, IPTU, conta de agua",
-    emoji: "🏠",
   },
   {
     key: "contas",
     label: "Contas & Servicos",
     hint: "Energia, internet, celular, gas, streaming",
-    emoji: "💡",
   },
   {
     key: "alimentacao",
     label: "Alimentacao",
     hint: "Supermercado, feira, acougue, padaria",
-    emoji: "🛒",
   },
   {
     key: "transporte",
     label: "Transporte",
     hint: "Combustivel, estacionamento, Uber, pedagio",
-    emoji: "🚗",
   },
   {
     key: "saude",
     label: "Saude",
     hint: "Farmacia, consultas, academia, suplementos",
-    emoji: "❤️",
   },
   {
     key: "educacao",
     label: "Educacao",
     hint: "Faculdade, cursos, livros, escola dos filhos",
-    emoji: "📚",
   },
   {
     key: "lazer",
     label: "Lazer & Pessoal",
     hint: "Restaurantes, viagens, roupas, hobbies",
-    emoji: "🎮",
   },
   {
     key: "dividas",
     label: "Dividas & Parcelas",
     hint: "Cartao de credito, emprestimos, financiamentos",
-    emoji: "💳",
   },
   {
     key: "outros",
     label: "Outros",
     hint: "Qualquer gasto que nao se encaixa acima",
-    emoji: "📦",
   },
 ];
 
@@ -180,4 +170,3 @@ export const COST_CATEGORY_COLORS: Record<CostCategory, string> = {
   dividas: "#f97316",
   outros: "#64748b",
 };
-

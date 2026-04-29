@@ -96,11 +96,11 @@ function BucketCard({
   const pct = bucket.target > 0 ? (bucket.actual / bucket.target) * 100 : 0;
 
   return (
-    <div className={`rounded-2xl border ${bgColor} p-5 space-y-4`}>
+    <div className={`rounded-lg border ${bgColor} p-5 space-y-4`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div
-            className={`w-10 h-10 rounded-xl flex items-center justify-center ${color}`}
+            className={`w-10 h-10 rounded-lg flex items-center justify-center ${color}`}
           >
             {icon}
           </div>
@@ -148,7 +148,7 @@ function BucketCard({
 
       {bucket.target > 0 && (
         <div
-          className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium ${
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${
             isOver
               ? "bg-rose-500/15 text-rose-400"
               : isUnder
@@ -282,7 +282,7 @@ export function BudgetOverview({
 
         {/* Surplus redistribution slider */}
         {necessidadesSurplus > 0 && (
-          <div className="p-4 bg-dark-surface rounded-xl border border-dark-border space-y-3">
+          <div className="p-4 bg-dark-surface rounded-lg border border-dark-border space-y-3">
             <div className="flex items-center gap-2">
               <Shuffle size={16} className="text-emerald-400 shrink-0" />
               <p className="text-sm text-dark-text">
@@ -352,7 +352,7 @@ export function BudgetOverview({
         {/* Unallocated money summary */}
         {unallocatedMoney !== 0 && (
           <div
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${
+            className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${
               unallocatedMoney > 0
                 ? "bg-emerald-500/10 border-emerald-500/20"
                 : "bg-rose-500/10 border-rose-500/20"

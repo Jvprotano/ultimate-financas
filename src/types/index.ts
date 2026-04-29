@@ -62,13 +62,35 @@ export interface BudgetBucket {
 
 export type SalaryInputMode = 'before_payroll_deductions' | 'take_home'
 
-export interface FinanceState {
-  salaryGross: number
+export interface FinanceScenarioData {
   salaryNet: number
-  useGrossSalary: boolean
+  salaryInputMode: SalaryInputMode
   costs: CostItem[]
   wants: WantItem[]
   deductions: DeductionItem[]
   selectedModelId: string
   diversification: DiversificationSlice[]
+  customModel: { n: number; d: number; i: number }
+  surplusToDesejos: number
+}
+
+export interface FinanceScenario extends FinanceScenarioData {
+  id: string
+  name: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ScenarioSummary {
+  id: string
+  name: string
+  salaryNet: number
+  paycheckInAccount: number
+  availableForBudget: number
+  totalCosts: number
+  totalWantsAmount: number
+  investmentDeductions: number
+  directInvestmentTarget: number
+  balanceAfterCosts: number
+  savingsRate: number
 }

@@ -85,7 +85,7 @@ export function DiversificationSelector({
       <div className="space-y-4">
         {/* Investment summary */}
         {totalInvestment > 0 && (
-          <div className="space-y-2 p-3 bg-dark-surface rounded-xl border border-dark-border">
+          <div className="space-y-2 p-3 bg-dark-surface rounded-lg border border-dark-border">
             <div className="flex justify-between text-sm">
               <span className="text-dark-text-secondary">Meta investimentos</span>
               <span className="font-bold text-emerald-400">{formatCurrency(totalInvestment)}</span>
@@ -133,13 +133,13 @@ export function DiversificationSelector({
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Outra classe..."
-            className="flex-1 px-3 py-2 rounded-xl border border-dark-border bg-dark-input text-dark-text text-sm
+            className="flex-1 px-3 py-2 rounded-lg border border-dark-border bg-dark-input text-dark-text text-sm
               focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
           />
           <button
             onClick={() => handleAdd(newName)}
             disabled={!newName.trim()}
-            className="flex items-center gap-1 px-3 py-2 rounded-xl bg-emerald-600 text-white text-sm font-medium
+            className="flex items-center gap-1 px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium
               hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             <Plus size={16} />

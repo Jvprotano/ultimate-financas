@@ -1,61 +1,65 @@
-import { RotateCcw } from "lucide-react";
-import { useFinancas } from "./hooks/useFinancas";
-import { SalaryInput } from "./components/SalaryInput";
-import { DeductionsManager } from "./components/DeductionsManager";
-import { CostManager } from "./components/CostManager";
-import { WantsManager } from "./components/WantsManager";
-import { BudgetModelSelector } from "./components/BudgetModelSelector";
-import { BudgetOverview } from "./components/BudgetOverview";
-import { DiversificationSelector } from "./components/DiversificationSelector";
-import { Summary } from "./components/Summary";
-import { Charts } from "./components/Charts";
-import { EmergencyFund } from "./components/EmergencyFund";
+import { RotateCcw, WalletCards } from 'lucide-react'
+import { useFinancas } from './hooks/useFinancas'
+import { SalaryInput } from './components/SalaryInput'
+import { DeductionsManager } from './components/DeductionsManager'
+import { CostManager } from './components/CostManager'
+import { WantsManager } from './components/WantsManager'
+import { BudgetModelSelector } from './components/BudgetModelSelector'
+import { BudgetOverview } from './components/BudgetOverview'
+import { DiversificationSelector } from './components/DiversificationSelector'
+import { Summary } from './components/Summary'
+import { Charts } from './components/Charts'
+import { EmergencyFund } from './components/EmergencyFund'
+import { ScenarioManager } from './components/ScenarioManager'
 
 function App() {
-  const f = useFinancas();
+  const f = useFinancas()
 
   const handleReset = () => {
-    if (window.confirm("Tem certeza que deseja limpar todos os dados?")) {
-      localStorage.clear();
-      window.location.reload();
+    if (window.confirm('Tem certeza que deseja limpar todos os dados?')) {
+      localStorage.clear()
+      window.location.reload()
     }
-  };
+  }
 
   return (
     <div className="min-h-screen bg-dark-bg">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-dark-bg/80 backdrop-blur-lg border-b border-dark-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-violet-500 flex items-center justify-center">
-                <span className="text-white font-bold text-sm">UF</span>
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-dark-text leading-tight">
-                  Ultimate Financas
-                </h1>
-                <p className="text-[11px] text-dark-text-muted leading-tight">
-                  Planejamento Salarial & Investimentos
-                </p>
-              </div>
+      <header className="sticky top-0 z-50 border-b border-dark-border bg-dark-bg/90 backdrop-blur">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white">
+              <WalletCards size={19} />
             </div>
-            <button
-              onClick={handleReset}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-dark-text-muted
-                hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-              title="Limpar todos os dados"
-            >
-              <RotateCcw size={14} />
-              <span className="hidden sm:inline">Resetar</span>
-            </button>
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-bold leading-tight text-dark-text">Ultimate Financas</h1>
+              <p className="truncate text-[11px] leading-tight text-dark-text-muted">
+                {f.activeScenario.name}
+              </p>
+            </div>
           </div>
+          <button
+            onClick={handleReset}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-dark-text-muted transition-colors hover:bg-rose-500/10 hover:text-rose-400"
+            title="Limpar todos os dados"
+          >
+            <RotateCcw size={14} />
+            <span className="hidden sm:inline">Resetar</span>
+          </button>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Summary Cards */}
+      <main className="mx-auto max-w-7xl space-y-5 px-4 py-5 sm:px-6 lg:px-8">
+        <ScenarioManager
+          scenarios={f.scenarios}
+          activeScenarioId={f.activeScenarioId}
+          setActiveScenarioId={f.setActiveScenarioId}
+          createScenario={f.createScenario}
+          duplicateScenario={f.duplicateScenario}
+          renameScenario={f.renameScenario}
+          removeScenario={f.removeScenario}
+          summaries={f.scenarioSummaries}
+        />
+
         <Summary
           salaryNet={f.salaryNet}
           salaryInputMode={f.salaryInputMode}
@@ -69,15 +73,6 @@ function App() {
           balanceAfterCosts={f.balanceAfterCosts}
         />
 
-        {/* Budget Model Selection */}
-        <BudgetModelSelector
-          selectedModelId={f.selectedModelId}
-          setSelectedModelId={f.setSelectedModelId}
-          customModel={f.customModel}
-          setCustomModel={f.setCustomModel}
-        />
-
-        {/* Budget Overview - Hero comparison section */}
         <BudgetOverview
           budgetComparison={f.budgetComparison}
           investmentDeductions={f.investmentDeductions}
@@ -92,10 +87,8 @@ function App() {
           setSurplusToDesejos={f.setSurplusToDesejos}
         />
 
-        {/* Input Section - 2 columns */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left Column - Income & Expenses */}
-          <div className="space-y-6">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+          <div className="space-y-5">
             <SalaryInput
               salaryNet={f.salaryNet}
               setSalaryNet={f.setSalaryNet}
@@ -116,16 +109,17 @@ function App() {
               investmentDeductions={f.investmentDeductions}
             />
 
-            <CostManager
-              costs={f.costs}
-              addCost={f.addCost}
-              removeCost={f.removeCost}
-              totalCosts={f.totalCosts}
-            />
+            <CostManager costs={f.costs} addCost={f.addCost} removeCost={f.removeCost} totalCosts={f.totalCosts} />
           </div>
 
-          {/* Right Column - Wants & Investments */}
-          <div className="space-y-6">
+          <div className="space-y-5">
+            <BudgetModelSelector
+              selectedModelId={f.selectedModelId}
+              setSelectedModelId={f.setSelectedModelId}
+              customModel={f.customModel}
+              setCustomModel={f.setCustomModel}
+            />
+
             <WantsManager
               wants={f.wants}
               addWant={f.addWant}
@@ -151,7 +145,6 @@ function App() {
           </div>
         </div>
 
-        {/* Charts - Full Width */}
         <Charts
           budgetAllocation={f.budgetAllocation}
           investmentAllocation={f.investmentAllocation}
@@ -162,17 +155,13 @@ function App() {
         />
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-dark-border mt-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <p className="text-center text-xs text-dark-text-muted">
-            Ultimate Finanças — Todos os dados sao salvos apenas no seu
-            navegador. Nenhuma informacao e enviada para servidores externos.
-          </p>
+      <footer className="border-t border-dark-border">
+        <div className="mx-auto max-w-7xl px-4 py-5 text-center text-xs text-dark-text-muted sm:px-6 lg:px-8">
+          Dados salvos apenas no navegador.
         </div>
       </footer>
     </div>
-  );
+  )
 }
 
-export default App;
+export default App

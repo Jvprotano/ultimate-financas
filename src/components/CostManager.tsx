@@ -63,7 +63,7 @@ export function CostManager({ costs, addCost, removeCost, totalCosts }: Props) {
         {/* Quick suggestions toggle */}
         <button
           onClick={() => setShowSuggestions(!showSuggestions)}
-          className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl
+          className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg
             bg-dark-surface border border-dark-border text-sm text-dark-text-secondary
             hover:bg-dark-hover transition-colors"
         >
@@ -72,13 +72,13 @@ export function CostManager({ costs, addCost, removeCost, totalCosts }: Props) {
         </button>
 
         {showSuggestions && (
-          <div className="p-3 bg-dark-surface rounded-xl border border-dark-border space-y-3">
+          <div className="p-3 bg-dark-surface rounded-lg border border-dark-border space-y-3">
             {quickSuggestions.map(({ cat, items }) => {
               const catInfo = COST_CATEGORIES.find((c) => c.key === cat)
               return (
                 <div key={cat}>
                   <span className="text-xs font-medium text-dark-text-muted mb-1.5 block">
-                    {catInfo?.emoji} {catInfo?.label}
+                    {catInfo?.label}
                   </span>
                   <div className="flex flex-wrap gap-1.5">
                     {items.map((item) => (
@@ -103,12 +103,12 @@ export function CostManager({ costs, addCost, removeCost, totalCosts }: Props) {
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value as CostCategory)}
-            className="w-full px-3 py-2.5 rounded-xl border border-dark-border bg-dark-input text-dark-text text-sm
+            className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-input text-dark-text text-sm
               focus:outline-none focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500 transition-all"
           >
-            {COST_CATEGORIES.map(({ key, label, emoji }) => (
+            {COST_CATEGORIES.map(({ key, label }) => (
               <option key={key} value={key}>
-                {emoji} {label}
+                {label}
               </option>
             ))}
           </select>
@@ -126,7 +126,7 @@ export function CostManager({ costs, addCost, removeCost, totalCosts }: Props) {
           onChange={(e) => setName(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Nome do custo (ex: Aluguel, Netflix...)"
-          className="w-full px-3 py-2.5 rounded-xl border border-dark-border bg-dark-input text-dark-text text-sm
+          className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-input text-dark-text text-sm
             focus:outline-none focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500 transition-all"
         />
 
@@ -137,7 +137,7 @@ export function CostManager({ costs, addCost, removeCost, totalCosts }: Props) {
           <button
             onClick={handleAdd}
             disabled={!name.trim() || value <= 0}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-rose-500 text-white text-sm font-medium
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-rose-500 text-white text-sm font-medium
               hover:bg-rose-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             <Plus size={16} />
@@ -151,7 +151,7 @@ export function CostManager({ costs, addCost, removeCost, totalCosts }: Props) {
             {costs.map((c) => (
               <div
                 key={c.id}
-                className="flex items-center justify-between px-3 py-2.5 bg-dark-surface rounded-xl group"
+                className="flex items-center justify-between px-3 py-2.5 bg-dark-surface rounded-lg group"
               >
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <div
@@ -176,7 +176,7 @@ export function CostManager({ costs, addCost, removeCost, totalCosts }: Props) {
                 </div>
               </div>
             ))}
-            <div className="flex justify-between px-3 py-2 bg-rose-500/10 rounded-xl border border-rose-500/20">
+            <div className="flex justify-between px-3 py-2 bg-rose-500/10 rounded-lg border border-rose-500/20">
               <span className="text-sm font-medium text-rose-400">Total custos</span>
               <span className="text-sm font-bold text-rose-400">{formatCurrency(totalCosts)}</span>
             </div>

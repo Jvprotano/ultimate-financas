@@ -42,7 +42,7 @@ export function CurrencyInput({ value, onChange, placeholder = '0,00', className
         value={formatDisplay(value)}
         onChange={handleChange}
         placeholder={placeholder}
-        className={`w-full pl-10 pr-4 py-2.5 rounded-xl border border-dark-border bg-dark-input text-dark-text font-medium text-right
+        className={`w-full pl-10 pr-4 py-2.5 rounded-lg border border-dark-border bg-dark-input text-dark-text font-medium text-right
           focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-500
           transition-all placeholder:text-dark-text-muted ${className}`}
       />

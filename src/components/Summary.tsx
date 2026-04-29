@@ -103,7 +103,7 @@ export function Summary({
       {stats.map((s) => (
         <div
           key={s.label}
-          className={`px-4 py-4 rounded-2xl border ${s.color}`}
+          className={`px-4 py-4 rounded-lg border ${s.color}`}
         >
           <div className="flex items-center gap-2 mb-2">
             <div

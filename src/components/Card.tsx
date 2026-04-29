@@ -46,13 +46,13 @@ export function Card({
 
   return (
     <section
-      className={`bg-dark-card rounded-2xl shadow-sm border border-dark-border overflow-hidden ${className}`}
+      className={`bg-dark-card rounded-lg shadow-sm border border-dark-border overflow-hidden ${className}`}
     >
       <div
         className={`flex items-center gap-3 px-5 py-4 ${collapsed ? '' : 'border-b border-dark-border-subtle'} ${collapsible ? 'cursor-pointer select-none hover:bg-dark-hover/50 transition-colors' : ''}`}
         onClick={collapsible ? toggleCollapse : undefined}
       >
-        <div className={`flex items-center justify-center w-9 h-9 rounded-xl ${accentColor} text-white shrink-0`}>
+        <div className={`flex items-center justify-center w-9 h-9 rounded-lg ${accentColor} text-white shrink-0`}>
           {icon}
         </div>
         <h2 className="text-lg font-semibold text-dark-text flex-1">{title}</h2>

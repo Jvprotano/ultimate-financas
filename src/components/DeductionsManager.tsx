@@ -57,13 +57,13 @@ export function DeductionsManager({ deductions, addDeduction, removeDeduction, t
             onChange={(e) => setName(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Nome do desconto"
-            className="w-full px-3 py-2.5 rounded-xl border border-dark-border bg-dark-input text-dark-text text-sm
+            className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-input text-dark-text text-sm
               focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all"
           />
           <select
             value={type}
             onChange={(e) => setType(e.target.value as DeductionType)}
-            className="w-full px-3 py-2.5 rounded-xl border border-dark-border bg-dark-input text-dark-text text-sm
+            className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-input text-dark-text text-sm
               focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all"
           >
             {(Object.entries(DEDUCTION_TYPE_LABELS) as [DeductionType, string][]).map(([key, label]) => (
@@ -81,7 +81,7 @@ export function DeductionsManager({ deductions, addDeduction, removeDeduction, t
           <button
             onClick={handleAdd}
             disabled={!name.trim() || value <= 0}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-medium
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-amber-500 text-white text-sm font-medium
               hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             <Plus size={16} />
@@ -94,7 +94,7 @@ export function DeductionsManager({ deductions, addDeduction, removeDeduction, t
             {deductions.map((d) => (
               <div
                 key={d.id}
-                className="flex items-center justify-between px-3 py-2.5 bg-dark-surface rounded-xl group"
+                className="flex items-center justify-between px-3 py-2.5 bg-dark-surface rounded-lg group"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
@@ -121,12 +121,12 @@ export function DeductionsManager({ deductions, addDeduction, removeDeduction, t
                 </div>
               </div>
             ))}
-            <div className="flex justify-between px-3 py-2 bg-amber-500/10 rounded-xl border border-amber-500/20">
+            <div className="flex justify-between px-3 py-2 bg-amber-500/10 rounded-lg border border-amber-500/20">
               <span className="text-sm font-medium text-amber-400">Total descontos</span>
               <span className="text-sm font-bold text-amber-400">{formatCurrency(totalDeductions)}</span>
             </div>
             {investmentDeductions > 0 && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+              <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
                 <TrendingUp size={14} className="text-emerald-400 shrink-0" />
                 <span className="text-xs text-emerald-400">
                   {formatCurrency(investmentDeductions)} conta como investimento no seu orçamento

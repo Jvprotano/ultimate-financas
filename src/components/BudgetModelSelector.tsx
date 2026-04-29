@@ -47,7 +47,7 @@ export function BudgetModelSelector({
               <div key={model.id} className="relative group/card">
                 <button
                   onClick={() => setSelectedModelId(model.id)}
-                  className={`w-full relative px-3 py-3 rounded-xl border-2 text-left transition-all ${
+                  className={`w-full relative px-3 py-3 rounded-lg border-2 text-left transition-all ${
                     isSelected
                       ? "border-primary-500 bg-primary-500/10 shadow-sm shadow-primary-500/10"
                       : "border-dark-border hover:border-dark-border-subtle hover:bg-dark-hover bg-dark-surface"
@@ -93,7 +93,7 @@ export function BudgetModelSelector({
         </p>
 
         {isCustom && (
-          <div className="space-y-3 p-4 bg-dark-surface rounded-xl border border-dark-border">
+          <div className="space-y-3 p-4 bg-dark-surface rounded-lg border border-dark-border">
             <p className="text-xs font-medium text-dark-text-muted uppercase tracking-wide">
               Proporcoes personalizadas
             </p>

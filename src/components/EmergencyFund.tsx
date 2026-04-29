@@ -34,7 +34,7 @@ export function EmergencyFund({ totalCosts }: Props) {
         </p>
         <div className="grid grid-cols-3 gap-3">
           {months.map((m) => (
-            <div key={m} className="px-3 py-3 bg-dark-surface rounded-xl border border-dark-border text-center">
+            <div key={m} className="px-3 py-3 bg-dark-surface rounded-lg border border-dark-border text-center">
               <span className="block text-xs text-dark-text-muted">{m} meses</span>
               <span className="block text-base font-bold text-dark-text mt-1">
                 {formatCurrency(totalCosts * m)}
