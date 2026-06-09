@@ -485,6 +485,7 @@ export function useFinancas() {
     setSurplusToDesejos: (value: number) => setScenarioField('surplusToDesejos', value),
     budgetComparison: metrics.budgetComparison,
     directInvestmentTarget: metrics.directInvestmentTarget,
+    totalDiversificationPercentage: metrics.totalDiversificationPercentage,
     investmentAllocation: metrics.investmentAllocation,
     costsByCategory: metrics.costsByCategory,
     balanceAfterCosts: metrics.balanceAfterCosts,

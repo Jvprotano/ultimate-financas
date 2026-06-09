@@ -1,17 +1,17 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary-50: #eff6ff;
-  --color-primary-100: #dbeafe;
-  --color-primary-200: #bfdbfe;
-  --color-primary-300: #93c5fd;
-  --color-primary-400: #60a5fa;
-  --color-primary-500: #3b82f6;
-  --color-primary-600: #2563eb;
-  --color-primary-700: #1d4ed8;
-  --color-primary-800: #1e40af;
-  --color-primary-900: #1e3a8a;
-  --color-primary-950: #172554;
+  --color-primary-50: #f0fdfa;
+  --color-primary-100: #ccfbf1;
+  --color-primary-200: #99f6e4;
+  --color-primary-300: #5eead4;
+  --color-primary-400: #2dd4bf;
+  --color-primary-500: #14b8a6;
+  --color-primary-600: #0d9488;
+  --color-primary-700: #0f766e;
+  --color-primary-800: #115e59;
+  --color-primary-900: #134e4a;
+  --color-primary-950: #042f2e;
 
   --color-emerald-50: #ecfdf5;
   --color-emerald-100: #d1fae5;
@@ -47,18 +47,19 @@
   --color-slate-950: #020617;
 
   /* Dark palette tokens */
-  --color-dark-card: #1a1f2e;
-  --color-dark-bg: #0f1219;
-  --color-dark-surface: #151a26;
-  --color-dark-border: #2a3044;
-  --color-dark-border-subtle: #232839;
-  --color-dark-input: #1e2333;
-  --color-dark-hover: #232839;
-  --color-dark-text: #e2e8f0;
-  --color-dark-text-secondary: #94a3b8;
-  --color-dark-text-muted: #64748b;
+  --color-dark-card: #111715;
+  --color-dark-bg: #080b0a;
+  --color-dark-surface: #0e1412;
+  --color-dark-border: #26332f;
+  --color-dark-border-subtle: #1b2521;
+  --color-dark-input: #121b18;
+  --color-dark-hover: #17211d;
+  --color-dark-text: #e6f0ec;
+  --color-dark-text-secondary: #9db0aa;
+  --color-dark-text-muted: #6f837d;
 
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Afacad Flux', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
 }
 
 @layer base {
@@ -75,8 +76,27 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background-color: var(--color-dark-bg);
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at top left, rgba(20, 184, 166, 0.12), transparent 34rem),
+      radial-gradient(circle at 80% 0%, rgba(245, 158, 11, 0.08), transparent 28rem),
+      var(--color-dark-bg);
     color: var(--color-dark-text);
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  ::selection {
+    background: rgba(20, 184, 166, 0.35);
+    color: white;
+  }
+
+  button,
+  input,
+  select {
+    font: inherit;
   }
 
   input[type="number"]::-webkit-outer-spin-button,
@@ -101,6 +121,6 @@
     border-radius: 4px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #3a4060;
+    background: #385148;
   }
 }

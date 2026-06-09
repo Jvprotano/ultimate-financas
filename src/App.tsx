@@ -1,5 +1,7 @@
-import { RotateCcw, WalletCards } from 'lucide-react'
+import { useRef, type ChangeEvent } from 'react'
+import { Download, RotateCcw, Upload, WalletCards } from 'lucide-react'
 import { useFinancas } from './hooks/useFinancas'
+import { CommandCenter } from './components/CommandCenter'
 import { SalaryInput } from './components/SalaryInput'
 import { DeductionsManager } from './components/DeductionsManager'
 import { CostManager } from './components/CostManager'
@@ -7,48 +9,178 @@ import { WantsManager } from './components/WantsManager'
 import { BudgetModelSelector } from './components/BudgetModelSelector'
 import { BudgetOverview } from './components/BudgetOverview'
 import { DiversificationSelector } from './components/DiversificationSelector'
-import { Summary } from './components/Summary'
 import { Charts } from './components/Charts'
 import { EmergencyFund } from './components/EmergencyFund'
 import { ScenarioManager } from './components/ScenarioManager'
 
+const APP_STORAGE_PREFIX = 'uf_'
+
+type BackupPayload = {
+  app?: string
+  version?: number
+  exportedAt?: string
+  localStorage?: Record<string, string>
+}
+
+function getAppStorageEntries() {
+  const entries: Record<string, string> = {}
+
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index)
+    if (key?.startsWith(APP_STORAGE_PREFIX)) {
+      entries[key] = localStorage.getItem(key) ?? ''
+    }
+  }
+
+  return entries
+}
+
+function clearAppStorage() {
+  const keysToRemove: string[] = []
+
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index)
+    if (key?.startsWith(APP_STORAGE_PREFIX)) {
+      keysToRemove.push(key)
+    }
+  }
+
+  keysToRemove.forEach((key) => localStorage.removeItem(key))
+}
+
 function App() {
   const f = useFinancas()
+  const importInputRef = useRef<HTMLInputElement>(null)
+
+  const handleExport = () => {
+    const payload = {
+      app: 'ultimate-financas',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      localStorage: getAppStorageEntries(),
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const date = new Date().toISOString().slice(0, 10)
+
+    link.href = url
+    link.download = `ultimate-financas-backup-${date}.json`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    try {
+      const payload = JSON.parse(await file.text()) as BackupPayload
+      const storage = payload.localStorage
+      const entries = storage
+        ? Object.entries(storage).filter(
+            ([key, value]) => key.startsWith(APP_STORAGE_PREFIX) && typeof value === 'string',
+          )
+        : []
+
+      if (!entries.length) {
+        throw new Error('No Ultimate Financas keys found')
+      }
+
+      const confirmed = window.confirm(
+        `Importar backup com ${entries.length} registros locais? Seus dados atuais do Ultimate Financas serao substituidos.`,
+      )
+      if (!confirmed) return
+
+      clearAppStorage()
+      entries.forEach(([key, value]) => localStorage.setItem(key, value))
+      window.location.reload()
+    } catch {
+      window.alert('Arquivo de backup invalido para o Ultimate Financas.')
+    }
+  }
 
   const handleReset = () => {
     if (window.confirm('Tem certeza que deseja limpar todos os dados?')) {
-      localStorage.clear()
+      clearAppStorage()
       window.location.reload()
     }
   }
 
   return (
-    <div className="min-h-screen bg-dark-bg">
-      <header className="sticky top-0 z-50 border-b border-dark-border bg-dark-bg/90 backdrop-blur">
+    <div className="min-h-screen bg-dark-bg text-dark-text">
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-dark-bg/88 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-500 text-[#06100f] shadow-lg shadow-primary-500/20">
               <WalletCards size={19} />
             </div>
             <div className="min-w-0">
-              <h1 className="truncate text-lg font-bold leading-tight text-dark-text">Ultimate Financas</h1>
+              <h1 className="truncate text-lg font-black leading-tight text-dark-text">Ultimate Financas</h1>
               <p className="truncate text-[11px] leading-tight text-dark-text-muted">
-                {f.activeScenario.name}
+                {f.activeScenario.name} - dados somente no navegador
               </p>
             </div>
           </div>
-          <button
-            onClick={handleReset}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-dark-text-muted transition-colors hover:bg-rose-500/10 hover:text-rose-400"
-            title="Limpar todos os dados"
-          >
-            <RotateCcw size={14} />
-            <span className="hidden sm:inline">Resetar</span>
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleExport}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-dark-text-secondary transition-colors hover:bg-primary-500/10 hover:text-primary-300"
+              title="Exportar backup local"
+            >
+              <Download size={14} />
+              <span className="hidden sm:inline">Backup</span>
+            </button>
+            <button
+              onClick={() => importInputRef.current?.click()}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-dark-text-secondary transition-colors hover:bg-amber-500/10 hover:text-amber-300"
+              title="Importar backup local"
+            >
+              <Upload size={14} />
+              <span className="hidden sm:inline">Importar</span>
+            </button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={handleImport}
+            />
+            <button
+              onClick={handleReset}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-dark-text-muted transition-colors hover:bg-rose-500/10 hover:text-rose-300"
+              title="Limpar todos os dados do app"
+            >
+              <RotateCcw size={14} />
+              <span className="hidden sm:inline">Resetar</span>
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-7xl space-y-5 px-4 py-5 sm:px-6 lg:px-8">
+        <CommandCenter
+          scenarioName={f.activeScenario.name}
+          salaryNet={f.salaryNet}
+          paycheckInAccount={f.paycheckInAccount}
+          availableForBudget={f.availableForBudget}
+          totalCosts={f.totalCosts}
+          totalWants={f.totalWantsAmount}
+          totalDeductions={f.totalDeductions}
+          investmentDeductions={f.investmentDeductions}
+          directInvestmentTarget={f.directInvestmentTarget}
+          balanceAfterCosts={f.balanceAfterCosts}
+          budgetComparison={f.budgetComparison}
+          totalWantsPercentage={f.totalWantsPercentage}
+          totalDiversificationPercentage={f.totalDiversificationPercentage}
+          costsCount={f.costs.length}
+          wantsCount={f.wants.length}
+          deductionsCount={f.deductions.length}
+        />
+
         <ScenarioManager
           scenarios={f.scenarios}
           activeScenarioId={f.activeScenarioId}
@@ -60,35 +192,8 @@ function App() {
           summaries={f.scenarioSummaries}
         />
 
-        <Summary
-          salaryNet={f.salaryNet}
-          salaryInputMode={f.salaryInputMode}
-          paycheckInAccount={f.paycheckInAccount}
-          totalDeductions={f.totalDeductions}
-          benefitDeductions={f.benefitDeductions}
-          investmentDeductions={f.investmentDeductions}
-          availableForBudget={f.availableForBudget}
-          totalCosts={f.totalCosts}
-          totalWants={f.totalWantsAmount}
-          balanceAfterCosts={f.balanceAfterCosts}
-        />
-
-        <BudgetOverview
-          budgetComparison={f.budgetComparison}
-          investmentDeductions={f.investmentDeductions}
-          directInvestmentTarget={f.directInvestmentTarget}
-          unallocatedMoney={f.unallocatedMoney}
-          availableForBudget={f.availableForBudget}
-          selectedModel={f.selectedModel}
-          baseBudgetAllocation={f.baseBudgetAllocation}
-          budgetAllocation={f.budgetAllocation}
-          necessidadesSurplus={f.necessidadesSurplus}
-          surplusToDesejos={f.surplusToDesejos}
-          setSurplusToDesejos={f.setSurplusToDesejos}
-        />
-
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-          <div className="space-y-5">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[390px_minmax(0,1fr)]">
+          <div className="space-y-5 xl:sticky xl:top-20 xl:self-start">
             <SalaryInput
               salaryNet={f.salaryNet}
               setSalaryNet={f.setSalaryNet}
@@ -108,11 +213,25 @@ function App() {
               totalDeductions={f.totalDeductions}
               investmentDeductions={f.investmentDeductions}
             />
-
-            <CostManager costs={f.costs} addCost={f.addCost} removeCost={f.removeCost} totalCosts={f.totalCosts} />
           </div>
 
           <div className="space-y-5">
+            <BudgetOverview
+              budgetComparison={f.budgetComparison}
+              investmentDeductions={f.investmentDeductions}
+              directInvestmentTarget={f.directInvestmentTarget}
+              unallocatedMoney={f.unallocatedMoney}
+              availableForBudget={f.availableForBudget}
+              selectedModel={f.selectedModel}
+              baseBudgetAllocation={f.baseBudgetAllocation}
+              budgetAllocation={f.budgetAllocation}
+              necessidadesSurplus={f.necessidadesSurplus}
+              surplusToDesejos={f.surplusToDesejos}
+              setSurplusToDesejos={f.setSurplusToDesejos}
+            />
+
+            <CostManager costs={f.costs} addCost={f.addCost} removeCost={f.removeCost} totalCosts={f.totalCosts} />
+
             <BudgetModelSelector
               selectedModelId={f.selectedModelId}
               setSelectedModelId={f.setSelectedModelId}
@@ -142,22 +261,22 @@ function App() {
             />
 
             <EmergencyFund totalCosts={f.totalCosts} />
+
+            <Charts
+              budgetAllocation={f.budgetAllocation}
+              investmentAllocation={f.investmentAllocation}
+              costsByCategory={f.costsByCategory}
+              wantAllocations={f.wantAllocations}
+              availableForBudget={f.availableForBudget}
+              investmentDeductions={f.investmentDeductions}
+            />
           </div>
         </div>
-
-        <Charts
-          budgetAllocation={f.budgetAllocation}
-          investmentAllocation={f.investmentAllocation}
-          costsByCategory={f.costsByCategory}
-          wantAllocations={f.wantAllocations}
-          availableForBudget={f.availableForBudget}
-          investmentDeductions={f.investmentDeductions}
-        />
       </main>
 
-      <footer className="border-t border-dark-border">
+      <footer className="border-t border-white/10">
         <div className="mx-auto max-w-7xl px-4 py-5 text-center text-xs text-dark-text-muted sm:px-6 lg:px-8">
-          Dados salvos apenas no navegador.
+          Dados salvos apenas no navegador. Use Backup para guardar uma copia fora do localStorage.
         </div>
       </footer>
     </div>
