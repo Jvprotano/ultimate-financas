@@ -64,6 +64,7 @@ function normalizeCreditCardEntry(entry: CreditCardEntry): CreditCardEntry {
     amount,
     personalAmount: finiteNumber(entry.personalAmount, amount),
     remainingAmount: finiteNumber(entry.remainingAmount),
+    ownerName: entry.ownerName?.trim() || '',
     ownerNote: entry.ownerNote?.trim() || '',
     installmentCurrent: installmentCurrent > 0 ? installmentCurrent : undefined,
     installmentTotal: installmentTotal > 0 ? installmentTotal : undefined,
@@ -254,10 +255,15 @@ function calculateCreditCardSummary(
   const nextEntries = entries.filter((entry) => entry.cycle === 'next')
   const currentTotal = currentEntries.reduce((sum, entry) => sum + entry.amount, 0)
   const currentPersonalTotal = currentEntries.reduce((sum, entry) => sum + entry.personalAmount, 0)
+  const currentThirdPartyTotal = currentEntries.reduce(
+    (sum, entry) => sum + Math.max(0, entry.amount - entry.personalAmount),
+    0,
+  )
   const nextTotal = nextEntries.reduce((sum, entry) => sum + entry.amount, 0)
   const nextPersonalTotal = nextEntries.reduce((sum, entry) => sum + entry.personalAmount, 0)
   const remainingInstallmentsTotal = currentEntries.reduce((sum, entry) => sum + entry.remainingAmount, 0)
   const byCard = new Map<string, { totalAmount: number; personalAmount: number }>()
+  const byOwner = new Map<string, { totalAmount: number; personalAmount: number }>()
 
   for (const entry of currentEntries) {
     const existing = byCard.get(entry.cardName) ?? { totalAmount: 0, personalAmount: 0 }
@@ -265,16 +271,30 @@ function calculateCreditCardSummary(
       totalAmount: existing.totalAmount + entry.amount,
       personalAmount: existing.personalAmount + entry.personalAmount,
     })
+
+    const thirdPartyAmount = Math.max(0, entry.amount - entry.personalAmount)
+    if (thirdPartyAmount > 0) {
+      const owner = entry.ownerName || entry.ownerNote || 'Outro'
+      const ownerExisting = byOwner.get(owner) ?? { totalAmount: 0, personalAmount: 0 }
+      byOwner.set(owner, {
+        totalAmount: ownerExisting.totalAmount + thirdPartyAmount,
+        personalAmount: ownerExisting.personalAmount,
+      })
+    }
   }
 
   return {
     currentTotal,
     currentPersonalTotal,
+    currentThirdPartyTotal,
     nextTotal,
     nextPersonalTotal,
     remainingInstallmentsTotal,
     availablePersonalLimit: settings.personalSpendingLimit - currentPersonalTotal,
     totalsByCard: Array.from(byCard.entries())
+      .map(([cardName, totals]) => ({ cardName, ...totals }))
+      .sort((a, b) => b.totalAmount - a.totalAmount),
+    totalsByOwner: Array.from(byOwner.entries())
       .map(([cardName, totals]) => ({ cardName, ...totals }))
       .sort((a, b) => b.totalAmount - a.totalAmount),
     currentEntriesCount: currentEntries.length,
@@ -335,7 +355,7 @@ function calculateScenario(state: FinanceScenarioData) {
   const totalDiversificationPercentage = safeState.diversification.reduce((sum, slice) => sum + slice.percentage, 0)
   const directInvestmentTarget = Math.max(
     0,
-    budgetAllocation.investimentos - investmentDeductions - employerInvestmentContributions,
+    budgetAllocation.investimentos - investmentDeductions,
   )
   const allocatedDirectInvestment = (directInvestmentTarget * totalDiversificationPercentage) / 100
 
@@ -360,13 +380,11 @@ function calculateScenario(state: FinanceScenarioData) {
     },
     investimentos: {
       target: budgetAllocation.investimentos,
-      actual: investmentDeductions + employerInvestmentContributions + allocatedDirectInvestment,
-      diff: budgetAllocation.investimentos - (investmentDeductions + employerInvestmentContributions + allocatedDirectInvestment),
+      actual: investmentDeductions + allocatedDirectInvestment,
+      diff: budgetAllocation.investimentos - (investmentDeductions + allocatedDirectInvestment),
       percentage:
         budgetAllocation.investimentos > 0
-          ? ((investmentDeductions + employerInvestmentContributions + allocatedDirectInvestment) /
-              budgetAllocation.investimentos) *
-            100
+          ? ((investmentDeductions + allocatedDirectInvestment) / budgetAllocation.investimentos) * 100
           : 0,
       baseTarget: baseBudgetAllocation.investimentos,
       movedIn: allocationMovement.investimentos.in,

@@ -69,6 +69,7 @@ export interface CreditCardEntry {
   amount: number
   personalAmount: number
   remainingAmount: number
+  ownerName?: string
   ownerNote?: string
   installmentCurrent?: number
   installmentTotal?: number
@@ -88,11 +89,13 @@ export interface CardTotal {
 export interface CreditCardSummary {
   currentTotal: number
   currentPersonalTotal: number
+  currentThirdPartyTotal: number
   nextTotal: number
   nextPersonalTotal: number
   remainingInstallmentsTotal: number
   availablePersonalLimit: number
   totalsByCard: CardTotal[]
+  totalsByOwner: CardTotal[]
   currentEntriesCount: number
   nextEntriesCount: number
 }

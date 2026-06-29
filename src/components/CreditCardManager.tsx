@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Calendar, CreditCard, FileText, Plus, RotateCcw, Trash2, Upload } from 'lucide-react'
+import { Calendar, CreditCard, FileText, Filter, Plus, RotateCcw, Trash2, Upload } from 'lucide-react'
 import { Card } from './Card'
 import { CurrencyInput } from './CurrencyInput'
 import { HeaderMetric } from './HeaderMetric'
@@ -28,7 +28,7 @@ type View = CreditCardCycle | 'import'
 type OwnerMode = 'mine' | 'other' | 'partial'
 type ParsedCardEntry = Omit<CreditCardEntry, 'id' | 'cycle'>
 
-const KNOWN_CARDS = ['Itau', 'XP', 'Inter', 'Nu']
+const KNOWN_CARDS = ['Itaú', 'XP', 'Inter', 'Nu']
 
 function normalizeText(value: string) {
   return value
@@ -129,10 +129,11 @@ function parseSpreadsheet(text: string): ParsedCardEntry[] {
       return {
         description,
         purchaseDate: (cells[indexes.date >= 0 ? indexes.date : 1] ?? '').trim(),
-        cardName: (cells[indexes.card >= 0 ? indexes.card : 2] ?? 'Cartao').trim() || 'Cartao',
+        cardName: (cells[indexes.card >= 0 ? indexes.card : 2] ?? 'Cartão').trim() || 'Cartão',
         amount,
         personalAmount,
         remainingAmount,
+        ownerName: personalAmount < amount ? cells.slice(6).join(' ').trim() || 'Outro' : '',
         ownerNote: cells.slice(6).join(' ').trim(),
         installmentCurrent,
         installmentTotal,
@@ -143,7 +144,7 @@ function parseSpreadsheet(text: string): ParsedCardEntry[] {
 }
 
 function cycleLabel(cycle: CreditCardCycle) {
-  return cycle === 'current' ? 'Fatura atual' : 'Proxima fatura'
+  return cycle === 'current' ? 'Fatura atual' : 'Próxima fatura'
 }
 
 export function CreditCardManager({
@@ -161,19 +162,27 @@ export function CreditCardManager({
   const [view, setView] = useState<View>('current')
   const [description, setDescription] = useState('')
   const [purchaseDate, setPurchaseDate] = useState('')
-  const [cardName, setCardName] = useState('Itau')
+  const [cardName, setCardName] = useState('Itaú')
   const [amount, setAmount] = useState(0)
   const [ownerMode, setOwnerMode] = useState<OwnerMode>('mine')
+  const [ownerName, setOwnerName] = useState('')
   const [personalAmount, setPersonalAmount] = useState(0)
   const [remainingAmount, setRemainingAmount] = useState(0)
   const [ownerNote, setOwnerNote] = useState('')
+  const [ownerFilter, setOwnerFilter] = useState('all')
   const [importText, setImportText] = useState('')
   const [importCycle, setImportCycle] = useState<CreditCardCycle>('current')
   const [replaceOnImport, setReplaceOnImport] = useState(true)
 
   const currentEntries = entries.filter((entry) => entry.cycle === 'current')
   const visibleCycle: CreditCardCycle = view === 'next' ? 'next' : 'current'
-  const visibleEntries = entries.filter((entry) => entry.cycle === visibleCycle)
+  const visibleEntries = entries.filter((entry) => {
+    if (entry.cycle !== visibleCycle) return false
+    if (ownerFilter === 'all') return true
+    if (ownerFilter === 'mine') return entry.personalAmount > 0
+    if (ownerFilter === 'third-party') return entry.amount - entry.personalAmount > 0
+    return (entry.ownerName || entry.ownerNote || 'Outro') === ownerFilter
+  })
   const parsedImport = useMemo(() => parseSpreadsheet(importText), [importText])
   const generatedNextEntries = useMemo(
     () =>
@@ -195,6 +204,7 @@ export function CreditCardManager({
             amount: entry.amount,
             personalAmount: entry.personalAmount,
             remainingAmount: buildRemainingAmount(entry.amount, nextCurrent, total),
+            ownerName: entry.ownerName,
             ownerNote: entry.ownerNote || 'Gerado pela fatura atual',
             installmentCurrent: nextCurrent,
             installmentTotal: total,
@@ -204,6 +214,13 @@ export function CreditCardManager({
   )
 
   const knownCards = Array.from(new Set([...KNOWN_CARDS, ...entries.map((entry) => entry.cardName).filter(Boolean)]))
+  const knownOwners = Array.from(
+    new Set(
+      entries
+        .filter((entry) => entry.amount - entry.personalAmount > 0)
+        .map((entry) => entry.ownerName || entry.ownerNote || 'Outro'),
+    ),
+  )
   const availableLimitTone = summary.availablePersonalLimit >= 0 ? 'text-emerald-300' : 'text-rose-300'
   const personalSpendPct =
     settings.personalSpendingLimit > 0
@@ -216,6 +233,7 @@ export function CreditCardManager({
     setAmount(0)
     setPersonalAmount(0)
     setRemainingAmount(0)
+    setOwnerName('')
     setOwnerNote('')
     setOwnerMode('mine')
   }
@@ -236,7 +254,8 @@ export function CreditCardManager({
       amount,
       personalAmount: computedPersonalAmount,
       remainingAmount: computedRemainingAmount,
-      ownerNote: ownerMode === 'other' && !ownerNote ? 'Nao e meu' : ownerNote,
+      ownerName: ownerMode === 'mine' ? '' : ownerName.trim() || 'Outro',
+      ownerNote,
       ...installmentInfo,
     })
     resetForm()
@@ -261,7 +280,7 @@ export function CreditCardManager({
 
   return (
     <Card
-      title="Cartoes e Faturas"
+      title="Cartões e Faturas"
       icon={<CreditCard size={18} />}
       accentColor="bg-sky-600"
       collapsible
@@ -273,7 +292,7 @@ export function CreditCardManager({
       <div className="space-y-5">
         <div className="grid gap-3 md:grid-cols-4">
           <div className="rounded-lg border border-sky-500/20 bg-sky-500/10 px-3 py-3">
-            <span className="block text-xs text-sky-300">Total dos cartoes</span>
+            <span className="block text-xs text-sky-300">Total dos cartões</span>
             <strong className="text-sm text-sky-100">{formatCurrency(summary.currentTotal)}</strong>
           </div>
           <div className="rounded-lg border border-primary-500/20 bg-primary-500/10 px-3 py-3">
@@ -292,7 +311,7 @@ export function CreditCardManager({
             }`}
           >
             <span className={`block text-xs ${availableLimitTone}`}>
-              {summary.availablePersonalLimit >= 0 ? 'Ainda disponivel' : 'Acima do limite'}
+              {summary.availablePersonalLimit >= 0 ? 'Ainda disponível' : 'Acima do limite'}
             </span>
             <strong className={`text-sm ${availableLimitTone}`}>
               {formatCurrency(Math.abs(summary.availablePersonalLimit))}
@@ -335,7 +354,7 @@ export function CreditCardManager({
         <div className="grid grid-cols-3 rounded-lg border border-dark-border bg-dark-surface p-1">
           {[
             { key: 'current' as View, label: 'Atual' },
-            { key: 'next' as View, label: 'Proxima' },
+            { key: 'next' as View, label: 'Próxima' },
             { key: 'import' as View, label: 'Importar' },
           ].map((item) => (
             <button
@@ -359,8 +378,8 @@ export function CreditCardManager({
                   <h3 className="text-sm font-bold text-dark-text">{cycleLabel(visibleCycle)}</h3>
                   <p className="text-xs text-dark-text-muted">
                     {visibleCycle === 'current'
-                      ? `${summary.currentEntriesCount} lancamentos cadastrados`
-                      : `${summary.nextEntriesCount} lancamentos previstos`}
+                    ? `${summary.currentEntriesCount} lançamentos cadastrados`
+                    : `${summary.nextEntriesCount} lançamentos previstos`}
                   </p>
                 </div>
                 {visibleCycle === 'next' && (
@@ -405,7 +424,7 @@ export function CreditCardManager({
                   />
                   <datalist id="credit-card-names">
                     {knownCards.map((card) => (
-                      <option key={card} value={card} />
+                    <option key={card} value={card} />
                     ))}
                   </datalist>
                 </label>
@@ -414,7 +433,7 @@ export function CreditCardManager({
                   <CurrencyInput value={amount} onChange={setAmount} />
                 </label>
                 <label className="block">
-                  <span className="mb-1.5 block text-xs font-medium text-dark-text-muted">Restante</span>
+                <span className="mb-1.5 block text-xs font-medium text-dark-text-muted">Restante</span>
                   <CurrencyInput value={remainingAmount} onChange={setRemainingAmount} />
                 </label>
                 <button
@@ -452,23 +471,57 @@ export function CreditCardManager({
                     <CurrencyInput value={personalAmount} onChange={setPersonalAmount} />
                   ) : (
                     <div className="rounded-lg border border-dark-border bg-dark-input px-3 py-2 text-sm text-dark-text-muted">
-                      {ownerMode === 'mine' ? 'Valor meu sera igual a fatura.' : 'Valor meu sera R$ 0,00.'}
+                      {ownerMode === 'mine' ? 'Valor meu será igual à fatura.' : 'Valor meu será R$ 0,00.'}
                     </div>
+                  )}
+                  {ownerMode !== 'mine' && (
+                    <input
+                      value={ownerName}
+                      onChange={(event) => setOwnerName(event.target.value)}
+                      placeholder="Pessoa: mãe, irmão..."
+                      className="w-full rounded-lg border border-dark-border bg-dark-input px-3 py-2.5 text-sm text-dark-text outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30"
+                    />
                   )}
                   <input
                     value={ownerNote}
                     onChange={(event) => setOwnerNote(event.target.value)}
-                    placeholder="Observacao: Mae, antec, reembolso..."
+                    placeholder="Observação: antec, reembolso..."
                     className="w-full rounded-lg border border-dark-border bg-dark-input px-3 py-2.5 text-sm text-dark-text outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30"
                   />
                 </div>
               </div>
             </div>
 
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dark-border bg-dark-surface p-3">
+              <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-dark-text-muted">
+                <Filter size={13} />
+                Filtrar
+              </span>
+              {[
+                { key: 'all', label: 'Todos' },
+                { key: 'mine', label: 'Meus' },
+                { key: 'third-party', label: 'Não são meus' },
+                ...knownOwners.map((owner) => ({ key: owner, label: owner })),
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setOwnerFilter(item.key)}
+                  className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                    ownerFilter === item.key
+                      ? 'border-sky-500 bg-sky-500/15 text-sky-200'
+                      : 'border-dark-border bg-dark-input text-dark-text-muted hover:text-dark-text'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+
             <div className="space-y-2">
               {visibleEntries.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-dark-border px-4 py-5 text-center text-sm text-dark-text-muted">
-                  Nenhum lancamento nesta fatura.
+                  Nenhum lançamento nesta fatura.
                 </div>
               ) : (
                 visibleEntries.map((entry) => (
@@ -514,6 +567,9 @@ export function CreditCardManager({
                           Parcela {entry.installmentCurrent}/{entry.installmentTotal}
                         </span>
                       )}
+                      {entry.amount - entry.personalAmount > 0 && (
+                        <span>De {entry.ownerName || entry.ownerNote || 'Outro'}</span>
+                      )}
                       {entry.ownerNote && <span>{entry.ownerNote}</span>}
                     </div>
                   </div>
@@ -527,10 +583,10 @@ export function CreditCardManager({
               <div>
                 <h3 className="flex items-center gap-2 text-sm font-bold text-dark-text">
                   <Upload size={15} className="text-sky-300" />
-                  Colar planilha do cartao
+                  Colar planilha do cartão
                 </h3>
                 <p className="mt-1 text-xs leading-relaxed text-dark-text-muted">
-                  Cole linhas do Sheets com colunas como Descricao, Data, Cartao, Fatura, E meu e Restante.
+                  Cole linhas do Sheets com colunas como Descrição, Data, Cartão, Fatura, É meu e Restante.
                 </p>
               </div>
               <span className="rounded-lg border border-sky-500/20 bg-sky-500/10 px-2.5 py-1.5 text-xs font-semibold text-sky-300">
@@ -541,7 +597,7 @@ export function CreditCardManager({
             <textarea
               value={importText}
               onChange={(event) => setImportText(event.target.value)}
-              placeholder={'Descricao\tData\tCartao\tFatura\tE meu\tRestante\nYoutube premium\t20/06\tItau\t53,90\t53,90\t0'}
+              placeholder={'Descrição\tData\tCartão\tFatura\tÉ meu\tRestante\nYoutube premium\t20/06\tItaú\t53,90\t53,90\t0'}
               className="mt-3 min-h-44 w-full rounded-lg border border-dark-border bg-dark-input px-3 py-2.5 font-mono text-xs text-dark-text outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30"
             />
 
@@ -581,7 +637,7 @@ export function CreditCardManager({
 
         <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
           <div className="rounded-lg border border-dark-border bg-dark-surface p-3">
-            <h3 className="mb-2 text-sm font-bold text-dark-text">Totais por cartao</h3>
+            <h3 className="mb-2 text-sm font-bold text-dark-text">Totais por cartão</h3>
             {summary.totalsByCard.length > 0 ? (
               <div className="space-y-2">
                 {summary.totalsByCard.map((card) => (
@@ -595,19 +651,36 @@ export function CreditCardManager({
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-dark-text-muted">Sem cartoes na fatura atual.</p>
+              <p className="text-sm text-dark-text-muted">Sem cartões na fatura atual.</p>
             )}
           </div>
 
           <div className="rounded-lg border border-dark-border bg-dark-surface p-3">
+            <h3 className="mb-2 text-sm font-bold text-dark-text">Por pessoa</h3>
+            {summary.totalsByOwner.length > 0 ? (
+              <div className="space-y-2">
+                {summary.totalsByOwner.map((owner) => (
+                  <div key={owner.cardName} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="font-medium text-dark-text-secondary">{owner.cardName}</span>
+                    <strong className="text-sky-200">{formatCurrency(owner.totalAmount)}</strong>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-dark-text-muted">Sem compras de terceiros na fatura atual.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-dark-border bg-dark-surface p-3">
             <h3 className="mb-2 text-sm font-bold text-dark-text">Futuro</h3>
             <dl className="space-y-2 text-sm">
               <div className="flex justify-between gap-3">
-                <dt className="text-dark-text-muted">Proxima fatura</dt>
+                <dt className="text-dark-text-muted">Próxima fatura</dt>
                 <dd className="font-semibold text-dark-text">{formatCurrency(summary.nextTotal)}</dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="text-dark-text-muted">Meu proximo</dt>
+                <dt className="text-dark-text-muted">Meu próximo</dt>
                 <dd className="font-semibold text-primary-300">{formatCurrency(summary.nextPersonalTotal)}</dd>
               </div>
               <div className="flex justify-between gap-3">
@@ -615,7 +688,6 @@ export function CreditCardManager({
                 <dd className="font-semibold text-amber-300">{formatCurrency(summary.remainingInstallmentsTotal)}</dd>
               </div>
             </dl>
-          </div>
         </div>
       </div>
     </Card>

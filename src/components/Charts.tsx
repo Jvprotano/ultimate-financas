@@ -114,7 +114,7 @@ export function Charts({
 
   const investmentData = [
     ...(investmentDeductions > 0
-      ? [{ name: "Previdencia (voce)", value: investmentDeductions, color: "#f59e0b" }]
+      ? [{ name: "Previdência (você)", value: investmentDeductions, color: "#f59e0b" }]
       : []),
     ...(employerInvestmentContributions > 0
       ? [{ name: "Empresa", value: employerInvestmentContributions, color: "#14b8a6" }]

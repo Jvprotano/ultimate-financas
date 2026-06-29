@@ -76,7 +76,7 @@ export function DiversificationSelector({
 
   return (
     <Card
-      title="Diversificacao de Investimentos"
+      title="Diversificação de Investimentos"
       icon={<Target size={18} />}
       accentColor="bg-emerald-600"
       collapsible
@@ -107,7 +107,7 @@ export function DiversificationSelector({
               <div className="flex justify-between text-sm">
                 <span className="text-dark-text-secondary">Contrapartida da empresa</span>
                 <span className="font-semibold text-emerald-400">
-                  - {formatCurrency(employerInvestmentContributions)}
+                  + {formatCurrency(employerInvestmentContributions)}
                 </span>
               </div>
             )}
@@ -116,7 +116,7 @@ export function DiversificationSelector({
               <span className="font-bold text-dark-text">{formatCurrency(directInvestmentTarget)}</span>
             </div>
             <p className="text-[11px] text-dark-text-muted">
-              Distribua apenas o dinheiro que voce ainda precisa investir pela conta corrente.
+              Distribua apenas o dinheiro que você ainda precisa investir pela conta corrente. A contrapartida da empresa é bônus e não reduz sua meta.
             </p>
           </div>
         )}
@@ -220,7 +220,7 @@ export function DiversificationSelector({
               </div>
               {totalPct > 100 && (
                 <p className="text-xs text-rose-400 font-medium">
-                  Alocacao excede 100%. Ajuste os sliders.
+                  Alocação excede 100%. Ajuste os sliders.
                 </p>
               )}
               {unallocatedPct > 0 && totalPct <= 100 && (

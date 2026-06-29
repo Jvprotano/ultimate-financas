@@ -1,5 +1,5 @@
-import { useRef, type ChangeEvent } from 'react'
-import { Download, RotateCcw, Upload, WalletCards } from 'lucide-react'
+import { useRef, useState, type ChangeEvent } from 'react'
+import { CreditCard, Download, LayoutDashboard, RotateCcw, Upload, WalletCards } from 'lucide-react'
 import { useFinancas } from './hooks/useFinancas'
 import { CommandCenter } from './components/CommandCenter'
 import { SalaryInput } from './components/SalaryInput'
@@ -52,6 +52,7 @@ function clearAppStorage() {
 function App() {
   const f = useFinancas()
   const importInputRef = useRef<HTMLInputElement>(null)
+  const [activeView, setActiveView] = useState<'planning' | 'cards'>('planning')
 
   const handleExport = () => {
     const payload = {
@@ -88,11 +89,11 @@ function App() {
         : []
 
       if (!entries.length) {
-        throw new Error('No Ultimate Financas keys found')
+        throw new Error('No Ultimate Finanças keys found')
       }
 
       const confirmed = window.confirm(
-        `Importar backup com ${entries.length} registros locais? Seus dados atuais do Ultimate Financas serao substituidos.`,
+        `Importar backup com ${entries.length} registros locais? Seus dados atuais do Ultimate Finanças serão substituídos.`,
       )
       if (!confirmed) return
 
@@ -100,7 +101,7 @@ function App() {
       entries.forEach(([key, value]) => localStorage.setItem(key, value))
       window.location.reload()
     } catch {
-      window.alert('Arquivo de backup invalido para o Ultimate Financas.')
+      window.alert('Arquivo de backup inválido para o Ultimate Finanças.')
     }
   }
 
@@ -120,13 +121,37 @@ function App() {
               <WalletCards size={19} />
             </div>
             <div className="min-w-0">
-              <h1 className="truncate text-lg font-black leading-tight text-dark-text">Ultimate Financas</h1>
+              <h1 className="truncate text-lg font-black leading-tight text-dark-text">Ultimate Finanças</h1>
               <p className="truncate text-[11px] leading-tight text-dark-text-muted">
                 {f.activeScenario.name} - dados somente no navegador
               </p>
             </div>
           </div>
           <div className="flex items-center gap-1.5">
+            <div className="mr-2 hidden rounded-lg border border-dark-border bg-dark-surface p-1 md:grid md:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setActiveView('planning')}
+                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${
+                  activeView === 'planning'
+                    ? 'bg-primary-600 text-white'
+                    : 'text-dark-text-secondary hover:text-dark-text'
+                }`}
+              >
+                <LayoutDashboard size={14} />
+                Planejamento
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveView('cards')}
+                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${
+                  activeView === 'cards' ? 'bg-sky-600 text-white' : 'text-dark-text-secondary hover:text-dark-text'
+                }`}
+              >
+                <CreditCard size={14} />
+                Cartões
+              </button>
+            </div>
             <button
               onClick={handleExport}
               className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-dark-text-secondary transition-colors hover:bg-primary-500/10 hover:text-primary-300"
@@ -163,20 +188,28 @@ function App() {
       </header>
 
       <main className="mx-auto max-w-7xl space-y-5 px-4 py-5 sm:px-6 lg:px-8">
-        <CommandCenter
-          scenarioName={f.activeScenario.name}
-          salaryNet={f.salaryNet}
-          paycheckInAccount={f.paycheckInAccount}
-          availableForBudget={f.availableForBudget}
-          totalCosts={f.totalCosts}
-          totalWants={f.totalWantsAmount}
-          totalDeductions={f.totalDeductions}
-          directInvestmentTarget={f.directInvestmentTarget}
-          balanceAfterCosts={f.balanceAfterCosts}
-          budgetComparison={f.budgetComparison}
-          emergencyFundCurrent={f.emergencyFundCurrent}
-          fixedIncomeMonthlyAllocation={f.fixedIncomeMonthlyAllocation}
-        />
+        <div className="grid grid-cols-2 rounded-lg border border-dark-border bg-dark-card p-1 md:hidden">
+          <button
+            type="button"
+            onClick={() => setActiveView('planning')}
+            className={`inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold transition-colors ${
+              activeView === 'planning' ? 'bg-primary-600 text-white' : 'text-dark-text-secondary'
+            }`}
+          >
+            <LayoutDashboard size={15} />
+            Planejamento
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('cards')}
+            className={`inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold transition-colors ${
+              activeView === 'cards' ? 'bg-sky-600 text-white' : 'text-dark-text-secondary'
+            }`}
+          >
+            <CreditCard size={15} />
+            Cartões
+          </button>
+        </div>
 
         <ScenarioManager
           scenarios={f.scenarios}
@@ -189,13 +222,32 @@ function App() {
           summaries={f.scenarioSummaries}
         />
 
+        {activeView === 'planning' ? (
+          <>
+            <CommandCenter
+              scenarioName={f.activeScenario.name}
+              salaryNet={f.salaryNet}
+              paycheckInAccount={f.paycheckInAccount}
+              availableForBudget={f.availableForBudget}
+              totalCosts={f.totalCosts}
+              totalWants={f.totalWantsAmount}
+              totalDeductions={f.totalDeductions}
+              directInvestmentTarget={f.directInvestmentTarget}
+              balanceAfterCosts={f.balanceAfterCosts}
+              budgetComparison={f.budgetComparison}
+              emergencyFundCurrent={f.emergencyFundCurrent}
+              fixedIncomeMonthlyAllocation={f.fixedIncomeMonthlyAllocation}
+              creditCardPersonalTotal={f.creditCardSummary.currentPersonalTotal}
+              creditCardAvailableLimit={f.creditCardSummary.availablePersonalLimit}
+            />
+
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-[390px_minmax(0,1fr)]">
           <div className="space-y-5 xl:sticky xl:top-20 xl:self-start">
             <div>
               <span className="text-xs font-bold uppercase tracking-wide text-primary-300">Base financeira</span>
               <h2 className="mt-1 text-xl font-black text-dark-text">Cadastre e acompanhe</h2>
               <p className="mt-1 text-sm text-dark-text-muted">
-                Renda, folha e custos fixos ficam aqui para consulta rapida.
+                Renda, folha e custos fixos ficam aqui para consulta rápida.
               </p>
             </div>
 
@@ -234,8 +286,8 @@ function App() {
 
           <div className="space-y-5">
             <div>
-              <span className="text-xs font-bold uppercase tracking-wide text-emerald-300">Plano do mes</span>
-              <h2 className="mt-1 text-xl font-black text-dark-text">Ajuste o que muda com frequencia</h2>
+              <span className="text-xs font-bold uppercase tracking-wide text-emerald-300">Plano do mês</span>
+              <h2 className="mt-1 text-xl font-black text-dark-text">Ajuste o que muda com frequência</h2>
               <p className="mt-1 text-sm text-dark-text-muted">
                 Metas, desejos, aportes e reserva ficam juntos para comparar sobras e faltas.
               </p>
@@ -261,19 +313,6 @@ function App() {
               selectedModel={f.selectedModel}
               baseBudgetAllocation={f.baseBudgetAllocation}
               balanceAfterCosts={f.balanceAfterCosts}
-            />
-
-            <CreditCardManager
-              entries={f.creditCardEntries}
-              settings={f.creditCardSettings}
-              summary={f.creditCardSummary}
-              availableForBudget={f.availableForBudget}
-              addEntry={f.addCreditCardEntry}
-              updateEntry={f.updateCreditCardEntry}
-              removeEntry={f.removeCreditCardEntry}
-              replaceEntries={f.replaceCreditCardEntries}
-              appendEntries={f.appendCreditCardEntries}
-              setSettings={f.setCreditCardSettings}
             />
 
             <WantsManager
@@ -324,11 +363,28 @@ function App() {
             />
           </div>
         </div>
+          </>
+        ) : (
+          <div className="space-y-5">
+            <CreditCardManager
+              entries={f.creditCardEntries}
+              settings={f.creditCardSettings}
+              summary={f.creditCardSummary}
+              availableForBudget={f.availableForBudget}
+              addEntry={f.addCreditCardEntry}
+              updateEntry={f.updateCreditCardEntry}
+              removeEntry={f.removeCreditCardEntry}
+              replaceEntries={f.replaceCreditCardEntries}
+              appendEntries={f.appendCreditCardEntries}
+              setSettings={f.setCreditCardSettings}
+            />
+          </div>
+        )}
       </main>
 
       <footer className="border-t border-white/10">
         <div className="mx-auto max-w-7xl px-4 py-5 text-center text-xs text-dark-text-muted sm:px-6 lg:px-8">
-          Dados salvos apenas no navegador. Use Backup para guardar uma copia fora do localStorage.
+          Dados salvos apenas no navegador. Use Backup para guardar uma cópia fora do localStorage.
         </div>
       </footer>
     </div>

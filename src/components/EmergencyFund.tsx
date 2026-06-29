@@ -13,7 +13,7 @@ interface Props {
 }
 
 function formatMonths(months: number) {
-  if (months <= 1) return '1 mes'
+  if (months <= 1) return '1 mês'
   if (months < 12) return `${months} meses`
   const years = Math.floor(months / 12)
   const remainingMonths = months % 12

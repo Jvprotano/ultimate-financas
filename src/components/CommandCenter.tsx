@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, CircleDollarSign, PiggyBank, Shield, WalletCards } from 'lucide-react'
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, CircleDollarSign, Gauge, PiggyBank, Shield, WalletCards } from 'lucide-react'
+import { Card } from './Card'
+import { HeaderMetric } from './HeaderMetric'
 import type { BudgetBucket } from '../types'
 import { formatCurrency } from '../utils'
 
@@ -16,6 +18,8 @@ interface Props {
   budgetComparison: Record<string, BudgetBucket>
   emergencyFundCurrent: number
   fixedIncomeMonthlyAllocation: number
+  creditCardPersonalTotal: number
+  creditCardAvailableLimit: number
 }
 
 type Tone = 'primary' | 'emerald' | 'amber' | 'rose' | 'slate'
@@ -97,6 +101,8 @@ export function CommandCenter({
   budgetComparison,
   emergencyFundCurrent,
   fixedIncomeMonthlyAllocation,
+  creditCardPersonalTotal,
+  creditCardAvailableLimit,
 }: Props) {
   const hasIncome = salaryNet > 0 && availableForBudget > 0
   const reserveTarget = totalCosts * 6
@@ -112,7 +118,7 @@ export function CommandCenter({
   if (!hasIncome) {
     alerts.push({
       title: 'Defina a renda',
-      detail: 'Sem renda, as metas e percentuais nao representam o mes.',
+      detail: 'Sem renda, as metas e percentuais não representam o mês.',
       tone: 'primary',
     })
   }
@@ -160,11 +166,18 @@ export function CommandCenter({
   }
 
   return (
-    <section className="rounded-lg border border-white/10 bg-dark-card p-4 shadow-sm">
+    <Card
+      title="Central do mês"
+      icon={<Gauge size={18} />}
+      accentColor="bg-primary-600"
+      collapsible
+      storageKey="command-center"
+      headerExtra={<HeaderMetric amount={balanceAfterCosts} baseAmount={availableForBudget} label="Livre" tone={balanceAfterCosts >= 0 ? 'emerald' : 'rose'} />}
+    >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <span className="text-xs font-bold uppercase tracking-wide text-primary-300">{scenarioName}</span>
-          <h2 className="mt-1 text-2xl font-black leading-tight text-dark-text">Central do mes</h2>
+          <h2 className="mt-1 text-2xl font-black leading-tight text-dark-text">Central do mês</h2>
         </div>
         <div className="text-right">
           <span className="block text-xs text-dark-text-muted">Cai na conta</span>
@@ -206,7 +219,7 @@ export function CommandCenter({
         />
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_280px_260px]">
         <div className="grid gap-2 md:grid-cols-3">
           {alerts.slice(0, 3).map((alert) => {
             const style = toneClass[alert.tone]
@@ -241,7 +254,28 @@ export function CommandCenter({
               : 'Cadastre custos fixos para calcular'}
           </p>
         </div>
+
+        <div
+          className={`rounded-lg border px-3 py-2.5 ${
+            creditCardAvailableLimit >= 0
+              ? 'border-sky-500/20 bg-sky-500/10'
+              : 'border-rose-500/20 bg-rose-500/10'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <span className="flex items-center gap-2 text-sm font-bold text-sky-100">
+              <WalletCards size={15} />
+              Cartões
+            </span>
+            <span className="text-xs font-bold text-dark-text-muted">{formatCurrency(creditCardPersonalTotal)}</span>
+          </div>
+          <p className={`mt-2 text-xs ${creditCardAvailableLimit >= 0 ? 'text-sky-200' : 'text-rose-200'}`}>
+            {creditCardAvailableLimit >= 0
+              ? `${formatCurrency(creditCardAvailableLimit)} do limite pessoal ainda livre`
+              : `${formatCurrency(Math.abs(creditCardAvailableLimit))} acima do limite pessoal`}
+          </p>
+        </div>
       </div>
-    </section>
+    </Card>
   )
 }

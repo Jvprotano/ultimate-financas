@@ -170,7 +170,7 @@ export function BudgetOverview({
   const canTransfer = fromArea !== toArea && amount > 0 && sourceCapacity > 0
   const transferAmount = Math.min(amount, sourceCapacity)
   const totalMoved = allocationTransfers.reduce((sum, transfer) => sum + transfer.amount, 0)
-  const investmentFromPayroll = investmentDeductions + employerInvestmentContributions
+  const investmentFromPayroll = investmentDeductions
 
   const handleTransfer = () => {
     if (!canTransfer) return
@@ -180,7 +180,7 @@ export function BudgetOverview({
 
   return (
     <Card
-      title="Plano de Alocacao"
+      title="Plano de Alocação"
       icon={<Landmark size={18} />}
       accentColor="bg-primary-600"
       collapsible
@@ -197,9 +197,9 @@ export function BudgetOverview({
         <section className="rounded-lg border border-dark-border bg-dark-surface p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h3 className="text-sm font-bold text-dark-text">Mover diferenca entre alocacoes</h3>
+              <h3 className="text-sm font-bold text-dark-text">Mover diferença entre alocações</h3>
               <p className="mt-1 text-xs leading-relaxed text-dark-text-muted">
-                Use quando uma caixa tem folga e outra precisa de mais meta. O movimento altera as metas, nao os gastos
+                Use quando uma caixa tem folga e outra precisa de mais meta. O movimento altera as metas, não os gastos
                 cadastrados.
               </p>
             </div>
@@ -268,7 +268,7 @@ export function BudgetOverview({
             </span>
             {amount > sourceCapacity && sourceCapacity > 0 && (
               <span className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-2.5 py-1.5 text-amber-300">
-                O movimento sera limitado a {formatCurrency(sourceCapacity)}.
+                O movimento será limitado a {formatCurrency(sourceCapacity)}.
               </span>
             )}
             {totalMoved > 0 && (
@@ -296,7 +296,7 @@ export function BudgetOverview({
                       type="button"
                       onClick={() => removeAllocationTransfer(transfer.id)}
                       className="rounded-lg p-1.5 text-dark-text-muted transition-colors hover:bg-rose-500/10 hover:text-rose-400"
-                      aria-label="Remover transferencia"
+                    aria-label="Remover transferência"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -315,8 +315,13 @@ export function BudgetOverview({
             </strong>
           </div>
           <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-3">
-            <span className="block text-xs text-emerald-300">Investimento via folha</span>
+            <span className="block text-xs text-emerald-300">Seu investimento via folha</span>
             <strong className="text-sm text-emerald-100">{formatCurrency(investmentFromPayroll)}</strong>
+            {employerInvestmentContributions > 0 && (
+              <span className="mt-1 block text-[11px] text-emerald-300">
+                Empresa: +{formatCurrency(employerInvestmentContributions)} como bônus
+              </span>
+            )}
           </div>
           <div
             className={`rounded-lg border px-3 py-3 ${
@@ -326,7 +331,7 @@ export function BudgetOverview({
             }`}
           >
             <span className={`block text-xs ${balanceAfterCosts >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-              Saldo real apos plano
+              Saldo real após plano
             </span>
             <strong className={`text-sm ${balanceAfterCosts >= 0 ? 'text-emerald-100' : 'text-rose-100'}`}>
               {formatCurrency(balanceAfterCosts)}
@@ -337,12 +342,12 @@ export function BudgetOverview({
         {directInvestmentTarget > 0 ? (
           <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
             <CheckCircle2 size={16} className="shrink-0" />
-            Aporte direto necessario: <strong>{formatCurrency(directInvestmentTarget)}</strong>.
+            Aporte direto necessário: <strong>{formatCurrency(directInvestmentTarget)}</strong>.
           </div>
         ) : (
           <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
             <AlertTriangle size={16} className="shrink-0" />
-            A meta de investimentos ja foi coberta por folha, empresa ou movimentos de meta.
+            A meta de investimentos já foi coberta pelo seu desconto em folha ou por movimentos de meta.
           </div>
         )}
       </div>

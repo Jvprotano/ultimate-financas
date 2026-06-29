@@ -82,8 +82,8 @@ export function SalaryInput({
           </div>
           <div className="px-3 py-2.5 rounded-lg border border-dark-border bg-dark-surface text-xs text-dark-text-muted">
             {isTakeHomeMode
-              ? "Use esta opcao se voce quer digitar o valor que realmente caiu na conta. Investimentos em folha entram de volta na base do orcamento; beneficios nao sao descontados de novo."
-              : "Use esta opcao se o valor informado ainda inclui os descontos cadastrados abaixo. Beneficios saem da base do orcamento e investimentos em folha continuam contando como investimento."}
+              ? "Use esta opção se você quer digitar o valor que realmente caiu na conta. Investimentos em folha entram de volta na base do orçamento; benefícios não são descontados de novo."
+              : "Use esta opção se o valor informado ainda inclui os descontos cadastrados abaixo. Benefícios saem da base do orçamento e investimentos em folha continuam contando como investimento."}
           </div>
         </div>
 
@@ -148,7 +148,7 @@ export function SalaryInput({
 
         {isTakeHomeMode && benefitDeductions > 0 && (
           <p className="text-xs text-dark-text-muted">
-            Os beneficios cadastrados ja estao fora do valor recebido e nao serao abatidos novamente.
+            Os benefícios cadastrados já estão fora do valor recebido e não serão abatidos novamente.
           </p>
         )}
       </div>
