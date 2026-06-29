@@ -283,24 +283,25 @@ function calculateCreditCardSummary(
 }
 
 function calculateScenario(state: FinanceScenarioData) {
-  const selectedModel = getSelectedModel(state)
-  const totalCosts = state.costs.reduce((sum, c) => sum + c.value, 0)
-  const totalDeductions = state.deductions.reduce((sum, d) => sum + d.value, 0)
-  const investmentDeductions = state.deductions
+  const safeState = normalizeScenario(state as FinanceScenario)
+  const selectedModel = getSelectedModel(safeState)
+  const totalCosts = safeState.costs.reduce((sum, c) => sum + c.value, 0)
+  const totalDeductions = safeState.deductions.reduce((sum, d) => sum + d.value, 0)
+  const investmentDeductions = safeState.deductions
     .filter((d) => INVESTMENT_DEDUCTION_TYPES.includes(d.type))
     .reduce((sum, d) => sum + d.value, 0)
-  const employerInvestmentContributions = state.deductions
+  const employerInvestmentContributions = safeState.deductions
     .filter((d) => INVESTMENT_DEDUCTION_TYPES.includes(d.type))
     .reduce((sum, d) => sum + (d.employerContribution ?? 0), 0)
   const benefitDeductions = totalDeductions - investmentDeductions
   const paycheckInAccount =
-    state.salaryInputMode === 'before_payroll_deductions'
-      ? Math.max(0, state.salaryNet - totalDeductions)
-      : state.salaryNet
+    safeState.salaryInputMode === 'before_payroll_deductions'
+      ? Math.max(0, safeState.salaryNet - totalDeductions)
+      : safeState.salaryNet
   const availableForBudget =
-    state.salaryInputMode === 'before_payroll_deductions'
-      ? Math.max(0, state.salaryNet - benefitDeductions)
-      : state.salaryNet + investmentDeductions
+    safeState.salaryInputMode === 'before_payroll_deductions'
+      ? Math.max(0, safeState.salaryNet - benefitDeductions)
+      : safeState.salaryNet + investmentDeductions
 
   const baseBudgetAllocation: Record<BudgetArea, number> = {
     necessidades: (availableForBudget * selectedModel.necessidades) / 100,
@@ -310,18 +311,18 @@ function calculateScenario(state: FinanceScenarioData) {
 
   const { allocation: budgetAllocation, movement: allocationMovement } = applyAllocationTransfers(
     baseBudgetAllocation,
-    state.allocationTransfers,
+    safeState.allocationTransfers,
   )
 
   const necessidadesSurplus = Math.max(0, budgetAllocation.necessidades - totalCosts)
-  const fixedWantsAmount = state.wants
+  const fixedWantsAmount = safeState.wants
     .filter((w) => (w.mode ?? 'percentage') === 'fixed')
     .reduce((sum, w) => sum + (w.fixedAmount ?? 0), 0)
   const variableWantsBase = Math.max(0, budgetAllocation.desejos - fixedWantsAmount)
-  const totalWantsPercentage = state.wants
+  const totalWantsPercentage = safeState.wants
     .filter((w) => (w.mode ?? 'percentage') === 'percentage')
     .reduce((sum, w) => sum + w.percentage, 0)
-  const wantAllocations = state.wants.map((w) => ({
+  const wantAllocations = safeState.wants.map((w) => ({
     ...w,
     mode: w.mode ?? 'percentage',
     fixedAmount: w.fixedAmount ?? 0,
@@ -331,7 +332,7 @@ function calculateScenario(state: FinanceScenarioData) {
         : (variableWantsBase * w.percentage) / 100,
   }))
   const totalWantsAmount = wantAllocations.reduce((sum, w) => sum + w.amount, 0)
-  const totalDiversificationPercentage = state.diversification.reduce((sum, slice) => sum + slice.percentage, 0)
+  const totalDiversificationPercentage = safeState.diversification.reduce((sum, slice) => sum + slice.percentage, 0)
   const directInvestmentTarget = Math.max(
     0,
     budgetAllocation.investimentos - investmentDeductions - employerInvestmentContributions,
@@ -373,17 +374,17 @@ function calculateScenario(state: FinanceScenarioData) {
     },
   }
 
-  const investmentAllocation = state.diversification.map((slice) => ({
+  const investmentAllocation = safeState.diversification.map((slice) => ({
     ...slice,
     amount: (directInvestmentTarget * slice.percentage) / 100,
   }))
   const fixedIncomeMonthlyAllocation = investmentAllocation
     .filter((slice) => isFixedIncomeSlice(slice.name))
     .reduce((sum, slice) => sum + slice.amount, 0)
-  const creditCardSummary = calculateCreditCardSummary(state.creditCardEntries, state.creditCardSettings)
+  const creditCardSummary = calculateCreditCardSummary(safeState.creditCardEntries, safeState.creditCardSettings)
 
   const costsByCategory = new Map<string, number>()
-  for (const c of state.costs) {
+  for (const c of safeState.costs) {
     costsByCategory.set(c.category, (costsByCategory.get(c.category) || 0) + c.value)
   }
 
@@ -422,10 +423,17 @@ function calculateScenario(state: FinanceScenarioData) {
 }
 
 export function useFinancas() {
-  const [scenarios, setScenarios] = useLocalStorage<FinanceScenario[]>(SCENARIOS_STORAGE_KEY, loadInitialScenarios())
+  const [storedScenarios, setScenarios] = useLocalStorage<FinanceScenario[]>(
+    SCENARIOS_STORAGE_KEY,
+    loadInitialScenarios(),
+  )
   const [activeScenarioId, setActiveScenarioId] = useLocalStorage<string>(
     ACTIVE_SCENARIO_STORAGE_KEY,
-    scenarios[0]?.id ?? '',
+    storedScenarios[0]?.id ?? '',
+  )
+  const scenarios = useMemo(
+    () => (Array.isArray(storedScenarios) ? storedScenarios.map(normalizeScenario) : []),
+    [storedScenarios],
   )
 
   useEffect(() => {
@@ -441,6 +449,12 @@ export function useFinancas() {
     }
   }, [activeScenarioId, scenarios, setActiveScenarioId, setScenarios])
 
+  useEffect(() => {
+    if (JSON.stringify(storedScenarios) !== JSON.stringify(scenarios)) {
+      setScenarios(scenarios)
+    }
+  }, [scenarios, setScenarios, storedScenarios])
+
   const activeScenario = scenarios.find((scenario) => scenario.id === activeScenarioId) ?? scenarios[0] ?? createDefaultScenario('Atual')
   const activeId = activeScenario?.id ?? ''
 
@@ -448,7 +462,7 @@ export function useFinancas() {
     (updater: (scenario: FinanceScenario) => FinanceScenario) => {
       setScenarios((prev) =>
         prev.map((scenario) =>
-          scenario.id === activeId ? { ...updater(scenario), updatedAt: nowIso() } : scenario,
+          scenario.id === activeId ? { ...updater(normalizeScenario(scenario)), updatedAt: nowIso() } : normalizeScenario(scenario),
         ),
       )
     },
