@@ -1,4 +1,5 @@
 import type {
+  BudgetArea,
   BudgetModel,
   DiversificationSlice,
   CostCategory,
@@ -82,6 +83,12 @@ export const DEFAULT_DIVERSIFICATION: DiversificationSlice[] = [
 export const INVESTMENT_DEDUCTION_TYPES: DeductionType[] = [
   'previdencia_privada',
 ];
+
+export const BUDGET_AREA_LABELS: Record<BudgetArea, string> = {
+  necessidades: "Necessidades",
+  desejos: "Desejos",
+  investimentos: "Investimentos",
+};
 
 export const COST_CATEGORIES: {
   key: CostCategory;

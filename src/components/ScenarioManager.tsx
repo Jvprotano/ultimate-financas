@@ -20,6 +20,10 @@ function metricTone(value: number) {
   return 'text-dark-text-muted'
 }
 
+function percentLabel(value: number, base: number) {
+  return base > 0 ? `${((value / base) * 100).toFixed(0)}%` : '0%'
+}
+
 export function ScenarioManager({
   scenarios,
   activeScenarioId,
@@ -91,9 +95,13 @@ export function ScenarioManager({
           {activeSummary && (
             <p className="truncate text-xs text-dark-text-muted">
               Base {formatCurrency(activeSummary.availableForBudget)} | aporte direto{' '}
-              {formatCurrency(activeSummary.directInvestmentTarget)} | livre{' '}
+              {formatCurrency(activeSummary.directInvestmentTarget)} ({percentLabel(
+                activeSummary.directInvestmentTarget,
+                activeSummary.availableForBudget,
+              )}) | livre{' '}
               <span className={metricTone(activeSummary.balanceAfterCosts)}>
-                {formatCurrency(activeSummary.balanceAfterCosts)}
+                {formatCurrency(activeSummary.balanceAfterCosts)} (
+                {percentLabel(activeSummary.balanceAfterCosts, activeSummary.availableForBudget)})
               </span>
             </p>
           )}
@@ -149,9 +157,13 @@ export function ScenarioManager({
                         {scenario.name}
                       </span>
                       <span className="mt-1 flex items-center justify-between gap-3 text-xs text-dark-text-muted">
-                        <span>{summary ? formatCurrency(summary.availableForBudget) : formatCurrency(0)}</span>
+                        <span>
+                          {summary ? formatCurrency(summary.availableForBudget) : formatCurrency(0)}
+                          {summary ? ` (${percentLabel(summary.availableForBudget, summary.availableForBudget)})` : ''}
+                        </span>
                         <span className={metricTone(summary?.balanceAfterCosts ?? 0)}>
                           {summary ? formatCurrency(summary.balanceAfterCosts) : formatCurrency(0)}
+                          {summary ? ` (${percentLabel(summary.balanceAfterCosts, summary.availableForBudget)})` : ''}
                         </span>
                       </span>
                     </button>
@@ -265,20 +277,29 @@ export function ScenarioManager({
                       <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
                         <div>
                           <dt className="text-dark-text-muted">Custos</dt>
-                          <dd className="font-semibold text-rose-400">{formatCurrency(summary.totalCosts)}</dd>
+                          <dd className="font-semibold text-rose-400">
+                            {formatCurrency(summary.totalCosts)} ({percentLabel(summary.totalCosts, summary.availableForBudget)})
+                          </dd>
                         </div>
                         <div>
                           <dt className="text-dark-text-muted">Desejos</dt>
-                          <dd className="font-semibold text-violet-400">{formatCurrency(summary.totalWantsAmount)}</dd>
+                          <dd className="font-semibold text-violet-400">
+                            {formatCurrency(summary.totalWantsAmount)} (
+                            {percentLabel(summary.totalWantsAmount, summary.availableForBudget)})
+                          </dd>
                         </div>
                         <div>
                           <dt className="text-dark-text-muted">Aporte direto</dt>
-                          <dd className="font-semibold text-emerald-400">{formatCurrency(summary.directInvestmentTarget)}</dd>
+                          <dd className="font-semibold text-emerald-400">
+                            {formatCurrency(summary.directInvestmentTarget)} (
+                            {percentLabel(summary.directInvestmentTarget, summary.availableForBudget)})
+                          </dd>
                         </div>
                         <div>
                           <dt className="text-dark-text-muted">Livre</dt>
                           <dd className={`font-semibold ${metricTone(summary.balanceAfterCosts)}`}>
-                            {formatCurrency(summary.balanceAfterCosts)}
+                            {formatCurrency(summary.balanceAfterCosts)} (
+                            {percentLabel(summary.balanceAfterCosts, summary.availableForBudget)})
                           </dd>
                         </div>
                       </dl>

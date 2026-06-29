@@ -2,6 +2,7 @@ import { DollarSign } from "lucide-react";
 import type { SalaryInputMode } from "../types";
 import { Card } from "./Card";
 import { CurrencyInput } from "./CurrencyInput";
+import { HeaderMetric } from "./HeaderMetric";
 import { formatCurrency } from "../utils";
 
 interface Props {
@@ -13,6 +14,7 @@ interface Props {
   totalDeductions: number;
   benefitDeductions: number;
   investmentDeductions: number;
+  employerInvestmentContributions: number;
   availableForBudget: number;
 }
 
@@ -25,6 +27,7 @@ export function SalaryInput({
   totalDeductions,
   benefitDeductions,
   investmentDeductions,
+  employerInvestmentContributions,
   availableForBudget,
 }: Props) {
   const isTakeHomeMode = salaryInputMode === "take_home";
@@ -38,7 +41,7 @@ export function SalaryInput({
       storageKey="salary"
       headerExtra={
         salaryNet > 0 ? (
-          <span className="text-sm font-bold text-emerald-400">{formatCurrency(salaryNet)}</span>
+          <HeaderMetric amount={salaryNet} baseAmount={salaryNet} label="Renda" tone="emerald" />
         ) : undefined
       }
     >
@@ -111,9 +114,17 @@ export function SalaryInput({
             )}
             {investmentDeductions > 0 && (
               <div className="flex items-center justify-between px-3 py-2.5 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
-                <span className="text-sm text-emerald-400">Previdencia (investimento)</span>
+                <span className="text-sm text-emerald-400">Previdencia (seu desconto)</span>
                 <span className="text-sm font-semibold text-emerald-400">
                   {formatCurrency(investmentDeductions)}
+                </span>
+              </div>
+            )}
+            {employerInvestmentContributions > 0 && (
+              <div className="flex items-center justify-between px-3 py-2.5 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
+                <span className="text-sm text-emerald-300">Contrapartida da empresa</span>
+                <span className="text-sm font-semibold text-emerald-300">
+                  + {formatCurrency(employerInvestmentContributions)}
                 </span>
               </div>
             )}

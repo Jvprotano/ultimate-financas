@@ -16,7 +16,8 @@ Plataforma web de planejamento salarial e de investimentos. Organize seu orçame
 - **Videos explicativos** — cada modelo tem um link para video no YouTube explicando a regra
 - **Diversificacao de investimentos** — renda fixa, acoes, FIIs, cripto + adicionar novas classes de ativos
 - **Alocacao calculada** — mostra exatamente quanto investir em cada classe
-- **Reserva de emergencia** — calculo automatico para 3, 6 e 12 meses
+- **Cartoes e faturas** — controle da fatura atual e proxima, importacao por colagem do Sheets, totais por cartao, limite pessoal esperado e parcelas restantes
+- **Reserva de emergencia** — calculo automatico para 3, 6 e 12 meses, valor atual e prazo pela alocacao em renda fixa
 - **Dashboard com graficos** — pizza para orçamento e diversificacao, barras para custos por categoria
 - **Alertas inteligentes** — aviso quando custos excedem o disponivel, taxa de economia
 - **Persistencia local** — todos os dados salvos no localStorage do navegador (zero backend)

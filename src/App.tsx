@@ -8,6 +8,7 @@ import { CostManager } from './components/CostManager'
 import { WantsManager } from './components/WantsManager'
 import { BudgetModelSelector } from './components/BudgetModelSelector'
 import { BudgetOverview } from './components/BudgetOverview'
+import { CreditCardManager } from './components/CreditCardManager'
 import { DiversificationSelector } from './components/DiversificationSelector'
 import { Charts } from './components/Charts'
 import { EmergencyFund } from './components/EmergencyFund'
@@ -170,15 +171,11 @@ function App() {
           totalCosts={f.totalCosts}
           totalWants={f.totalWantsAmount}
           totalDeductions={f.totalDeductions}
-          investmentDeductions={f.investmentDeductions}
           directInvestmentTarget={f.directInvestmentTarget}
           balanceAfterCosts={f.balanceAfterCosts}
           budgetComparison={f.budgetComparison}
-          totalWantsPercentage={f.totalWantsPercentage}
-          totalDiversificationPercentage={f.totalDiversificationPercentage}
-          costsCount={f.costs.length}
-          wantsCount={f.wants.length}
-          deductionsCount={f.deductions.length}
+          emergencyFundCurrent={f.emergencyFundCurrent}
+          fixedIncomeMonthlyAllocation={f.fixedIncomeMonthlyAllocation}
         />
 
         <ScenarioManager
@@ -194,6 +191,14 @@ function App() {
 
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-[390px_minmax(0,1fr)]">
           <div className="space-y-5 xl:sticky xl:top-20 xl:self-start">
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wide text-primary-300">Base financeira</span>
+              <h2 className="mt-1 text-xl font-black text-dark-text">Cadastre e acompanhe</h2>
+              <p className="mt-1 text-sm text-dark-text-muted">
+                Renda, folha e custos fixos ficam aqui para consulta rapida.
+              </p>
+            </div>
+
             <SalaryInput
               salaryNet={f.salaryNet}
               setSalaryNet={f.setSalaryNet}
@@ -203,6 +208,7 @@ function App() {
               totalDeductions={f.totalDeductions}
               benefitDeductions={f.benefitDeductions}
               investmentDeductions={f.investmentDeductions}
+              employerInvestmentContributions={f.employerInvestmentContributions}
               availableForBudget={f.availableForBudget}
             />
 
@@ -210,27 +216,30 @@ function App() {
               deductions={f.deductions}
               addDeduction={f.addDeduction}
               removeDeduction={f.removeDeduction}
+              updateDeductionEmployerContribution={f.updateDeductionEmployerContribution}
               totalDeductions={f.totalDeductions}
               investmentDeductions={f.investmentDeductions}
+              employerInvestmentContributions={f.employerInvestmentContributions}
+              availableForBudget={f.availableForBudget}
+            />
+
+            <CostManager
+              costs={f.costs}
+              addCost={f.addCost}
+              removeCost={f.removeCost}
+              totalCosts={f.totalCosts}
+              availableForBudget={f.availableForBudget}
             />
           </div>
 
           <div className="space-y-5">
-            <BudgetOverview
-              budgetComparison={f.budgetComparison}
-              investmentDeductions={f.investmentDeductions}
-              directInvestmentTarget={f.directInvestmentTarget}
-              unallocatedMoney={f.unallocatedMoney}
-              availableForBudget={f.availableForBudget}
-              selectedModel={f.selectedModel}
-              baseBudgetAllocation={f.baseBudgetAllocation}
-              budgetAllocation={f.budgetAllocation}
-              necessidadesSurplus={f.necessidadesSurplus}
-              surplusToDesejos={f.surplusToDesejos}
-              setSurplusToDesejos={f.setSurplusToDesejos}
-            />
-
-            <CostManager costs={f.costs} addCost={f.addCost} removeCost={f.removeCost} totalCosts={f.totalCosts} />
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wide text-emerald-300">Plano do mes</span>
+              <h2 className="mt-1 text-xl font-black text-dark-text">Ajuste o que muda com frequencia</h2>
+              <p className="mt-1 text-sm text-dark-text-muted">
+                Metas, desejos, aportes e reserva ficam juntos para comparar sobras e faltas.
+              </p>
+            </div>
 
             <BudgetModelSelector
               selectedModelId={f.selectedModelId}
@@ -239,14 +248,48 @@ function App() {
               setCustomModel={f.setCustomModel}
             />
 
+            <BudgetOverview
+              budgetComparison={f.budgetComparison}
+              allocationTransfers={f.allocationTransfers}
+              addAllocationTransfer={f.addAllocationTransfer}
+              removeAllocationTransfer={f.removeAllocationTransfer}
+              clearAllocationTransfers={f.clearAllocationTransfers}
+              investmentDeductions={f.investmentDeductions}
+              employerInvestmentContributions={f.employerInvestmentContributions}
+              directInvestmentTarget={f.directInvestmentTarget}
+              availableForBudget={f.availableForBudget}
+              selectedModel={f.selectedModel}
+              baseBudgetAllocation={f.baseBudgetAllocation}
+              balanceAfterCosts={f.balanceAfterCosts}
+            />
+
+            <CreditCardManager
+              entries={f.creditCardEntries}
+              settings={f.creditCardSettings}
+              summary={f.creditCardSummary}
+              availableForBudget={f.availableForBudget}
+              addEntry={f.addCreditCardEntry}
+              updateEntry={f.updateCreditCardEntry}
+              removeEntry={f.removeCreditCardEntry}
+              replaceEntries={f.replaceCreditCardEntries}
+              appendEntries={f.appendCreditCardEntries}
+              setSettings={f.setCreditCardSettings}
+            />
+
             <WantsManager
               wants={f.wants}
               addWant={f.addWant}
               removeWant={f.removeWant}
               updateWantPercentage={f.updateWantPercentage}
+              updateWantFixedAmount={f.updateWantFixedAmount}
+              updateWantMode={f.updateWantMode}
               wantAllocations={f.wantAllocations}
               totalWantsPercentage={f.totalWantsPercentage}
+              fixedWantsAmount={f.fixedWantsAmount}
+              variableWantsBase={f.variableWantsBase}
+              totalWantsAmount={f.totalWantsAmount}
               desejosAmount={f.budgetAllocation.desejos}
+              availableForBudget={f.availableForBudget}
             />
 
             <DiversificationSelector
@@ -257,10 +300,18 @@ function App() {
               investmentAllocation={f.investmentAllocation}
               totalInvestment={f.budgetAllocation.investimentos}
               investmentDeductions={f.investmentDeductions}
+              employerInvestmentContributions={f.employerInvestmentContributions}
               directInvestmentTarget={f.directInvestmentTarget}
+              availableForBudget={f.availableForBudget}
             />
 
-            <EmergencyFund totalCosts={f.totalCosts} />
+            <EmergencyFund
+              totalCosts={f.totalCosts}
+              currentReserve={f.emergencyFundCurrent}
+              setCurrentReserve={f.setEmergencyFundCurrent}
+              fixedIncomeMonthlyAllocation={f.fixedIncomeMonthlyAllocation}
+              availableForBudget={f.availableForBudget}
+            />
 
             <Charts
               budgetAllocation={f.budgetAllocation}
@@ -269,6 +320,7 @@ function App() {
               wantAllocations={f.wantAllocations}
               availableForBudget={f.availableForBudget}
               investmentDeductions={f.investmentDeductions}
+              employerInvestmentContributions={f.employerInvestmentContributions}
             />
           </div>
         </div>

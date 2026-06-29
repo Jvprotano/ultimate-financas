@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Receipt, Plus, Trash2, ChevronDown } from 'lucide-react'
 import { Card } from './Card'
 import { CurrencyInput } from './CurrencyInput'
+import { HeaderMetric } from './HeaderMetric'
 import type { CostItem, CostCategory } from '../types'
 import { COST_CATEGORIES, COST_CATEGORY_LABELS, COST_CATEGORY_COLORS } from '../types/constants'
 import { formatCurrency } from '../utils'
@@ -11,9 +12,10 @@ interface Props {
   addCost: (name: string, value: number, category: CostCategory) => void
   removeCost: (id: string) => void
   totalCosts: number
+  availableForBudget: number
 }
 
-export function CostManager({ costs, addCost, removeCost, totalCosts }: Props) {
+export function CostManager({ costs, addCost, removeCost, totalCosts, availableForBudget }: Props) {
   const [name, setName] = useState('')
   const [value, setValue] = useState(0)
   const [category, setCategory] = useState<CostCategory>('moradia')
@@ -55,7 +57,7 @@ export function CostManager({ costs, addCost, removeCost, totalCosts }: Props) {
       storageKey="costs"
       headerExtra={
         totalCosts > 0 ? (
-          <span className="text-sm font-bold text-rose-400">{formatCurrency(totalCosts)}</span>
+          <HeaderMetric amount={totalCosts} baseAmount={availableForBudget} label="Fixos" tone="rose" />
         ) : undefined
       }
     >

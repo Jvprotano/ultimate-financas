@@ -19,14 +19,19 @@ export type CostCategory =
 export interface WantItem {
   id: string
   name: string
+  mode?: WantAllocationMode
   percentage: number
+  fixedAmount?: number
 }
+
+export type WantAllocationMode = 'percentage' | 'fixed'
 
 export interface DeductionItem {
   id: string
   name: string
   value: number
   type: DeductionType
+  employerContribution?: number
 }
 
 export type DeductionType =
@@ -53,14 +58,65 @@ export interface DiversificationSlice {
   color: string
 }
 
+export type CreditCardCycle = 'current' | 'next'
+
+export interface CreditCardEntry {
+  id: string
+  cycle: CreditCardCycle
+  description: string
+  purchaseDate: string
+  cardName: string
+  amount: number
+  personalAmount: number
+  remainingAmount: number
+  ownerNote?: string
+  installmentCurrent?: number
+  installmentTotal?: number
+}
+
+export interface CreditCardSettings {
+  paymentDate: string
+  personalSpendingLimit: number
+}
+
+export interface CardTotal {
+  cardName: string
+  totalAmount: number
+  personalAmount: number
+}
+
+export interface CreditCardSummary {
+  currentTotal: number
+  currentPersonalTotal: number
+  nextTotal: number
+  nextPersonalTotal: number
+  remainingInstallmentsTotal: number
+  availablePersonalLimit: number
+  totalsByCard: CardTotal[]
+  currentEntriesCount: number
+  nextEntriesCount: number
+}
+
 export interface BudgetBucket {
   target: number
   actual: number
   diff: number
   percentage: number
+  baseTarget?: number
+  movedIn?: number
+  movedOut?: number
 }
 
 export type SalaryInputMode = 'before_payroll_deductions' | 'take_home'
+
+export type BudgetArea = 'necessidades' | 'desejos' | 'investimentos'
+
+export interface AllocationTransfer {
+  id: string
+  from: BudgetArea
+  to: BudgetArea
+  amount: number
+}
 
 export interface FinanceScenarioData {
   salaryNet: number
@@ -72,6 +128,10 @@ export interface FinanceScenarioData {
   diversification: DiversificationSlice[]
   customModel: { n: number; d: number; i: number }
   surplusToDesejos: number
+  allocationTransfers: AllocationTransfer[]
+  emergencyFundCurrent: number
+  creditCardEntries: CreditCardEntry[]
+  creditCardSettings: CreditCardSettings
 }
 
 export interface FinanceScenario extends FinanceScenarioData {
@@ -90,6 +150,7 @@ export interface ScenarioSummary {
   totalCosts: number
   totalWantsAmount: number
   investmentDeductions: number
+  employerInvestmentContributions: number
   directInvestmentTarget: number
   balanceAfterCosts: number
   savingsRate: number

@@ -31,6 +31,7 @@ interface Props {
   wantAllocations: (WantItem & { amount: number })[];
   availableForBudget: number;
   investmentDeductions: number;
+  employerInvestmentContributions: number;
 }
 
 const BUDGET_COLORS = ["#3b82f6", "#a78bfa", "#34d399"];
@@ -89,6 +90,7 @@ export function Charts({
   wantAllocations,
   availableForBudget,
   investmentDeductions,
+  employerInvestmentContributions,
 }: Props) {
   if (availableForBudget <= 0) return null;
 
@@ -112,7 +114,10 @@ export function Charts({
 
   const investmentData = [
     ...(investmentDeductions > 0
-      ? [{ name: "Previdencia (fonte)", value: investmentDeductions, color: "#f59e0b" }]
+      ? [{ name: "Previdencia (voce)", value: investmentDeductions, color: "#f59e0b" }]
+      : []),
+    ...(employerInvestmentContributions > 0
+      ? [{ name: "Empresa", value: employerInvestmentContributions, color: "#14b8a6" }]
       : []),
     ...investmentAllocation
       .filter((d) => d.amount > 0)
@@ -145,6 +150,7 @@ export function Charts({
       accentColor="bg-slate-600"
       collapsible
       storageKey="charts"
+      defaultCollapsed
     >
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {/* Budget Split */}

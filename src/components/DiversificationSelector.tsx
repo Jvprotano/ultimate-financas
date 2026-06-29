@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Target, Plus, Trash2 } from 'lucide-react'
 import { Card } from './Card'
+import { HeaderMetric } from './HeaderMetric'
 import type { DiversificationSlice } from '../types'
 import { formatCurrency } from '../utils'
 
@@ -12,7 +13,9 @@ interface Props {
   investmentAllocation: (DiversificationSlice & { amount: number })[]
   totalInvestment: number
   investmentDeductions: number
+  employerInvestmentContributions: number
   directInvestmentTarget: number
+  availableForBudget: number
 }
 
 const PRESET_COLORS = ['#3b82f6', '#34d399', '#fbbf24', '#a78bfa', '#fb7185', '#22d3ee', '#f472b6', '#a3e635']
@@ -36,7 +39,9 @@ export function DiversificationSelector({
   investmentAllocation,
   totalInvestment,
   investmentDeductions,
+  employerInvestmentContributions,
   directInvestmentTarget,
+  availableForBudget,
 }: Props) {
   const [newName, setNewName] = useState('')
 
@@ -77,8 +82,8 @@ export function DiversificationSelector({
       collapsible
       storageKey="diversification"
       headerExtra={
-        directInvestmentTarget > 0 ? (
-          <span className="text-sm font-bold text-emerald-400">{formatCurrency(directInvestmentTarget)}</span>
+        totalInvestment > 0 ? (
+          <HeaderMetric amount={directInvestmentTarget} baseAmount={availableForBudget} label="Direto" tone="emerald" />
         ) : undefined
       }
     >
@@ -93,17 +98,25 @@ export function DiversificationSelector({
             {investmentDeductions > 0 && (
               <>
                 <div className="flex justify-between text-sm">
-                  <span className="text-dark-text-secondary">Previdencia (fonte)</span>
+                  <span className="text-dark-text-secondary">Previdencia (seu desconto)</span>
                   <span className="font-semibold text-amber-400">- {formatCurrency(investmentDeductions)}</span>
-                </div>
-                <div className="border-t border-dark-border-subtle pt-2 flex justify-between text-sm">
-                  <span className="text-dark-text font-medium">Aporte direto</span>
-                  <span className="font-bold text-dark-text">{formatCurrency(directInvestmentTarget)}</span>
                 </div>
               </>
             )}
+            {employerInvestmentContributions > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-dark-text-secondary">Contrapartida da empresa</span>
+                <span className="font-semibold text-emerald-400">
+                  - {formatCurrency(employerInvestmentContributions)}
+                </span>
+              </div>
+            )}
+            <div className="border-t border-dark-border-subtle pt-2 flex justify-between text-sm">
+              <span className="text-dark-text font-medium">Aporte direto</span>
+              <span className="font-bold text-dark-text">{formatCurrency(directInvestmentTarget)}</span>
+            </div>
             <p className="text-[11px] text-dark-text-muted">
-              Distribua o aporte direto entre suas classes de investimento{investmentDeductions > 0 ? ' (sem previdencia)' : ''}.
+              Distribua apenas o dinheiro que voce ainda precisa investir pela conta corrente.
             </p>
           </div>
         )}
