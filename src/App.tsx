@@ -376,6 +376,8 @@ function App() {
               removeEntry={f.removeCreditCardEntry}
               replaceEntries={f.replaceCreditCardEntries}
               appendEntries={f.appendCreditCardEntries}
+              anticipateEntry={f.anticipateCreditCardInstallments}
+              payInvoice={f.payCreditCardInvoice}
               setSettings={f.setCreditCardSettings}
             />
           </div>
