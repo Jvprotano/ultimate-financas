@@ -1,12 +1,13 @@
 import { AlertTriangle, ArrowRight, CheckCircle2, CreditCard, Shield } from 'lucide-react'
 import type { ScenarioMetrics } from '../hooks/useFinancas'
-import type { BudgetArea, EmergencyFundState, ScenarioSummary } from '../types'
+import type { BudgetArea, CreditCardSummary, EmergencyFundState, ScenarioSummary } from '../types'
 import { BUDGET_AREA_COLORS, BUDGET_AREA_LABELS, CHART_PALETTE, COST_CATEGORY_COLORS, COST_CATEGORY_LABELS } from '../types/constants'
 import { formatCurrency, formatMonths } from '../utils'
 import { BarRow, Meter, SegmentedBar, StatTile } from './ui'
 
 interface Props {
   metrics: ScenarioMetrics
+  creditCardSummary: CreditCardSummary
   emergencyFund: EmergencyFundState
   scenarioSummaries: ScenarioSummary[]
   activeScenarioId: string
@@ -22,9 +23,9 @@ interface Alert {
 
 const AREAS: BudgetArea[] = ['necessidades', 'desejos', 'investimentos']
 
-function buildAlerts(metrics: ScenarioMetrics): Alert[] {
+function buildAlerts(metrics: ScenarioMetrics, creditCardSummary: CreditCardSummary): Alert[] {
   const alerts: Alert[] = []
-  const { budgetComparison, balanceAfterPlan, totalDiversificationPercentage, creditCardSummary, selectedModel } = metrics
+  const { budgetComparison, balanceAfterPlan, totalDiversificationPercentage, selectedModel } = metrics
   const modelTotal = selectedModel.necessidades + selectedModel.desejos + selectedModel.investimentos
 
   if (balanceAfterPlan < -0.005) {
@@ -102,7 +103,14 @@ const alertStyle: Record<Alert['severity'], { box: string; text: string }> = {
   ok: { box: 'border-primary-500/25 bg-primary-500/[0.07]', text: 'text-primary-300' },
 }
 
-export function Dashboard({ metrics, emergencyFund, scenarioSummaries, activeScenarioId, onGoToPlanning }: Props) {
+export function Dashboard({
+  metrics,
+  creditCardSummary,
+  emergencyFund,
+  scenarioSummaries,
+  activeScenarioId,
+  onGoToPlanning,
+}: Props) {
   const {
     availableForBudget,
     paycheckInAccount,
@@ -123,7 +131,6 @@ export function Dashboard({ metrics, emergencyFund, scenarioSummaries, activeSce
     emergencyFundProgress,
     emergencyFundMonthsToGoal,
     fixedIncomeMonthlyAllocation,
-    creditCardSummary,
   } = metrics
 
   if (availableForBudget <= 0) {
@@ -146,7 +153,7 @@ export function Dashboard({ metrics, emergencyFund, scenarioSummaries, activeSce
     )
   }
 
-  const alerts = buildAlerts(metrics)
+  const alerts = buildAlerts(metrics, creditCardSummary)
   const costRows = Array.from(costsByCategory.entries())
     .map(([category, value]) => ({ category, value }))
     .sort((a, b) => b.value - a.value)

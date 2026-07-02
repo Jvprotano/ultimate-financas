@@ -126,8 +126,6 @@ export interface FinanceScenarioData {
   diversification: DiversificationSlice[]
   customModel: { n: number; d: number; i: number }
   emergencyFund: EmergencyFundState
-  creditCardEntries: CreditCardEntry[]
-  creditCardSettings: CreditCardSettings
 }
 
 export interface FinanceScenario extends FinanceScenarioData {

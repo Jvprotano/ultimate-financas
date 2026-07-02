@@ -25,6 +25,8 @@ const SCENARIOS_STORAGE_KEY = 'uf_scenarios_v3'
 const ACTIVE_SCENARIO_STORAGE_KEY = 'uf_active_scenario_v3'
 const LEGACY_SCENARIOS_KEY = 'uf_scenarios_v2'
 const LEGACY_ACTIVE_SCENARIO_KEY = 'uf_active_scenario_v2'
+const CREDIT_CARD_ENTRIES_STORAGE_KEY = 'uf_credit_card_entries_v1'
+const CREDIT_CARD_SETTINGS_STORAGE_KEY = 'uf_credit_card_settings_v1'
 const DEFAULT_EMERGENCY_FUND: EmergencyFundState = { current: 0, targetMonths: 6 }
 const DEFAULT_CREDIT_CARD_SETTINGS: CreditCardSettings = {
   paymentDate: '05/07',
@@ -53,7 +55,7 @@ function finiteNumber(value: unknown, fallback = 0) {
 }
 
 // ---------------------------------------------------------------------------
-// Cartões de crédito (inalterado)
+// Cartões de crédito (módulo global, independente de cenário)
 // ---------------------------------------------------------------------------
 
 function normalizeCreditCardEntry(entry: CreditCardEntry): CreditCardEntry {
@@ -220,8 +222,15 @@ function calculateCreditCardSummary(
 // ---------------------------------------------------------------------------
 
 function normalizeScenario(scenario: FinanceScenario): FinanceScenario {
+  // Cenários salvos antes do cartão virar um módulo global podem trazer
+  // creditCardEntries/creditCardSettings embutidos: descartamos ao normalizar.
+  const rest = { ...scenario } as Partial<Record<'creditCardEntries' | 'creditCardSettings', unknown>> &
+    FinanceScenario
+  delete rest.creditCardEntries
+  delete rest.creditCardSettings
+
   return {
-    ...scenario,
+    ...rest,
     salaryNet: finiteNumber(scenario.salaryNet),
     salaryInputMode: scenario.salaryInputMode === 'take_home' ? 'take_home' : 'before_payroll_deductions',
     costs: Array.isArray(scenario.costs) ? scenario.costs : [],
@@ -250,17 +259,6 @@ function normalizeScenario(scenario: FinanceScenario): FinanceScenario {
       current: Math.max(0, finiteNumber(scenario.emergencyFund?.current)),
       targetMonths: Math.max(1, Math.round(finiteNumber(scenario.emergencyFund?.targetMonths, 6))),
     },
-    creditCardEntries: Array.isArray(scenario.creditCardEntries)
-      ? scenario.creditCardEntries.map(normalizeCreditCardEntry)
-      : [],
-    creditCardSettings: {
-      ...DEFAULT_CREDIT_CARD_SETTINGS,
-      ...(scenario.creditCardSettings ?? {}),
-      personalSpendingLimit: finiteNumber(
-        scenario.creditCardSettings?.personalSpendingLimit,
-        DEFAULT_CREDIT_CARD_SETTINGS.personalSpendingLimit,
-      ),
-    },
   }
 }
 
@@ -281,8 +279,6 @@ function createDefaultScenario(name = 'Atual'): FinanceScenario {
     diversification: DEFAULT_DIVERSIFICATION,
     customModel: { n: 50, d: 30, i: 20 },
     emergencyFund: DEFAULT_EMERGENCY_FUND,
-    creditCardEntries: [],
-    creditCardSettings: DEFAULT_CREDIT_CARD_SETTINGS,
   }
 }
 
@@ -316,8 +312,6 @@ interface LegacyScenario {
   customModel?: { n: number; d: number; i: number }
   allocationTransfers?: LegacyAllocationTransfer[]
   emergencyFundCurrent?: number
-  creditCardEntries?: CreditCardEntry[]
-  creditCardSettings?: CreditCardSettings
 }
 
 function resolveModelPercentages(selectedModelId?: string, customModel?: { n: number; d: number; i: number }) {
@@ -393,8 +387,6 @@ function convertLegacyScenario(legacy: LegacyScenario): FinanceScenario {
     diversification: Array.isArray(legacy.diversification) ? legacy.diversification : DEFAULT_DIVERSIFICATION,
     customModel: legacy.customModel ?? { n: 50, d: 30, i: 20 },
     emergencyFund: { current: finiteNumber(legacy.emergencyFundCurrent), targetMonths: 6 },
-    creditCardEntries: Array.isArray(legacy.creditCardEntries) ? legacy.creditCardEntries : [],
-    creditCardSettings: legacy.creditCardSettings ?? DEFAULT_CREDIT_CARD_SETTINGS,
   })
 }
 
@@ -544,8 +536,6 @@ function calculateScenario(state: FinanceScenario) {
       ? Math.ceil(emergencyFundRemaining / fixedIncomeMonthlyAllocation)
       : 0
 
-  const creditCardSummary = calculateCreditCardSummary(state.creditCardEntries, state.creditCardSettings)
-
   return {
     selectedModel,
     totalCosts,
@@ -570,7 +560,6 @@ function calculateScenario(state: FinanceScenario) {
     emergencyFundRemaining,
     emergencyFundProgress,
     emergencyFundMonthsToGoal,
-    creditCardSummary,
   }
 }
 
@@ -608,6 +597,20 @@ export function useFinancas() {
   const activeScenario =
     scenarios.find((scenario) => scenario.id === activeScenarioId) ?? scenarios[0] ?? createDefaultScenario('Atual')
   const activeId = activeScenario?.id ?? ''
+
+  // Cartões de crédito: módulo global, compartilhado por todos os cenários.
+  const [storedCreditCardEntries, setCreditCardEntries] = useLocalStorage<CreditCardEntry[]>(
+    CREDIT_CARD_ENTRIES_STORAGE_KEY,
+    [],
+  )
+  const creditCardEntries = useMemo(
+    () => (Array.isArray(storedCreditCardEntries) ? storedCreditCardEntries.map(normalizeCreditCardEntry) : []),
+    [storedCreditCardEntries],
+  )
+  const [creditCardSettings, setCreditCardSettingsRaw] = useLocalStorage<CreditCardSettings>(
+    CREDIT_CARD_SETTINGS_STORAGE_KEY,
+    DEFAULT_CREDIT_CARD_SETTINGS,
+  )
 
   const updateActiveScenario = useCallback(
     (updater: (scenario: FinanceScenario) => FinanceScenario) => {
@@ -811,101 +814,86 @@ export function useFinancas() {
     [updateActiveScenario],
   )
 
-  // Cartões de crédito (inalterado)
+  // Cartões de crédito: módulo global, não pertence a nenhum cenário específico.
   const addCreditCardEntry = useCallback(
     (entry: Omit<CreditCardEntry, 'id'>) => {
-      updateActiveScenario((scenario) => {
-        const nextEntries = [...scenario.creditCardEntries, normalizeCreditCardEntry({ ...entry, id: uid() })]
-        return {
-          ...scenario,
-          creditCardEntries: entry.cycle === 'current' ? syncGeneratedNextEntries(nextEntries) : nextEntries,
-        }
+      setCreditCardEntries((prev) => {
+        const nextEntries = [...prev, normalizeCreditCardEntry({ ...entry, id: uid() })]
+        return entry.cycle === 'current' ? syncGeneratedNextEntries(nextEntries) : nextEntries
       })
     },
-    [updateActiveScenario],
+    [setCreditCardEntries],
   )
 
   const updateCreditCardEntry = useCallback(
     (id: string, patch: Partial<Omit<CreditCardEntry, 'id'>>) => {
-      updateActiveScenario((scenario) => {
-        const target = scenario.creditCardEntries.find((entry) => entry.id === id)
-        if (!target) return scenario
+      setCreditCardEntries((prev) => {
+        const target = prev.find((entry) => entry.id === id)
+        if (!target) return prev
 
         // Editar um lançamento gerado automaticamente o torna manual,
         // para a edição não ser descartada na próxima sincronização.
         const effectivePatch =
           target.cycle === 'next' && target.autoGenerated ? { ...patch, autoGenerated: false } : patch
-        const nextEntries = scenario.creditCardEntries.map((entry) =>
+        const nextEntries = prev.map((entry) =>
           entry.id === id ? normalizeCreditCardEntry({ ...entry, ...effectivePatch }) : entry,
         )
 
-        return {
-          ...scenario,
-          creditCardEntries: target.cycle === 'current' ? syncGeneratedNextEntries(nextEntries) : nextEntries,
-        }
+        return target.cycle === 'current' ? syncGeneratedNextEntries(nextEntries) : nextEntries
       })
     },
-    [updateActiveScenario],
+    [setCreditCardEntries],
   )
 
   const removeCreditCardEntry = useCallback(
     (id: string) => {
-      updateActiveScenario((scenario) => {
-        const target = scenario.creditCardEntries.find((entry) => entry.id === id)
-        const nextEntries = scenario.creditCardEntries.filter((entry) => entry.id !== id)
-        return {
-          ...scenario,
-          creditCardEntries: target?.cycle === 'current' ? syncGeneratedNextEntries(nextEntries) : nextEntries,
-        }
+      setCreditCardEntries((prev) => {
+        const target = prev.find((entry) => entry.id === id)
+        const nextEntries = prev.filter((entry) => entry.id !== id)
+        return target?.cycle === 'current' ? syncGeneratedNextEntries(nextEntries) : nextEntries
       })
     },
-    [updateActiveScenario],
+    [setCreditCardEntries],
   )
 
   const replaceCreditCardEntries = useCallback(
     (cycle: CreditCardCycle, entries: Omit<CreditCardEntry, 'id' | 'cycle'>[]) => {
-      updateActiveScenario((scenario) => {
+      setCreditCardEntries((prev) => {
         const nextEntries = [
-          ...scenario.creditCardEntries.filter((entry) => entry.cycle !== cycle),
+          ...prev.filter((entry) => entry.cycle !== cycle),
           ...entries.map((entry) => normalizeCreditCardEntry({ ...entry, cycle, id: uid() })),
         ]
-        return {
-          ...scenario,
-          creditCardEntries: cycle === 'current' ? syncGeneratedNextEntries(nextEntries) : nextEntries,
-        }
+        return cycle === 'current' ? syncGeneratedNextEntries(nextEntries) : nextEntries
       })
     },
-    [updateActiveScenario],
+    [setCreditCardEntries],
   )
 
   const appendCreditCardEntries = useCallback(
     (cycle: CreditCardCycle, entries: Omit<CreditCardEntry, 'id' | 'cycle'>[]) => {
-      updateActiveScenario((scenario) => {
+      setCreditCardEntries((prev) => {
         const nextEntries = [
-          ...scenario.creditCardEntries,
+          ...prev,
           ...entries.map((entry) => normalizeCreditCardEntry({ ...entry, cycle, id: uid() })),
         ]
-        return {
-          ...scenario,
-          creditCardEntries: cycle === 'current' ? syncGeneratedNextEntries(nextEntries) : nextEntries,
-        }
+        return cycle === 'current' ? syncGeneratedNextEntries(nextEntries) : nextEntries
       })
     },
-    [updateActiveScenario],
+    [setCreditCardEntries],
   )
 
   const anticipateCreditCardInstallments = useCallback(
     (id: string, count: number) => {
-      updateActiveScenario((scenario) => {
-        const entry = scenario.creditCardEntries.find((item) => item.id === id)
+      setCreditCardEntries((prev) => {
+        const entry = prev.find((item) => item.id === id)
         if (!entry || entry.cycle !== 'current' || !entry.installmentCurrent || !entry.installmentTotal) {
-          return scenario
+          return prev
         }
 
         const current = entry.installmentCurrent
         const total = entry.installmentTotal
         const quantity = Math.min(Math.max(1, Math.floor(count)), total - current)
-        if (quantity < 1) return scenario
+        if (quantity < 1) return prev
 
         // Cada parcela antecipada vira um lançamento próprio na fatura atual;
         // o valor restante da compra fica concentrado na última parcela lançada.
@@ -923,21 +911,21 @@ export function useFinancas() {
         })
 
         const nextEntries = [
-          ...scenario.creditCardEntries.map((item) => (item.id === id ? { ...item, remainingAmount: 0 } : item)),
+          ...prev.map((item) => (item.id === id ? { ...item, remainingAmount: 0 } : item)),
           ...anticipated,
         ]
 
-        return { ...scenario, creditCardEntries: syncGeneratedNextEntries(nextEntries) }
+        return syncGeneratedNextEntries(nextEntries)
       })
     },
-    [updateActiveScenario],
+    [setCreditCardEntries],
   )
 
   const payCreditCardInvoice = useCallback(() => {
-    updateActiveScenario((scenario) => {
+    setCreditCardEntries((prev) => {
       // Sincroniza antes de virar o ciclo: dados criados antes da geração
       // automática podem ainda não ter as parcelas materializadas na próxima.
-      const syncedEntries = syncGeneratedNextEntries(scenario.creditCardEntries)
+      const syncedEntries = syncGeneratedNextEntries(prev)
       const newCurrentEntries = syncedEntries
         .filter((entry) => entry.cycle === 'next')
         .map((entry) =>
@@ -950,18 +938,23 @@ export function useFinancas() {
           }),
         )
 
-      return { ...scenario, creditCardEntries: syncGeneratedNextEntries(newCurrentEntries) }
+      return syncGeneratedNextEntries(newCurrentEntries)
     })
-  }, [updateActiveScenario])
+  }, [setCreditCardEntries])
 
   const setCreditCardSettings = useCallback(
     (settings: CreditCardSettings) => {
-      setScenarioField('creditCardSettings', {
+      setCreditCardSettingsRaw({
         ...settings,
         personalSpendingLimit: Math.max(0, settings.personalSpendingLimit),
       })
     },
-    [setScenarioField],
+    [setCreditCardSettingsRaw],
+  )
+
+  const creditCardSummary = useMemo(
+    () => calculateCreditCardSummary(creditCardEntries, creditCardSettings),
+    [creditCardEntries, creditCardSettings],
   )
 
   const metrics = useMemo(() => calculateScenario(activeScenario), [activeScenario])
@@ -1027,10 +1020,10 @@ export function useFinancas() {
     // Métricas calculadas
     metrics,
 
-    // Cartões de crédito
-    creditCardEntries: activeScenario.creditCardEntries,
-    creditCardSettings: activeScenario.creditCardSettings,
-    creditCardSummary: metrics.creditCardSummary,
+    // Cartões de crédito (módulo global, independente do cenário ativo)
+    creditCardEntries,
+    creditCardSettings,
+    creditCardSummary,
     addCreditCardEntry,
     updateCreditCardEntry,
     removeCreditCardEntry,

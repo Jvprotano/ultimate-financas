@@ -255,6 +255,7 @@ function App() {
         {activeView === 'overview' && (
           <Dashboard
             metrics={m}
+            creditCardSummary={f.creditCardSummary}
             emergencyFund={f.emergencyFund}
             scenarioSummaries={f.scenarioSummaries}
             activeScenarioId={f.activeScenarioId}
