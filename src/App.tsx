@@ -1,20 +1,34 @@
-import { useRef, useState, type ChangeEvent } from 'react'
-import { CreditCard, Download, LayoutDashboard, RotateCcw, Upload, WalletCards } from 'lucide-react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
+import {
+  CreditCard,
+  Download,
+  LayoutDashboard,
+  MoreVertical,
+  RotateCcw,
+  SlidersHorizontal,
+  Upload,
+  WalletCards,
+} from 'lucide-react'
 import { useFinancas } from './hooks/useFinancas'
-import { CommandCenter } from './components/CommandCenter'
-import { SalaryInput } from './components/SalaryInput'
-import { DeductionsManager } from './components/DeductionsManager'
+import { Dashboard } from './components/Dashboard'
+import { IncomePanel } from './components/IncomePanel'
+import { BudgetModelPicker } from './components/BudgetModelPicker'
 import { CostManager } from './components/CostManager'
 import { WantsManager } from './components/WantsManager'
-import { BudgetModelSelector } from './components/BudgetModelSelector'
-import { BudgetOverview } from './components/BudgetOverview'
-import { CreditCardManager } from './components/CreditCardManager'
-import { DiversificationSelector } from './components/DiversificationSelector'
-import { Charts } from './components/Charts'
+import { InvestmentPlan } from './components/InvestmentPlan'
 import { EmergencyFund } from './components/EmergencyFund'
-import { ScenarioManager } from './components/ScenarioManager'
+import { CreditCardManager } from './components/CreditCardManager'
+import { ScenarioSwitcher } from './components/ScenarioSwitcher'
 
 const APP_STORAGE_PREFIX = 'uf_'
+
+type View = 'overview' | 'planning' | 'cards'
+
+const VIEWS: { id: View; label: string; icon: typeof LayoutDashboard }[] = [
+  { id: 'overview', label: 'Visão geral', icon: LayoutDashboard },
+  { id: 'planning', label: 'Planejamento', icon: SlidersHorizontal },
+  { id: 'cards', label: 'Cartões', icon: CreditCard },
+]
 
 type BackupPayload = {
   app?: string
@@ -49,15 +63,102 @@ function clearAppStorage() {
   keysToRemove.forEach((key) => localStorage.removeItem(key))
 }
 
+function TabBar({
+  activeView,
+  setActiveView,
+  className = '',
+}: {
+  activeView: View
+  setActiveView: (view: View) => void
+  className?: string
+}) {
+  return (
+    <nav className={`grid grid-cols-3 gap-1 rounded-lg border border-dark-border bg-dark-surface p-1 ${className}`}>
+      {VIEWS.map(({ id, label, icon: Icon }) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => setActiveView(id)}
+          className={`inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+            activeView === id ? 'bg-dark-hover text-dark-text shadow-sm' : 'text-dark-text-muted hover:text-dark-text'
+          }`}
+        >
+          <Icon size={14} />
+          <span className="whitespace-nowrap">{label}</span>
+        </button>
+      ))}
+    </nav>
+  )
+}
+
+function AppMenu({
+  onExport,
+  onImport,
+  onReset,
+}: {
+  onExport: () => void
+  onImport: () => void
+  onReset: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handleClick = (event: MouseEvent) => {
+      if (!ref.current?.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  const itemClass =
+    'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-dark-text-secondary transition-colors hover:bg-dark-hover hover:text-dark-text'
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="rounded-lg border border-dark-border bg-dark-surface p-2 text-dark-text-muted transition-colors hover:text-dark-text"
+        aria-label="Mais opções"
+      >
+        <MoreVertical size={16} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-xl border border-dark-border bg-dark-card p-1.5 shadow-xl shadow-black/40">
+          <button type="button" className={itemClass} onClick={() => { onExport(); setOpen(false) }}>
+            <Download size={14} />
+            Exportar backup
+          </button>
+          <button type="button" className={itemClass} onClick={() => { onImport(); setOpen(false) }}>
+            <Upload size={14} />
+            Importar backup
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-dark-text-muted transition-colors hover:bg-rose-500/10 hover:text-rose-300"
+            onClick={() => { onReset(); setOpen(false) }}
+          >
+            <RotateCcw size={14} />
+            Apagar todos os dados
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function App() {
   const f = useFinancas()
   const importInputRef = useRef<HTMLInputElement>(null)
-  const [activeView, setActiveView] = useState<'planning' | 'cards'>('planning')
+  const [activeView, setActiveView] = useState<View>('overview')
+  const m = f.metrics
 
   const handleExport = () => {
     const payload = {
       app: 'ultimate-financas',
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       localStorage: getAppStorageEntries(),
     }
@@ -114,60 +215,29 @@ function App() {
 
   return (
     <div className="min-h-screen bg-dark-bg text-dark-text">
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-dark-bg/88 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-500 text-[#06100f] shadow-lg shadow-primary-500/20">
-              <WalletCards size={19} />
+      <header className="sticky top-0 z-40 border-b border-dark-border-subtle bg-dark-bg/90 backdrop-blur-xl">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white">
+              <WalletCards size={16} />
             </div>
-            <div className="min-w-0">
-              <h1 className="truncate text-lg font-black leading-tight text-dark-text">Ultimate Finanças</h1>
-              <p className="truncate text-[11px] leading-tight text-dark-text-muted">
-                {f.activeScenario.name} - dados somente no navegador
-              </p>
-            </div>
+            <h1 className="truncate text-[15px] font-semibold tracking-tight text-dark-text">Ultimate Finanças</h1>
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className="mr-2 hidden rounded-lg border border-dark-border bg-dark-surface p-1 md:grid md:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => setActiveView('planning')}
-                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${
-                  activeView === 'planning'
-                    ? 'bg-primary-600 text-white'
-                    : 'text-dark-text-secondary hover:text-dark-text'
-                }`}
-              >
-                <LayoutDashboard size={14} />
-                Planejamento
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveView('cards')}
-                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${
-                  activeView === 'cards' ? 'bg-sky-600 text-white' : 'text-dark-text-secondary hover:text-dark-text'
-                }`}
-              >
-                <CreditCard size={14} />
-                Cartões
-              </button>
-            </div>
-            <button
-              onClick={handleExport}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-dark-text-secondary transition-colors hover:bg-primary-500/10 hover:text-primary-300"
-              title="Exportar backup local"
-            >
-              <Download size={14} />
-              <span className="hidden sm:inline">Backup</span>
-            </button>
-            <button
-              onClick={() => importInputRef.current?.click()}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-dark-text-secondary transition-colors hover:bg-amber-500/10 hover:text-amber-300"
-              title="Importar backup local"
-            >
-              <Upload size={14} />
-              <span className="hidden sm:inline">Importar</span>
-            </button>
+
+          <TabBar activeView={activeView} setActiveView={setActiveView} className="hidden md:grid" />
+
+          <div className="flex items-center gap-2">
+            <ScenarioSwitcher
+              scenarios={f.scenarios}
+              activeScenarioId={f.activeScenarioId}
+              setActiveScenarioId={f.setActiveScenarioId}
+              createScenario={f.createScenario}
+              duplicateScenario={f.duplicateScenario}
+              renameScenario={f.renameScenario}
+              removeScenario={f.removeScenario}
+              summaries={f.scenarioSummaries}
+            />
+            <AppMenu onExport={handleExport} onImport={() => importInputRef.current?.click()} onReset={handleReset} />
             <input
               ref={importInputRef}
               type="file"
@@ -175,218 +245,112 @@ function App() {
               className="hidden"
               onChange={handleImport}
             />
-            <button
-              onClick={handleReset}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-dark-text-muted transition-colors hover:bg-rose-500/10 hover:text-rose-300"
-              title="Limpar todos os dados do app"
-            >
-              <RotateCcw size={14} />
-              <span className="hidden sm:inline">Resetar</span>
-            </button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-5 px-4 py-5 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-2 rounded-lg border border-dark-border bg-dark-card p-1 md:hidden">
-          <button
-            type="button"
-            onClick={() => setActiveView('planning')}
-            className={`inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold transition-colors ${
-              activeView === 'planning' ? 'bg-primary-600 text-white' : 'text-dark-text-secondary'
-            }`}
-          >
-            <LayoutDashboard size={15} />
-            Planejamento
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveView('cards')}
-            className={`inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold transition-colors ${
-              activeView === 'cards' ? 'bg-sky-600 text-white' : 'text-dark-text-secondary'
-            }`}
-          >
-            <CreditCard size={15} />
-            Cartões
-          </button>
-        </div>
+      <main className="mx-auto max-w-6xl space-y-4 px-4 py-5 sm:px-6">
+        <TabBar activeView={activeView} setActiveView={setActiveView} className="md:hidden" />
 
-        <ScenarioManager
-          scenarios={f.scenarios}
-          activeScenarioId={f.activeScenarioId}
-          setActiveScenarioId={f.setActiveScenarioId}
-          createScenario={f.createScenario}
-          duplicateScenario={f.duplicateScenario}
-          renameScenario={f.renameScenario}
-          removeScenario={f.removeScenario}
-          summaries={f.scenarioSummaries}
-        />
+        {activeView === 'overview' && (
+          <Dashboard
+            metrics={m}
+            emergencyFund={f.emergencyFund}
+            scenarioSummaries={f.scenarioSummaries}
+            activeScenarioId={f.activeScenarioId}
+            onGoToPlanning={() => setActiveView('planning')}
+          />
+        )}
 
-        {activeView === 'planning' ? (
-          <>
-            <CommandCenter
-              scenarioName={f.activeScenario.name}
-              salaryNet={f.salaryNet}
-              paycheckInAccount={f.paycheckInAccount}
-              availableForBudget={f.availableForBudget}
-              totalCosts={f.totalCosts}
-              totalWants={f.totalWantsAmount}
-              totalDeductions={f.totalDeductions}
-              directInvestmentTarget={f.directInvestmentTarget}
-              balanceAfterCosts={f.balanceAfterCosts}
-              budgetComparison={f.budgetComparison}
-              emergencyFundCurrent={f.emergencyFundCurrent}
-              fixedIncomeMonthlyAllocation={f.fixedIncomeMonthlyAllocation}
-              creditCardPersonalTotal={f.creditCardSummary.currentPersonalTotal}
-              creditCardAvailableLimit={f.creditCardSummary.availablePersonalLimit}
-            />
-
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[390px_minmax(0,1fr)]">
-          <div className="space-y-5 xl:sticky xl:top-20 xl:self-start">
-            <div>
-              <span className="text-xs font-bold uppercase tracking-wide text-primary-300">Base financeira</span>
-              <h2 className="mt-1 text-xl font-black text-dark-text">Cadastre e acompanhe</h2>
-              <p className="mt-1 text-sm text-dark-text-muted">
-                Renda, folha e custos fixos ficam aqui para consulta rápida.
-              </p>
+        {activeView === 'planning' && (
+          <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
+            <div className="space-y-4">
+              <IncomePanel
+                salaryNet={f.salaryNet}
+                setSalaryNet={f.setSalaryNet}
+                salaryInputMode={f.salaryInputMode}
+                setSalaryInputMode={f.setSalaryInputMode}
+                deductions={f.deductions}
+                addDeduction={f.addDeduction}
+                removeDeduction={f.removeDeduction}
+                updateDeductionEmployerContribution={f.updateDeductionEmployerContribution}
+                paycheckInAccount={m.paycheckInAccount}
+                totalDeductions={m.totalDeductions}
+                availableForBudget={m.availableForBudget}
+              />
+              <CostManager
+                costs={f.costs}
+                addCost={f.addCost}
+                removeCost={f.removeCost}
+                totalCosts={m.totalCosts}
+                necessidadesTarget={m.budgetAllocation.necessidades}
+              />
+              <EmergencyFund
+                emergencyFund={f.emergencyFund}
+                setCurrent={f.setEmergencyFundCurrent}
+                setTargetMonths={f.setEmergencyFundTargetMonths}
+                totalCosts={m.totalCosts}
+                target={m.emergencyFundTarget}
+                remaining={m.emergencyFundRemaining}
+                progress={m.emergencyFundProgress}
+                monthsToGoal={m.emergencyFundMonthsToGoal}
+                fixedIncomeMonthlyAllocation={m.fixedIncomeMonthlyAllocation}
+              />
             </div>
 
-            <SalaryInput
-              salaryNet={f.salaryNet}
-              setSalaryNet={f.setSalaryNet}
-              salaryInputMode={f.salaryInputMode}
-              setSalaryInputMode={f.setSalaryInputMode}
-              paycheckInAccount={f.paycheckInAccount}
-              totalDeductions={f.totalDeductions}
-              benefitDeductions={f.benefitDeductions}
-              investmentDeductions={f.investmentDeductions}
-              employerInvestmentContributions={f.employerInvestmentContributions}
-              availableForBudget={f.availableForBudget}
-            />
-
-            <DeductionsManager
-              deductions={f.deductions}
-              addDeduction={f.addDeduction}
-              removeDeduction={f.removeDeduction}
-              updateDeductionEmployerContribution={f.updateDeductionEmployerContribution}
-              totalDeductions={f.totalDeductions}
-              investmentDeductions={f.investmentDeductions}
-              employerInvestmentContributions={f.employerInvestmentContributions}
-              availableForBudget={f.availableForBudget}
-            />
-
-            <CostManager
-              costs={f.costs}
-              addCost={f.addCost}
-              removeCost={f.removeCost}
-              totalCosts={f.totalCosts}
-              availableForBudget={f.availableForBudget}
-            />
-          </div>
-
-          <div className="space-y-5">
-            <div>
-              <span className="text-xs font-bold uppercase tracking-wide text-emerald-300">Plano do mês</span>
-              <h2 className="mt-1 text-xl font-black text-dark-text">Ajuste o que muda com frequência</h2>
-              <p className="mt-1 text-sm text-dark-text-muted">
-                Metas, desejos, aportes e reserva ficam juntos para comparar sobras e faltas.
-              </p>
+            <div className="space-y-4">
+              <BudgetModelPicker
+                selectedModelId={f.selectedModelId}
+                setSelectedModelId={f.setSelectedModelId}
+                customModel={f.customModel}
+                setCustomModel={f.setCustomModel}
+                availableForBudget={m.availableForBudget}
+                budgetAllocation={m.budgetAllocation}
+              />
+              <WantsManager
+                wants={f.wants}
+                addWant={f.addWant}
+                removeWant={f.removeWant}
+                updateWantAmount={f.updateWantAmount}
+                totalWantsAmount={m.totalWantsAmount}
+                desejosTarget={m.budgetAllocation.desejos}
+              />
+              <InvestmentPlan
+                diversification={f.diversification}
+                updateDiversification={f.updateDiversification}
+                addDiversificationSlice={f.addDiversificationSlice}
+                removeDiversificationSlice={f.removeDiversificationSlice}
+                investmentAllocation={m.investmentAllocation}
+                investmentTarget={m.budgetAllocation.investimentos}
+                investmentDeductions={m.investmentDeductions}
+                employerInvestmentContributions={m.employerInvestmentContributions}
+                directInvestmentTarget={m.directInvestmentTarget}
+              />
             </div>
-
-            <BudgetModelSelector
-              selectedModelId={f.selectedModelId}
-              setSelectedModelId={f.setSelectedModelId}
-              customModel={f.customModel}
-              setCustomModel={f.setCustomModel}
-            />
-
-            <BudgetOverview
-              budgetComparison={f.budgetComparison}
-              allocationTransfers={f.allocationTransfers}
-              addAllocationTransfer={f.addAllocationTransfer}
-              removeAllocationTransfer={f.removeAllocationTransfer}
-              clearAllocationTransfers={f.clearAllocationTransfers}
-              investmentDeductions={f.investmentDeductions}
-              employerInvestmentContributions={f.employerInvestmentContributions}
-              directInvestmentTarget={f.directInvestmentTarget}
-              availableForBudget={f.availableForBudget}
-              selectedModel={f.selectedModel}
-              baseBudgetAllocation={f.baseBudgetAllocation}
-              balanceAfterCosts={f.balanceAfterCosts}
-            />
-
-            <WantsManager
-              wants={f.wants}
-              addWant={f.addWant}
-              removeWant={f.removeWant}
-              updateWantPercentage={f.updateWantPercentage}
-              updateWantFixedAmount={f.updateWantFixedAmount}
-              updateWantMode={f.updateWantMode}
-              wantAllocations={f.wantAllocations}
-              totalWantsPercentage={f.totalWantsPercentage}
-              fixedWantsAmount={f.fixedWantsAmount}
-              variableWantsBase={f.variableWantsBase}
-              totalWantsAmount={f.totalWantsAmount}
-              desejosAmount={f.budgetAllocation.desejos}
-              availableForBudget={f.availableForBudget}
-            />
-
-            <DiversificationSelector
-              diversification={f.diversification}
-              updateDiversification={f.updateDiversification}
-              addDiversificationSlice={f.addDiversificationSlice}
-              removeDiversificationSlice={f.removeDiversificationSlice}
-              investmentAllocation={f.investmentAllocation}
-              totalInvestment={f.budgetAllocation.investimentos}
-              investmentDeductions={f.investmentDeductions}
-              employerInvestmentContributions={f.employerInvestmentContributions}
-              directInvestmentTarget={f.directInvestmentTarget}
-              availableForBudget={f.availableForBudget}
-            />
-
-            <EmergencyFund
-              totalCosts={f.totalCosts}
-              currentReserve={f.emergencyFundCurrent}
-              setCurrentReserve={f.setEmergencyFundCurrent}
-              fixedIncomeMonthlyAllocation={f.fixedIncomeMonthlyAllocation}
-              availableForBudget={f.availableForBudget}
-            />
-
-            <Charts
-              budgetAllocation={f.budgetAllocation}
-              investmentAllocation={f.investmentAllocation}
-              costsByCategory={f.costsByCategory}
-              wantAllocations={f.wantAllocations}
-              availableForBudget={f.availableForBudget}
-              investmentDeductions={f.investmentDeductions}
-              employerInvestmentContributions={f.employerInvestmentContributions}
-            />
           </div>
-        </div>
-          </>
-        ) : (
-          <div className="space-y-5">
-            <CreditCardManager
-              entries={f.creditCardEntries}
-              settings={f.creditCardSettings}
-              summary={f.creditCardSummary}
-              availableForBudget={f.availableForBudget}
-              addEntry={f.addCreditCardEntry}
-              updateEntry={f.updateCreditCardEntry}
-              removeEntry={f.removeCreditCardEntry}
-              replaceEntries={f.replaceCreditCardEntries}
-              appendEntries={f.appendCreditCardEntries}
-              anticipateEntry={f.anticipateCreditCardInstallments}
-              payInvoice={f.payCreditCardInvoice}
-              setSettings={f.setCreditCardSettings}
-            />
-          </div>
+        )}
+
+        {activeView === 'cards' && (
+          <CreditCardManager
+            entries={f.creditCardEntries}
+            settings={f.creditCardSettings}
+            summary={f.creditCardSummary}
+            availableForBudget={m.availableForBudget}
+            addEntry={f.addCreditCardEntry}
+            updateEntry={f.updateCreditCardEntry}
+            removeEntry={f.removeCreditCardEntry}
+            replaceEntries={f.replaceCreditCardEntries}
+            appendEntries={f.appendCreditCardEntries}
+            anticipateEntry={f.anticipateCreditCardInstallments}
+            payInvoice={f.payCreditCardInvoice}
+            setSettings={f.setCreditCardSettings}
+          />
         )}
       </main>
 
-      <footer className="border-t border-white/10">
-        <div className="mx-auto max-w-7xl px-4 py-5 text-center text-xs text-dark-text-muted sm:px-6 lg:px-8">
-          Dados salvos apenas no navegador. Use Backup para guardar uma cópia fora do localStorage.
+      <footer className="border-t border-dark-border-subtle">
+        <div className="mx-auto max-w-6xl px-4 py-4 text-center text-xs text-dark-text-muted sm:px-6">
+          Dados salvos apenas neste navegador. Exporte um backup para guardar uma cópia.
         </div>
       </footer>
     </div>

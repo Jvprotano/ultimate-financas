@@ -4,176 +4,137 @@ import type {
   DiversificationSlice,
   CostCategory,
   DeductionType,
-} from "./index";
+} from './index'
 
 export const BUDGET_MODELS: BudgetModel[] = [
   {
-    id: "50-30-20",
-    name: "50 / 30 / 20",
-    description: "50% Necessidades, 30% Desejos, 20% Investimentos",
+    id: '50-30-20',
+    name: '50 / 30 / 20',
+    description: 'Equilíbrio clássico entre presente e futuro',
     necessidades: 50,
     desejos: 30,
     investimentos: 20,
   },
   {
-    id: "60-20-20",
-    name: "60 / 20 / 20",
-    description: "60% Necessidades, 20% Desejos, 20% Investimentos",
+    id: '60-20-20',
+    name: '60 / 20 / 20',
+    description: 'Para quem tem custos fixos mais pesados',
     necessidades: 60,
     desejos: 20,
     investimentos: 20,
   },
   {
-    id: "70-20-10",
-    name: "70 / 20 / 10",
-    description: "70% Necessidades, 20% Desejos, 10% Investimentos",
+    id: '70-20-10',
+    name: '70 / 20 / 10',
+    description: 'Primeiro passo para quem está apertado',
     necessidades: 70,
     desejos: 20,
     investimentos: 10,
   },
   {
-    id: "40-30-30",
-    name: "40 / 30 / 30",
-    description: "40% Necessidades, 30% Desejos, 30% Investimentos",
+    id: '40-30-30',
+    name: '40 / 30 / 30',
+    description: 'Agressivo em investimentos',
     necessidades: 40,
     desejos: 30,
     investimentos: 30,
   },
   {
-    id: "custom",
-    name: "Personalizado",
-    description: "Defina suas proprias proporcoes",
+    id: 'custom',
+    name: 'Personalizado',
+    description: 'Você define as proporções',
     necessidades: 50,
     desejos: 30,
     investimentos: 20,
   },
-];
+]
 
-/** YouTube video links explaining each budget model */
-export const BUDGET_MODEL_VIDEOS: Record<
-  string,
-  { url: string; channel: string }
-> = {
-  "50-30-20": {
-    url: "https://youtu.be/GjLQnuREjlY?si=S0BOrn0ao8DHVyRH",
-    channel: "Investidor Sardinha",
-  },
-  "60-20-20": {
-    url: "https://youtu.be/RwRJrFN918s?si=ndBC0nVemMVNcIL8",
-    channel: "Finan. YouTube",
-  },
-  "70-20-10": {
-    url: "https://www.youtube.com/shorts/Bf6m5WWkV7I",
-    channel: "Investidor Sardinha",
-  },
-  "40-30-30": {
-    url: "https://youtu.be/RwRJrFN918s?si=ndBC0nVemMVNcIL8",
-    channel: "Finan. YouTube",
-  },
-};
+/**
+ * Paleta categórica validada para a superfície escura
+ * (checagens de banda de luminosidade, croma, CVD e contraste).
+ */
+export const CHART_PALETTE = {
+  blue: '#3987e5',
+  aqua: '#199e70',
+  yellow: '#c98500',
+  green: '#008300',
+  violet: '#9085e9',
+  red: '#e66767',
+  magenta: '#d55181',
+  orange: '#d95926',
+  muted: '#6f807a',
+} as const
+
+export const BUDGET_AREA_COLORS: Record<BudgetArea, string> = {
+  necessidades: CHART_PALETTE.blue,
+  desejos: CHART_PALETTE.yellow,
+  investimentos: CHART_PALETTE.aqua,
+}
 
 export const DEFAULT_DIVERSIFICATION: DiversificationSlice[] = [
-  { id: "renda-fixa", name: "Renda Fixa", percentage: 50, color: "#3b82f6" },
-  { id: "acoes", name: "Acoes", percentage: 30, color: "#34d399" },
-  { id: "fiis", name: "Fundos Imobiliarios", percentage: 10, color: "#fbbf24" },
-  { id: "cripto", name: "Criptomoedas", percentage: 10, color: "#a78bfa" },
-];
+  { id: 'renda-fixa', name: 'Renda Fixa', percentage: 50, color: CHART_PALETTE.blue },
+  { id: 'acoes', name: 'Ações', percentage: 30, color: CHART_PALETTE.aqua },
+  { id: 'fiis', name: 'Fundos Imobiliários', percentage: 10, color: CHART_PALETTE.yellow },
+  { id: 'cripto', name: 'Criptomoedas', percentage: 10, color: CHART_PALETTE.violet },
+]
 
-/** Deduction types that count as investments */
-export const INVESTMENT_DEDUCTION_TYPES: DeductionType[] = [
-  'previdencia_privada',
-];
+export const DIVERSIFICATION_PRESET_COLORS: string[] = [
+  CHART_PALETTE.blue,
+  CHART_PALETTE.aqua,
+  CHART_PALETTE.yellow,
+  CHART_PALETTE.violet,
+  CHART_PALETTE.red,
+  CHART_PALETTE.magenta,
+  CHART_PALETTE.orange,
+  CHART_PALETTE.green,
+]
+
+/** Tipos de desconto em folha que contam como investimento */
+export const INVESTMENT_DEDUCTION_TYPES: DeductionType[] = ['previdencia_privada']
 
 export const BUDGET_AREA_LABELS: Record<BudgetArea, string> = {
-  necessidades: "Necessidades",
-  desejos: "Desejos",
-  investimentos: "Investimentos",
-};
+  necessidades: 'Necessidades',
+  desejos: 'Desejos',
+  investimentos: 'Investimentos',
+}
 
 export const COST_CATEGORIES: {
-  key: CostCategory;
-  label: string;
-  hint: string;
+  key: CostCategory
+  label: string
+  hint: string
 }[] = [
-  {
-    key: "moradia",
-    label: "Moradia",
-    hint: "Aluguel, condominio, IPTU, conta de agua",
-  },
-  {
-    key: "contas",
-    label: "Contas & Servicos",
-    hint: "Energia, internet, celular, gas, streaming",
-  },
-  {
-    key: "alimentacao",
-    label: "Alimentacao",
-    hint: "Supermercado, feira, acougue, padaria",
-  },
-  {
-    key: "transporte",
-    label: "Transporte",
-    hint: "Combustivel, estacionamento, Uber, pedagio",
-  },
-  {
-    key: "saude",
-    label: "Saude",
-    hint: "Farmacia, consultas, academia, suplementos",
-  },
-  {
-    key: "educacao",
-    label: "Educacao",
-    hint: "Faculdade, cursos, livros, escola dos filhos",
-  },
-  {
-    key: "lazer",
-    label: "Lazer & Pessoal",
-    hint: "Restaurantes, viagens, roupas, hobbies",
-  },
-  {
-    key: "dividas",
-    label: "Dividas & Parcelas",
-    hint: "Cartao de credito, emprestimos, financiamentos",
-  },
-  {
-    key: "outros",
-    label: "Outros",
-    hint: "Qualquer gasto que nao se encaixa acima",
-  },
-];
+  { key: 'moradia', label: 'Moradia', hint: 'Aluguel, condomínio, IPTU, água' },
+  { key: 'contas', label: 'Contas & Serviços', hint: 'Energia, internet, celular, gás' },
+  { key: 'alimentacao', label: 'Alimentação', hint: 'Supermercado, feira, padaria' },
+  { key: 'transporte', label: 'Transporte', hint: 'Combustível, Uber, pedágio' },
+  { key: 'saude', label: 'Saúde', hint: 'Farmácia, consultas, academia' },
+  { key: 'educacao', label: 'Educação', hint: 'Faculdade, cursos, livros' },
+  { key: 'lazer', label: 'Lazer & Pessoal', hint: 'Restaurantes, roupas, hobbies' },
+  { key: 'dividas', label: 'Dívidas & Parcelas', hint: 'Empréstimos, financiamentos' },
+  { key: 'outros', label: 'Outros', hint: 'O que não se encaixa acima' },
+]
 
-
-export const COST_CATEGORY_LABELS: Record<CostCategory, string> =
-  Object.fromEntries([
-    ["moradia", "Moradia"],
-    ["contas", "Contas & Servicos"],
-    ["alimentacao", "Alimentacao"],
-    ["transporte", "Transporte"],
-    ["saude", "Saude"],
-    ["educacao", "Educacao"],
-    ["lazer", "Lazer & Pessoal"],
-    ["dividas", "Dividas & Parcelas"],
-    ["outros", "Outros"],
-  ]) as Record<CostCategory, string>;
-
+export const COST_CATEGORY_LABELS: Record<CostCategory, string> = Object.fromEntries(
+  COST_CATEGORIES.map(({ key, label }) => [key, label]),
+) as Record<CostCategory, string>
 
 export const DEDUCTION_TYPE_LABELS: Record<DeductionType, string> = {
-  previdencia_privada: "Previdencia Privada",
-  plano_saude: "Plano de Saude",
-  vale_alimentacao: "Vale Alimentacao",
-  vale_transporte: "Vale Transporte",
-  seguro_vida: "Seguro de Vida",
-  outros: "Outros",
-};
+  previdencia_privada: 'Previdência Privada',
+  plano_saude: 'Plano de Saúde',
+  vale_alimentacao: 'Vale Alimentação',
+  vale_transporte: 'Vale Transporte',
+  seguro_vida: 'Seguro de Vida',
+  outros: 'Outros',
+}
 
 export const COST_CATEGORY_COLORS: Record<CostCategory, string> = {
-  moradia: "#3b82f6",
-  contas: "#06b6d4",
-  alimentacao: "#34d399",
-  transporte: "#fbbf24",
-  saude: "#fb7185",
-  educacao: "#a78bfa",
-  lazer: "#22d3ee",
-  dividas: "#f97316",
-  outros: "#64748b",
-};
+  moradia: CHART_PALETTE.blue,
+  contas: CHART_PALETTE.violet,
+  alimentacao: CHART_PALETTE.aqua,
+  transporte: CHART_PALETTE.yellow,
+  saude: CHART_PALETTE.magenta,
+  educacao: CHART_PALETTE.green,
+  lazer: CHART_PALETTE.orange,
+  dividas: CHART_PALETTE.red,
+  outros: CHART_PALETTE.muted,
+}

@@ -1,10 +1,17 @@
 import { useState } from 'react'
-import { Receipt, Plus, Trash2, ChevronDown } from 'lucide-react'
+import { Plus, Receipt, Trash2 } from 'lucide-react'
 import { Card } from './Card'
 import { CurrencyInput } from './CurrencyInput'
 import { HeaderMetric } from './HeaderMetric'
+import { Meter, PrimaryButton, SuggestionChip, } from './ui'
+import { inputClass, selectClass } from '../utils'
 import type { CostItem, CostCategory } from '../types'
-import { COST_CATEGORIES, COST_CATEGORY_LABELS, COST_CATEGORY_COLORS } from '../types/constants'
+import {
+  BUDGET_AREA_COLORS,
+  COST_CATEGORIES,
+  COST_CATEGORY_COLORS,
+  COST_CATEGORY_LABELS,
+} from '../types/constants'
 import { formatCurrency } from '../utils'
 
 interface Props {
@@ -12,16 +19,26 @@ interface Props {
   addCost: (name: string, value: number, category: CostCategory) => void
   removeCost: (id: string) => void
   totalCosts: number
-  availableForBudget: number
+  necessidadesTarget: number
 }
 
-export function CostManager({ costs, addCost, removeCost, totalCosts, availableForBudget }: Props) {
+const QUICK_SUGGESTIONS: { cat: CostCategory; name: string }[] = [
+  { cat: 'moradia', name: 'Aluguel' },
+  { cat: 'moradia', name: 'Condomínio' },
+  { cat: 'contas', name: 'Energia' },
+  { cat: 'contas', name: 'Internet' },
+  { cat: 'contas', name: 'Celular' },
+  { cat: 'alimentacao', name: 'Supermercado' },
+  { cat: 'transporte', name: 'Combustível' },
+  { cat: 'saude', name: 'Academia' },
+]
+
+export function CostManager({ costs, addCost, removeCost, totalCosts, necessidadesTarget }: Props) {
   const [name, setName] = useState('')
   const [value, setValue] = useState(0)
   const [category, setCategory] = useState<CostCategory>('moradia')
-  const [showSuggestions, setShowSuggestions] = useState(false)
-
   const selectedCat = COST_CATEGORIES.find((c) => c.key === category)
+  const remaining = necessidadesTarget - totalCosts
 
   const handleAdd = () => {
     if (!name.trim() || value <= 0) return
@@ -30,159 +47,103 @@ export function CostManager({ costs, addCost, removeCost, totalCosts, availableF
     setValue(0)
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleAdd()
-  }
-
-  const handleQuickAdd = (catKey: CostCategory, suggestion: string) => {
-    setCategory(catKey)
-    setName(suggestion)
-    setShowSuggestions(false)
-  }
-
-  const quickSuggestions: { cat: CostCategory; items: string[] }[] = [
-    { cat: 'moradia', items: ['Aluguel', 'Condominio', 'IPTU'] },
-    { cat: 'contas', items: ['Energia', 'Internet', 'Celular', 'Streaming'] },
-    { cat: 'alimentacao', items: ['Supermercado', 'iFood/Delivery'] },
-    { cat: 'transporte', items: ['Combustivel', 'Uber', 'Estacionamento'] },
-    { cat: 'dividas', items: ['Cartao de Credito', 'Financiamento'] },
-  ]
+  const sortedCosts = [...costs].sort((a, b) => b.value - a.value)
 
   return (
     <Card
-      title="Custos Mensais"
-      icon={<Receipt size={18} />}
-      accentColor="bg-rose-500"
+      title="Custos fixos"
+      icon={<Receipt size={17} />}
       collapsible
       storageKey="costs"
       headerExtra={
         totalCosts > 0 ? (
-          <HeaderMetric amount={totalCosts} baseAmount={availableForBudget} label="Fixos" tone="rose" />
+          <HeaderMetric amount={totalCosts} baseAmount={necessidadesTarget} label="Total" tone="slate" />
         ) : undefined
       }
     >
       <div className="space-y-4">
-        {/* Quick suggestions toggle */}
-        <button
-          onClick={() => setShowSuggestions(!showSuggestions)}
-          className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg
-            bg-dark-surface border border-dark-border text-sm text-dark-text-secondary
-            hover:bg-dark-hover transition-colors"
-        >
-          <span>Sugestoes rapidas de custos comuns</span>
-          <ChevronDown size={16} className={`transition-transform ${showSuggestions ? 'rotate-180' : ''}`} />
-        </button>
-
-        {showSuggestions && (
-          <div className="p-3 bg-dark-surface rounded-lg border border-dark-border space-y-3">
-            {quickSuggestions.map(({ cat, items }) => {
-              const catInfo = COST_CATEGORIES.find((c) => c.key === cat)
-              return (
-                <div key={cat}>
-                  <span className="text-xs font-medium text-dark-text-muted mb-1.5 block">
-                    {catInfo?.label}
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {items.map((item) => (
-                      <button
-                        key={item}
-                        onClick={() => handleQuickAdd(cat, item)}
-                        className="px-2.5 py-1 rounded-lg bg-dark-input border border-dark-border text-xs text-dark-text-secondary
-                          hover:border-primary-500/50 hover:text-primary-400 transition-colors"
-                      >
-                        + {item}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
+        {necessidadesTarget > 0 && (
+          <div>
+            <div className="mb-1.5 flex items-baseline justify-between text-xs">
+              <span className="text-dark-text-muted">Meta de necessidades: {formatCurrency(necessidadesTarget)}</span>
+              <span className={`font-medium tabular-nums ${remaining >= 0 ? 'text-primary-400' : 'text-rose-400'}`}>
+                {remaining >= 0 ? `${formatCurrency(remaining)} de folga` : `${formatCurrency(-remaining)} acima`}
+              </span>
+            </div>
+            <Meter value={totalCosts} max={necessidadesTarget} color={BUDGET_AREA_COLORS.necessidades} />
           </div>
         )}
 
-        {/* Category selector with hints */}
-        <div>
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value as CostCategory)}
-            className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-input text-dark-text text-sm
-              focus:outline-none focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500 transition-all"
-          >
-            {COST_CATEGORIES.map(({ key, label }) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-          </select>
-          {selectedCat && (
-            <p className="text-[11px] text-dark-text-muted mt-1 px-1">
-              Ex: {selectedCat.hint}
-            </p>
-          )}
+        <div className="flex flex-wrap gap-1.5">
+          {QUICK_SUGGESTIONS.filter((s) => !costs.some((c) => c.name === s.name)).map((s) => (
+            <SuggestionChip
+              key={s.name}
+              label={s.name}
+              onClick={() => {
+                setCategory(s.cat)
+                setName(s.name)
+              }}
+            />
+          ))}
         </div>
 
-        {/* Name + Value inputs */}
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Nome do custo (ex: Aluguel, Netflix...)"
-          className="w-full px-3 py-2.5 rounded-lg border border-dark-border bg-dark-input text-dark-text text-sm
-            focus:outline-none focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500 transition-all"
-        />
-
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <CurrencyInput value={value} onChange={setValue} />
+        <div className="rounded-lg border border-dark-border bg-dark-surface/60 p-3">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+              placeholder="Nome do custo"
+              className={inputClass}
+            />
+            <select value={category} onChange={(e) => setCategory(e.target.value as CostCategory)} className={selectClass}>
+              {COST_CATEGORIES.map(({ key, label }) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
           </div>
-          <button
-            onClick={handleAdd}
-            disabled={!name.trim() || value <= 0}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-rose-500 text-white text-sm font-medium
-              hover:bg-rose-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            <Plus size={16} />
-            Adicionar
-          </button>
+          {selectedCat && <p className="mt-1.5 px-1 text-[11px] text-dark-text-muted">Ex: {selectedCat.hint}</p>}
+          <div className="mt-2 flex gap-2">
+            <div className="flex-1">
+              <CurrencyInput value={value} onChange={setValue} />
+            </div>
+            <PrimaryButton onClick={handleAdd} disabled={!name.trim() || value <= 0}>
+              <Plus size={15} />
+              Adicionar
+            </PrimaryButton>
+          </div>
         </div>
 
-        {/* Cost list */}
-        {costs.length > 0 && (
-          <div className="space-y-2">
-            {costs.map((c) => (
-              <div
-                key={c.id}
-                className="flex items-center justify-between px-3 py-2.5 bg-dark-surface rounded-lg group"
-              >
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <div
-                    className="w-2.5 h-2.5 rounded-full shrink-0"
+        {sortedCosts.length > 0 && (
+          <ul className="space-y-1.5">
+            {sortedCosts.map((c) => (
+              <li key={c.id} className="group flex items-center justify-between rounded-lg bg-dark-surface px-3 py-2.5">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full"
                     style={{ backgroundColor: COST_CATEGORY_COLORS[c.category] }}
                   />
                   <div className="min-w-0">
-                    <span className="text-sm font-medium text-dark-text block truncate">{c.name}</span>
+                    <span className="block truncate text-sm font-medium text-dark-text">{c.name}</span>
                     <span className="text-xs text-dark-text-muted">{COST_CATEGORY_LABELS[c.category]}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-dark-text">{formatCurrency(c.value)}</span>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <span className="text-sm font-medium tabular-nums text-dark-text">{formatCurrency(c.value)}</span>
                   <button
                     onClick={() => removeCost(c.id)}
-                    className="p-1.5 rounded-lg text-dark-text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-colors
-                      opacity-0 group-hover:opacity-100"
+                    className="rounded-md p-1.5 text-dark-text-muted opacity-0 transition-all hover:bg-rose-500/10 hover:text-rose-400 group-hover:opacity-100"
                     aria-label={`Remover ${c.name}`}
                   >
                     <Trash2 size={14} />
                   </button>
                 </div>
-              </div>
+              </li>
             ))}
-            <div className="flex justify-between px-3 py-2 bg-rose-500/10 rounded-lg border border-rose-500/20">
-              <span className="text-sm font-medium text-rose-400">Total custos</span>
-              <span className="text-sm font-bold text-rose-400">{formatCurrency(totalCosts)}</span>
-            </div>
-          </div>
+          </ul>
         )}
       </div>
     </Card>

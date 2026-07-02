@@ -1,121 +1,106 @@
-import { Clock3, Shield } from 'lucide-react'
+import { Shield } from 'lucide-react'
 import { Card } from './Card'
 import { CurrencyInput } from './CurrencyInput'
 import { HeaderMetric } from './HeaderMetric'
-import { formatCurrency } from '../utils'
+import { Meter } from './ui'
+import type { EmergencyFundState } from '../types'
+import { formatCurrency, formatMonths } from '../utils'
 
 interface Props {
+  emergencyFund: EmergencyFundState
+  setCurrent: (value: number) => void
+  setTargetMonths: (months: number) => void
   totalCosts: number
-  currentReserve: number
-  setCurrentReserve: (value: number) => void
+  target: number
+  remaining: number
+  progress: number
+  monthsToGoal: number
   fixedIncomeMonthlyAllocation: number
-  availableForBudget: number
 }
 
-function formatMonths(months: number) {
-  if (months <= 1) return '1 mês'
-  if (months < 12) return `${months} meses`
-  const years = Math.floor(months / 12)
-  const remainingMonths = months % 12
-  if (remainingMonths === 0) return years === 1 ? '1 ano' : `${years} anos`
-  return `${years}a ${remainingMonths}m`
-}
+const MONTH_OPTIONS = [3, 6, 12]
 
 export function EmergencyFund({
+  emergencyFund,
+  setCurrent,
+  setTargetMonths,
   totalCosts,
-  currentReserve,
-  setCurrentReserve,
+  target,
+  remaining,
+  progress,
+  monthsToGoal,
   fixedIncomeMonthlyAllocation,
-  availableForBudget,
 }: Props) {
-  const months = [3, 6, 12]
-  const sixMonthReserve = totalCosts * 6
-  const remainingToSixMonths = Math.max(0, sixMonthReserve - currentReserve)
-  const progress = sixMonthReserve > 0 ? Math.min(100, (currentReserve / sixMonthReserve) * 100) : 0
-  const monthsToGoal =
-    remainingToSixMonths > 0 && fixedIncomeMonthlyAllocation > 0
-      ? Math.ceil(remainingToSixMonths / fixedIncomeMonthlyAllocation)
-      : 0
-
   return (
     <Card
-      title="Reserva de Emergencia"
-      icon={<Shield size={18} />}
-      accentColor="bg-slate-600"
+      title="Reserva de emergência"
+      icon={<Shield size={17} />}
       collapsible
       storageKey="emergency"
       headerExtra={
-        currentReserve > 0 || sixMonthReserve > 0 ? (
-          <HeaderMetric amount={currentReserve} baseAmount={availableForBudget} label="Atual" tone="slate" />
-        ) : undefined
+        target > 0 ? <HeaderMetric amount={emergencyFund.current} baseAmount={target} label="Guardado" tone="slate" /> : undefined
       }
     >
       <div className="space-y-4">
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+        <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-dark-text-secondary">
-              Valor atual da reserva
-            </label>
-            <CurrencyInput value={currentReserve} onChange={setCurrentReserve} />
+            <label className="mb-1.5 block text-sm font-medium text-dark-text-secondary">Quanto você já tem</label>
+            <CurrencyInput value={emergencyFund.current} onChange={setCurrent} />
           </div>
-          <div className="rounded-lg border border-slate-500/20 bg-slate-500/10 px-3 py-2.5">
-            <span className="block text-xs text-slate-300">Aporte mensal em renda fixa</span>
-            <strong className="text-sm text-slate-100">{formatCurrency(fixedIncomeMonthlyAllocation)}</strong>
+          <div>
+            <span className="mb-1.5 block text-sm font-medium text-dark-text-secondary">Meta em meses de custo</span>
+            <div className="grid grid-cols-3 gap-1 rounded-lg border border-dark-border bg-dark-input p-1">
+              {MONTH_OPTIONS.map((months) => (
+                <button
+                  key={months}
+                  type="button"
+                  onClick={() => setTargetMonths(months)}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    emergencyFund.targetMonths === months
+                      ? 'bg-dark-surface text-dark-text shadow-sm'
+                      : 'text-dark-text-muted hover:text-dark-text'
+                  }`}
+                >
+                  {months}m
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
         {totalCosts > 0 ? (
           <>
-            <div className="grid grid-cols-3 gap-3">
-              {months.map((month) => (
-                <div key={month} className="rounded-lg border border-dark-border bg-dark-surface px-3 py-3 text-center">
-                  <span className="block text-xs text-dark-text-muted">{month} meses</span>
-                  <span className="mt-1 block text-base font-bold text-dark-text">{formatCurrency(totalCosts * month)}</span>
-                </div>
-              ))}
+            <div>
+              <div className="mb-1.5 flex items-baseline justify-between text-xs">
+                <span className="text-dark-text-muted">
+                  Meta: {formatCurrency(target)} ({emergencyFund.targetMonths} meses de custos fixos)
+                </span>
+                <span className="font-semibold tabular-nums text-dark-text">{progress.toFixed(0)}%</span>
+              </div>
+              <Meter value={emergencyFund.current} max={target} color="#3987e5" height={8} />
             </div>
 
-            <div className="rounded-lg border border-dark-border bg-dark-surface p-4">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-bold text-dark-text">Meta principal: 6 meses</h3>
-                  <p className="text-xs text-dark-text-muted">
-                    {formatCurrency(currentReserve)} de {formatCurrency(sixMonthReserve)}
-                  </p>
-                </div>
-                <span className="font-mono text-sm font-bold text-slate-200">{progress.toFixed(0)}%</span>
-              </div>
-              <div className="h-2.5 overflow-hidden rounded-full bg-white/[0.07]">
-                <div className="h-full rounded-full bg-slate-300" style={{ width: `${progress}%` }} />
-              </div>
-            </div>
-
-            <div
-              className={`flex items-center gap-3 rounded-lg border px-4 py-3 ${
-                remainingToSixMonths <= 0
-                  ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200'
-                  : 'border-amber-500/20 bg-amber-500/10 text-amber-200'
-              }`}
-            >
-              <Clock3 size={16} className="shrink-0" />
-              {remainingToSixMonths <= 0 ? (
-                <span className="text-sm font-medium">Reserva de 6 meses atingida.</span>
+            <p className="text-sm leading-relaxed text-dark-text-secondary">
+              {remaining <= 0 ? (
+                <>Reserva completa. Aportes em renda fixa agora podem mirar outros objetivos.</>
               ) : fixedIncomeMonthlyAllocation > 0 ? (
-                <span className="text-sm">
-                  Faltam {formatCurrency(remainingToSixMonths)}. Com a renda fixa atual, prazo estimado:{' '}
-                  <strong>{formatMonths(monthsToGoal)}</strong>.
-                </span>
+                <>
+                  Faltam <strong className="text-dark-text">{formatCurrency(remaining)}</strong>. No ritmo atual de{' '}
+                  {formatCurrency(fixedIncomeMonthlyAllocation)}/mês em renda fixa, você completa em{' '}
+                  <strong className="text-dark-text">{formatMonths(monthsToGoal)}</strong>.
+                </>
               ) : (
-                <span className="text-sm">
-                  Faltam {formatCurrency(remainingToSixMonths)}. Aloque parte do aporte em renda fixa para calcular prazo.
-                </span>
+                <>
+                  Faltam <strong className="text-dark-text">{formatCurrency(remaining)}</strong>. Direcione parte do
+                  aporte para renda fixa para estimar o prazo.
+                </>
               )}
-            </div>
+            </p>
           </>
         ) : (
-          <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-            Cadastre os custos fixos para calcular as metas de 3, 6 e 12 meses.
-          </div>
+          <p className="text-sm text-dark-text-muted">
+            Cadastre os custos fixos para calcular a meta — a reserva ideal cobre alguns meses do seu custo de vida.
+          </p>
         )}
       </div>
     </Card>

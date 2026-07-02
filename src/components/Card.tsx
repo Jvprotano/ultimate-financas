@@ -6,6 +6,7 @@ interface CardProps {
   icon: ReactNode
   children: ReactNode
   className?: string
+  /** Mantido por compatibilidade; o estilo atual usa ícones neutros. */
   accentColor?: string
   collapsible?: boolean
   storageKey?: string
@@ -18,7 +19,6 @@ export function Card({
   icon,
   children,
   className = '',
-  accentColor = 'bg-primary-600',
   collapsible = false,
   storageKey,
   defaultCollapsed = false,
@@ -45,26 +45,20 @@ export function Card({
   }
 
   return (
-    <section
-      className={`bg-dark-card rounded-lg shadow-sm border border-dark-border overflow-hidden ${className}`}
-    >
+    <section className={`overflow-hidden rounded-xl border border-dark-border bg-dark-card ${className}`}>
       <div
-        className={`flex items-center gap-3 px-5 py-4 ${collapsed ? '' : 'border-b border-dark-border-subtle'} ${collapsible ? 'cursor-pointer select-none hover:bg-dark-hover/50 transition-colors' : ''}`}
+        className={`flex items-center gap-2.5 px-5 py-4 ${collapsed ? '' : 'border-b border-dark-border-subtle'} ${
+          collapsible ? 'cursor-pointer select-none transition-colors hover:bg-dark-hover/40' : ''
+        }`}
         onClick={collapsible ? toggleCollapse : undefined}
       >
-        <div className={`flex items-center justify-center w-9 h-9 rounded-lg ${accentColor} text-white shrink-0`}>
-          {icon}
-        </div>
-        <h2 className="text-lg font-semibold text-dark-text flex-1">{title}</h2>
-        {headerExtra && (
-          <div onClick={(e) => e.stopPropagation()}>
-            {headerExtra}
-          </div>
-        )}
+        <span className="shrink-0 text-dark-text-muted">{icon}</span>
+        <h2 className="flex-1 text-[15px] font-semibold tracking-tight text-dark-text">{title}</h2>
+        {headerExtra && <div onClick={(e) => e.stopPropagation()}>{headerExtra}</div>}
         {collapsible && (
           <ChevronDown
-            size={18}
-            className={`text-dark-text-muted transition-transform duration-200 ${collapsed ? '-rotate-90' : ''}`}
+            size={16}
+            className={`shrink-0 text-dark-text-muted transition-transform duration-200 ${collapsed ? '-rotate-90' : ''}`}
           />
         )}
       </div>

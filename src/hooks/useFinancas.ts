@@ -7,13 +7,13 @@ import type {
   DiversificationSlice,
   CostCategory,
   DeductionType,
-  BudgetBucket,
   BudgetArea,
-  AllocationTransfer,
+  BudgetBucket,
   CreditCardCycle,
   CreditCardEntry,
   CreditCardSettings,
   CreditCardSummary,
+  EmergencyFundState,
   SalaryInputMode,
   FinanceScenario,
   FinanceScenarioData,
@@ -21,9 +21,11 @@ import type {
 } from '../types'
 import { BUDGET_MODELS, DEFAULT_DIVERSIFICATION, INVESTMENT_DEDUCTION_TYPES } from '../types/constants'
 
-const SCENARIOS_STORAGE_KEY = 'uf_scenarios_v2'
-const ACTIVE_SCENARIO_STORAGE_KEY = 'uf_active_scenario_v2'
-const BUDGET_AREAS: BudgetArea[] = ['necessidades', 'desejos', 'investimentos']
+const SCENARIOS_STORAGE_KEY = 'uf_scenarios_v3'
+const ACTIVE_SCENARIO_STORAGE_KEY = 'uf_active_scenario_v3'
+const LEGACY_SCENARIOS_KEY = 'uf_scenarios_v2'
+const LEGACY_ACTIVE_SCENARIO_KEY = 'uf_active_scenario_v2'
+const DEFAULT_EMERGENCY_FUND: EmergencyFundState = { current: 0, targetMonths: 6 }
 const DEFAULT_CREDIT_CARD_SETTINGS: CreditCardSettings = {
   paymentDate: '05/07',
   personalSpendingLimit: 1500,
@@ -49,6 +51,10 @@ function readJson<T>(key: string, fallback: T): T {
 function finiteNumber(value: unknown, fallback = 0) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
+
+// ---------------------------------------------------------------------------
+// Cartões de crédito (inalterado)
+// ---------------------------------------------------------------------------
 
 function normalizeCreditCardEntry(entry: CreditCardEntry): CreditCardEntry {
   const amount = finiteNumber(entry.amount)
@@ -149,182 +155,6 @@ function syncGeneratedNextEntries(entries: CreditCardEntry[]): CreditCardEntry[]
   return [...currentEntries, ...manualNextEntries, ...generated]
 }
 
-function normalizeScenario(scenario: FinanceScenario): FinanceScenario {
-  return {
-    ...scenario,
-    salaryInputMode: scenario.salaryInputMode ?? 'before_payroll_deductions',
-    costs: Array.isArray(scenario.costs) ? scenario.costs : [],
-    wants: Array.isArray(scenario.wants)
-      ? scenario.wants.map((want) => ({
-          ...want,
-          mode: want.mode ?? 'percentage',
-          percentage: Number.isFinite(want.percentage) ? want.percentage : 0,
-          fixedAmount: Number.isFinite(want.fixedAmount) ? want.fixedAmount : 0,
-        }))
-      : [],
-    deductions: Array.isArray(scenario.deductions)
-      ? scenario.deductions.map((deduction) => ({
-          ...deduction,
-          employerContribution: Number.isFinite(deduction.employerContribution)
-            ? deduction.employerContribution
-            : 0,
-        }))
-      : [],
-    diversification: Array.isArray(scenario.diversification) ? scenario.diversification : DEFAULT_DIVERSIFICATION,
-    customModel: scenario.customModel ?? { n: 50, d: 30, i: 20 },
-    surplusToDesejos: Number.isFinite(scenario.surplusToDesejos) ? scenario.surplusToDesejos : 50,
-    allocationTransfers: Array.isArray(scenario.allocationTransfers)
-      ? scenario.allocationTransfers.filter(
-          (transfer) =>
-            BUDGET_AREAS.includes(transfer.from) &&
-            BUDGET_AREAS.includes(transfer.to) &&
-            transfer.from !== transfer.to &&
-            transfer.amount > 0,
-        )
-      : [],
-    emergencyFundCurrent: Number.isFinite(scenario.emergencyFundCurrent) ? scenario.emergencyFundCurrent : 0,
-    creditCardEntries: Array.isArray(scenario.creditCardEntries)
-      ? scenario.creditCardEntries.map(normalizeCreditCardEntry)
-      : [],
-    creditCardSettings: {
-      ...DEFAULT_CREDIT_CARD_SETTINGS,
-      ...(scenario.creditCardSettings ?? {}),
-      personalSpendingLimit: finiteNumber(
-        scenario.creditCardSettings?.personalSpendingLimit,
-        DEFAULT_CREDIT_CARD_SETTINGS.personalSpendingLimit,
-      ),
-    },
-  }
-}
-
-function createDefaultScenario(name = 'Atual'): FinanceScenario {
-  const timestamp = nowIso()
-
-  return {
-    id: uid(),
-    name,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-    salaryNet: 0,
-    salaryInputMode: 'before_payroll_deductions',
-    costs: [],
-    wants: [],
-    deductions: [],
-    selectedModelId: '50-30-20',
-    diversification: DEFAULT_DIVERSIFICATION,
-    customModel: { n: 50, d: 30, i: 20 },
-    surplusToDesejos: 50,
-    allocationTransfers: [],
-    emergencyFundCurrent: 0,
-    creditCardEntries: [],
-    creditCardSettings: DEFAULT_CREDIT_CARD_SETTINGS,
-  }
-}
-
-function migrateLegacyScenario(): FinanceScenario {
-  const timestamp = nowIso()
-
-  return {
-    id: uid(),
-    name: 'Atual',
-    createdAt: timestamp,
-    updatedAt: timestamp,
-    salaryNet: readJson<number>('uf_salary_net', 0),
-    salaryInputMode: readJson<SalaryInputMode>('uf_salary_input_mode', 'before_payroll_deductions'),
-    costs: readJson<CostItem[]>('uf_costs', []),
-    wants: readJson<WantItem[]>('uf_wants', []),
-    deductions: readJson<DeductionItem[]>('uf_deductions', []),
-    selectedModelId: readJson<string>('uf_model', '50-30-20'),
-    diversification: readJson<DiversificationSlice[]>('uf_diversification', DEFAULT_DIVERSIFICATION),
-    customModel: readJson<{ n: number; d: number; i: number }>('uf_custom_model', { n: 50, d: 30, i: 20 }),
-    surplusToDesejos: readJson<number>('uf_surplus_desejos', 50),
-    allocationTransfers: [],
-    emergencyFundCurrent: readJson<number>('uf_emergency_current', 0),
-    creditCardEntries: readJson<CreditCardEntry[]>('uf_credit_card_entries', []),
-    creditCardSettings: readJson<CreditCardSettings>('uf_credit_card_settings', DEFAULT_CREDIT_CARD_SETTINGS),
-  }
-}
-
-function loadInitialScenarios(): FinanceScenario[] {
-  const existing = readJson<FinanceScenario[] | null>(SCENARIOS_STORAGE_KEY, null)
-  if (existing?.length) return existing.map(normalizeScenario)
-
-  const legacyScenario = migrateLegacyScenario()
-  const hasLegacyData =
-    legacyScenario.salaryNet > 0 ||
-    legacyScenario.costs.length > 0 ||
-    legacyScenario.wants.length > 0 ||
-    legacyScenario.deductions.length > 0
-
-  return hasLegacyData ? [normalizeScenario(legacyScenario)] : [createDefaultScenario('Atual')]
-}
-
-function cloneScenario(source: FinanceScenario, name: string): FinanceScenario {
-  const timestamp = nowIso()
-
-  return {
-    ...structuredClone(source),
-    id: uid(),
-    name,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  }
-}
-
-function getSelectedModel(state: FinanceScenarioData) {
-  const model = BUDGET_MODELS.find((m) => m.id === state.selectedModelId) ?? BUDGET_MODELS[0]
-  if (model.id === 'custom') {
-    return {
-      ...model,
-      necessidades: state.customModel.n,
-      desejos: state.customModel.d,
-      investimentos: state.customModel.i,
-    }
-  }
-  return model
-}
-
-function applyAllocationTransfers(
-  baseBudgetAllocation: Record<BudgetArea, number>,
-  transfers: AllocationTransfer[],
-) {
-  const allocation = { ...baseBudgetAllocation }
-  const movement = {
-    necessidades: { in: 0, out: 0 },
-    desejos: { in: 0, out: 0 },
-    investimentos: { in: 0, out: 0 },
-  }
-
-  for (const transfer of transfers) {
-    if (transfer.from === transfer.to || transfer.amount <= 0) continue
-    const amount = Math.min(transfer.amount, allocation[transfer.from])
-    if (amount <= 0) continue
-
-    allocation[transfer.from] -= amount
-    allocation[transfer.to] += amount
-    movement[transfer.from].out += amount
-    movement[transfer.to].in += amount
-  }
-
-  return { allocation, movement }
-}
-
-function isFixedIncomeSlice(name: string) {
-  const normalized = name
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase()
-
-  return (
-    normalized.includes('renda fixa') ||
-    normalized.includes('tesouro') ||
-    normalized.includes('selic') ||
-    normalized.includes('cdb') ||
-    normalized.includes('poupanca') ||
-    normalized.includes('liquidez')
-  )
-}
-
 function calculateCreditCardSummary(
   entries: CreditCardEntry[],
   settings: CreditCardSettings,
@@ -385,112 +215,336 @@ function calculateCreditCardSummary(
   }
 }
 
-function calculateScenario(state: FinanceScenarioData) {
-  const safeState = normalizeScenario(state as FinanceScenario)
-  const selectedModel = getSelectedModel(safeState)
-  const totalCosts = safeState.costs.reduce((sum, c) => sum + c.value, 0)
-  const totalDeductions = safeState.deductions.reduce((sum, d) => sum + d.value, 0)
-  const investmentDeductions = safeState.deductions
+// ---------------------------------------------------------------------------
+// Normalização e migração
+// ---------------------------------------------------------------------------
+
+function normalizeScenario(scenario: FinanceScenario): FinanceScenario {
+  return {
+    ...scenario,
+    salaryNet: finiteNumber(scenario.salaryNet),
+    salaryInputMode: scenario.salaryInputMode === 'take_home' ? 'take_home' : 'before_payroll_deductions',
+    costs: Array.isArray(scenario.costs) ? scenario.costs : [],
+    wants: Array.isArray(scenario.wants)
+      ? scenario.wants.map((want) => ({
+          id: want.id || uid(),
+          name: want.name || 'Desejo',
+          plannedAmount: Math.max(0, finiteNumber(want.plannedAmount)),
+        }))
+      : [],
+    deductions: Array.isArray(scenario.deductions)
+      ? scenario.deductions.map((deduction) => ({
+          ...deduction,
+          value: finiteNumber(deduction.value),
+          employerContribution: finiteNumber(deduction.employerContribution),
+        }))
+      : [],
+    selectedModelId: BUDGET_MODELS.some((m) => m.id === scenario.selectedModelId)
+      ? scenario.selectedModelId
+      : '50-30-20',
+    diversification: Array.isArray(scenario.diversification)
+      ? scenario.diversification
+      : DEFAULT_DIVERSIFICATION,
+    customModel: scenario.customModel ?? { n: 50, d: 30, i: 20 },
+    emergencyFund: {
+      current: Math.max(0, finiteNumber(scenario.emergencyFund?.current)),
+      targetMonths: Math.max(1, Math.round(finiteNumber(scenario.emergencyFund?.targetMonths, 6))),
+    },
+    creditCardEntries: Array.isArray(scenario.creditCardEntries)
+      ? scenario.creditCardEntries.map(normalizeCreditCardEntry)
+      : [],
+    creditCardSettings: {
+      ...DEFAULT_CREDIT_CARD_SETTINGS,
+      ...(scenario.creditCardSettings ?? {}),
+      personalSpendingLimit: finiteNumber(
+        scenario.creditCardSettings?.personalSpendingLimit,
+        DEFAULT_CREDIT_CARD_SETTINGS.personalSpendingLimit,
+      ),
+    },
+  }
+}
+
+function createDefaultScenario(name = 'Atual'): FinanceScenario {
+  const timestamp = nowIso()
+
+  return {
+    id: uid(),
+    name,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    salaryNet: 0,
+    salaryInputMode: 'before_payroll_deductions',
+    costs: [],
+    wants: [],
+    deductions: [],
+    selectedModelId: '50-30-20',
+    diversification: DEFAULT_DIVERSIFICATION,
+    customModel: { n: 50, d: 30, i: 20 },
+    emergencyFund: DEFAULT_EMERGENCY_FUND,
+    creditCardEntries: [],
+    creditCardSettings: DEFAULT_CREDIT_CARD_SETTINGS,
+  }
+}
+
+// Formato dos cenários v2, usado apenas na migração
+interface LegacyWantItem {
+  id: string
+  name: string
+  mode?: 'percentage' | 'fixed'
+  percentage?: number
+  fixedAmount?: number
+}
+
+interface LegacyAllocationTransfer {
+  from: BudgetArea
+  to: BudgetArea
+  amount: number
+}
+
+interface LegacyScenario {
+  id?: string
+  name?: string
+  createdAt?: string
+  updatedAt?: string
+  salaryNet?: number
+  salaryInputMode?: SalaryInputMode
+  costs?: CostItem[]
+  wants?: LegacyWantItem[]
+  deductions?: DeductionItem[]
+  selectedModelId?: string
+  diversification?: DiversificationSlice[]
+  customModel?: { n: number; d: number; i: number }
+  allocationTransfers?: LegacyAllocationTransfer[]
+  emergencyFundCurrent?: number
+  creditCardEntries?: CreditCardEntry[]
+  creditCardSettings?: CreditCardSettings
+}
+
+function resolveModelPercentages(selectedModelId?: string, customModel?: { n: number; d: number; i: number }) {
+  const model = BUDGET_MODELS.find((m) => m.id === selectedModelId) ?? BUDGET_MODELS[0]
+  if (model.id === 'custom' && customModel) {
+    return { necessidades: customModel.n, desejos: customModel.d, investimentos: customModel.i }
+  }
+  return { necessidades: model.necessidades, desejos: model.desejos, investimentos: model.investimentos }
+}
+
+/**
+ * Converte um cenário v2 para o v3. Desejos percentuais viram valores
+ * planejados equivalentes ao que a fórmula antiga exibia (incluindo o efeito
+ * das transferências de meta, que deixam de existir no v3).
+ */
+function convertLegacyScenario(legacy: LegacyScenario): FinanceScenario {
+  const timestamp = nowIso()
+  const salaryNet = finiteNumber(legacy.salaryNet)
+  const salaryInputMode: SalaryInputMode =
+    legacy.salaryInputMode === 'take_home' ? 'take_home' : 'before_payroll_deductions'
+  const deductions = Array.isArray(legacy.deductions) ? legacy.deductions : []
+  const totalDeductions = deductions.reduce((sum, d) => sum + finiteNumber(d.value), 0)
+  const investmentDeductions = deductions
+    .filter((d) => INVESTMENT_DEDUCTION_TYPES.includes(d.type))
+    .reduce((sum, d) => sum + finiteNumber(d.value), 0)
+  const benefitDeductions = totalDeductions - investmentDeductions
+  const availableForBudget =
+    salaryInputMode === 'before_payroll_deductions'
+      ? Math.max(0, salaryNet - benefitDeductions)
+      : salaryNet + investmentDeductions
+
+  const model = resolveModelPercentages(legacy.selectedModelId, legacy.customModel)
+  const allocation: Record<BudgetArea, number> = {
+    necessidades: (availableForBudget * model.necessidades) / 100,
+    desejos: (availableForBudget * model.desejos) / 100,
+    investimentos: (availableForBudget * model.investimentos) / 100,
+  }
+
+  for (const transfer of legacy.allocationTransfers ?? []) {
+    if (!transfer || transfer.from === transfer.to) continue
+    const amount = Math.min(finiteNumber(transfer.amount), allocation[transfer.from] ?? 0)
+    if (amount <= 0) continue
+    allocation[transfer.from] -= amount
+    allocation[transfer.to] += amount
+  }
+
+  const legacyWants = Array.isArray(legacy.wants) ? legacy.wants : []
+  const fixedWantsAmount = legacyWants
+    .filter((w) => w.mode === 'fixed')
+    .reduce((sum, w) => sum + finiteNumber(w.fixedAmount), 0)
+  const variableWantsBase = Math.max(0, allocation.desejos - fixedWantsAmount)
+
+  const wants: WantItem[] = legacyWants.map((want) => ({
+    id: want.id || uid(),
+    name: want.name || 'Desejo',
+    plannedAmount:
+      want.mode === 'fixed'
+        ? Math.max(0, finiteNumber(want.fixedAmount))
+        : Math.round(variableWantsBase * finiteNumber(want.percentage)) / 100,
+  }))
+
+  return normalizeScenario({
+    id: legacy.id || uid(),
+    name: legacy.name || 'Atual',
+    createdAt: legacy.createdAt || timestamp,
+    updatedAt: timestamp,
+    salaryNet,
+    salaryInputMode,
+    costs: Array.isArray(legacy.costs) ? legacy.costs : [],
+    wants,
+    deductions,
+    selectedModelId: legacy.selectedModelId || '50-30-20',
+    diversification: Array.isArray(legacy.diversification) ? legacy.diversification : DEFAULT_DIVERSIFICATION,
+    customModel: legacy.customModel ?? { n: 50, d: 30, i: 20 },
+    emergencyFund: { current: finiteNumber(legacy.emergencyFundCurrent), targetMonths: 6 },
+    creditCardEntries: Array.isArray(legacy.creditCardEntries) ? legacy.creditCardEntries : [],
+    creditCardSettings: legacy.creditCardSettings ?? DEFAULT_CREDIT_CARD_SETTINGS,
+  })
+}
+
+function loadInitialScenarios(): FinanceScenario[] {
+  const existing = readJson<FinanceScenario[] | null>(SCENARIOS_STORAGE_KEY, null)
+  if (existing?.length) return existing.map(normalizeScenario)
+
+  const legacy = readJson<LegacyScenario[] | null>(LEGACY_SCENARIOS_KEY, null)
+  if (legacy?.length) return legacy.map(convertLegacyScenario)
+
+  return [createDefaultScenario('Atual')]
+}
+
+function loadInitialActiveScenarioId(scenarios: FinanceScenario[]): string {
+  const stored = readJson<string>(ACTIVE_SCENARIO_STORAGE_KEY, '')
+  if (scenarios.some((scenario) => scenario.id === stored)) return stored
+  const legacyActive = readJson<string>(LEGACY_ACTIVE_SCENARIO_KEY, '')
+  if (scenarios.some((scenario) => scenario.id === legacyActive)) return legacyActive
+  return scenarios[0]?.id ?? ''
+}
+
+function cloneScenario(source: FinanceScenario, name: string): FinanceScenario {
+  const timestamp = nowIso()
+
+  return {
+    ...structuredClone(source),
+    id: uid(),
+    name,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cálculo do cenário
+// ---------------------------------------------------------------------------
+
+function getSelectedModel(state: FinanceScenarioData) {
+  const model = BUDGET_MODELS.find((m) => m.id === state.selectedModelId) ?? BUDGET_MODELS[0]
+  if (model.id === 'custom') {
+    return {
+      ...model,
+      necessidades: state.customModel.n,
+      desejos: state.customModel.d,
+      investimentos: state.customModel.i,
+    }
+  }
+  return model
+}
+
+function isFixedIncomeSlice(name: string) {
+  const normalized = name
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+
+  return (
+    normalized.includes('renda fixa') ||
+    normalized.includes('tesouro') ||
+    normalized.includes('selic') ||
+    normalized.includes('cdb') ||
+    normalized.includes('poupanca') ||
+    normalized.includes('liquidez')
+  )
+}
+
+function buildBucket(target: number, actual: number): BudgetBucket {
+  return {
+    target,
+    actual,
+    diff: target - actual,
+    percentage: target > 0 ? (actual / target) * 100 : 0,
+  }
+}
+
+export type ScenarioMetrics = ReturnType<typeof calculateScenario>
+
+function calculateScenario(state: FinanceScenario) {
+  const selectedModel = getSelectedModel(state)
+  const totalCosts = state.costs.reduce((sum, c) => sum + c.value, 0)
+  const totalDeductions = state.deductions.reduce((sum, d) => sum + d.value, 0)
+  const investmentDeductions = state.deductions
     .filter((d) => INVESTMENT_DEDUCTION_TYPES.includes(d.type))
     .reduce((sum, d) => sum + d.value, 0)
-  const employerInvestmentContributions = safeState.deductions
+  const employerInvestmentContributions = state.deductions
     .filter((d) => INVESTMENT_DEDUCTION_TYPES.includes(d.type))
     .reduce((sum, d) => sum + (d.employerContribution ?? 0), 0)
   const benefitDeductions = totalDeductions - investmentDeductions
-  const paycheckInAccount =
-    safeState.salaryInputMode === 'before_payroll_deductions'
-      ? Math.max(0, safeState.salaryNet - totalDeductions)
-      : safeState.salaryNet
-  const availableForBudget =
-    safeState.salaryInputMode === 'before_payroll_deductions'
-      ? Math.max(0, safeState.salaryNet - benefitDeductions)
-      : safeState.salaryNet + investmentDeductions
 
-  const baseBudgetAllocation: Record<BudgetArea, number> = {
+  // "Cai na conta": o que sobra do salário depois de toda a folha.
+  const paycheckInAccount =
+    state.salaryInputMode === 'before_payroll_deductions'
+      ? Math.max(0, state.salaryNet - totalDeductions)
+      : state.salaryNet
+
+  // Base do orçamento: benefícios (VA, plano etc.) ficam fora porque não são
+  // dinheiro livre; previdência descontada em folha continua contando, porque
+  // é investimento seu.
+  const availableForBudget =
+    state.salaryInputMode === 'before_payroll_deductions'
+      ? Math.max(0, state.salaryNet - benefitDeductions)
+      : state.salaryNet + investmentDeductions
+
+  const budgetAllocation: Record<BudgetArea, number> = {
     necessidades: (availableForBudget * selectedModel.necessidades) / 100,
     desejos: (availableForBudget * selectedModel.desejos) / 100,
     investimentos: (availableForBudget * selectedModel.investimentos) / 100,
   }
 
-  const { allocation: budgetAllocation, movement: allocationMovement } = applyAllocationTransfers(
-    baseBudgetAllocation,
-    safeState.allocationTransfers,
-  )
+  const totalWantsAmount = state.wants.reduce((sum, w) => sum + w.plannedAmount, 0)
 
-  const necessidadesSurplus = Math.max(0, budgetAllocation.necessidades - totalCosts)
-  const fixedWantsAmount = safeState.wants
-    .filter((w) => (w.mode ?? 'percentage') === 'fixed')
-    .reduce((sum, w) => sum + (w.fixedAmount ?? 0), 0)
-  const variableWantsBase = Math.max(0, budgetAllocation.desejos - fixedWantsAmount)
-  const totalWantsPercentage = safeState.wants
-    .filter((w) => (w.mode ?? 'percentage') === 'percentage')
-    .reduce((sum, w) => sum + w.percentage, 0)
-  const wantAllocations = safeState.wants.map((w) => ({
-    ...w,
-    mode: w.mode ?? 'percentage',
-    fixedAmount: w.fixedAmount ?? 0,
-    amount:
-      (w.mode ?? 'percentage') === 'fixed'
-        ? w.fixedAmount ?? 0
-        : (variableWantsBase * w.percentage) / 100,
-  }))
-  const totalWantsAmount = wantAllocations.reduce((sum, w) => sum + w.amount, 0)
-  const totalDiversificationPercentage = safeState.diversification.reduce((sum, slice) => sum + slice.percentage, 0)
-  const directInvestmentTarget = Math.max(
-    0,
-    budgetAllocation.investimentos - investmentDeductions,
-  )
-  const allocatedDirectInvestment = (directInvestmentTarget * totalDiversificationPercentage) / 100
+  // Quanto ainda precisa ser aportado pela conta, além do que já sai em folha.
+  const directInvestmentTarget = Math.max(0, budgetAllocation.investimentos - investmentDeductions)
+  const totalPlannedInvestment = investmentDeductions + directInvestmentTarget
+  const savingsRate = availableForBudget > 0 ? (totalPlannedInvestment / availableForBudget) * 100 : 0
 
-  const budgetComparison: Record<string, BudgetBucket> = {
-    necessidades: {
-      target: budgetAllocation.necessidades,
-      actual: totalCosts,
-      diff: budgetAllocation.necessidades - totalCosts,
-      percentage: budgetAllocation.necessidades > 0 ? (totalCosts / budgetAllocation.necessidades) * 100 : 0,
-      baseTarget: baseBudgetAllocation.necessidades,
-      movedIn: allocationMovement.necessidades.in,
-      movedOut: allocationMovement.necessidades.out,
-    },
-    desejos: {
-      target: budgetAllocation.desejos,
-      actual: totalWantsAmount,
-      diff: budgetAllocation.desejos - totalWantsAmount,
-      percentage: budgetAllocation.desejos > 0 ? (totalWantsAmount / budgetAllocation.desejos) * 100 : 0,
-      baseTarget: baseBudgetAllocation.desejos,
-      movedIn: allocationMovement.desejos.in,
-      movedOut: allocationMovement.desejos.out,
-    },
-    investimentos: {
-      target: budgetAllocation.investimentos,
-      actual: investmentDeductions + allocatedDirectInvestment,
-      diff: budgetAllocation.investimentos - (investmentDeductions + allocatedDirectInvestment),
-      percentage:
-        budgetAllocation.investimentos > 0
-          ? ((investmentDeductions + allocatedDirectInvestment) / budgetAllocation.investimentos) * 100
-          : 0,
-      baseTarget: baseBudgetAllocation.investimentos,
-      movedIn: allocationMovement.investimentos.in,
-      movedOut: allocationMovement.investimentos.out,
-    },
+  // Saldo se o plano inteiro for executado: custos pagos, desejos gastos e
+  // aporte direto feito por completo.
+  const balanceAfterPlan = paycheckInAccount - totalCosts - totalWantsAmount - directInvestmentTarget
+
+  const budgetComparison: Record<BudgetArea, BudgetBucket> = {
+    necessidades: buildBucket(budgetAllocation.necessidades, totalCosts),
+    desejos: buildBucket(budgetAllocation.desejos, totalWantsAmount),
+    investimentos: buildBucket(budgetAllocation.investimentos, totalPlannedInvestment),
   }
 
-  const investmentAllocation = safeState.diversification.map((slice) => ({
+  const totalDiversificationPercentage = state.diversification.reduce((sum, slice) => sum + slice.percentage, 0)
+  const investmentAllocation = state.diversification.map((slice) => ({
     ...slice,
     amount: (directInvestmentTarget * slice.percentage) / 100,
   }))
   const fixedIncomeMonthlyAllocation = investmentAllocation
     .filter((slice) => isFixedIncomeSlice(slice.name))
     .reduce((sum, slice) => sum + slice.amount, 0)
-  const creditCardSummary = calculateCreditCardSummary(safeState.creditCardEntries, safeState.creditCardSettings)
 
-  const costsByCategory = new Map<string, number>()
-  for (const c of safeState.costs) {
+  const costsByCategory = new Map<CostCategory, number>()
+  for (const c of state.costs) {
     costsByCategory.set(c.category, (costsByCategory.get(c.category) || 0) + c.value)
   }
 
-  const balanceAfterCosts = paycheckInAccount - totalCosts - totalWantsAmount - allocatedDirectInvestment
-  const unallocatedMoney = balanceAfterCosts
+  const emergencyFundTarget = totalCosts * state.emergencyFund.targetMonths
+  const emergencyFundRemaining = Math.max(0, emergencyFundTarget - state.emergencyFund.current)
+  const emergencyFundProgress =
+    emergencyFundTarget > 0 ? Math.min(100, (state.emergencyFund.current / emergencyFundTarget) * 100) : 0
+  const emergencyFundMonthsToGoal =
+    emergencyFundRemaining > 0 && fixedIncomeMonthlyAllocation > 0
+      ? Math.ceil(emergencyFundRemaining / fixedIncomeMonthlyAllocation)
+      : 0
+
+  const creditCardSummary = calculateCreditCardSummary(state.creditCardEntries, state.creditCardSettings)
 
   return {
     selectedModel,
@@ -501,40 +555,41 @@ function calculateScenario(state: FinanceScenarioData) {
     benefitDeductions,
     paycheckInAccount,
     availableForBudget,
-    baseBudgetAllocation,
     budgetAllocation,
-    allocationMovement,
-    necessidadesSurplus,
-    fixedWantsAmount,
-    variableWantsBase,
-    totalWantsPercentage,
-    wantAllocations,
     totalWantsAmount,
-    totalDiversificationPercentage,
     directInvestmentTarget,
-    allocatedDirectInvestment,
+    totalPlannedInvestment,
+    savingsRate,
+    balanceAfterPlan,
     budgetComparison,
+    totalDiversificationPercentage,
     investmentAllocation,
     fixedIncomeMonthlyAllocation,
-    creditCardSummary,
     costsByCategory,
-    balanceAfterCosts,
-    unallocatedMoney,
+    emergencyFundTarget,
+    emergencyFundRemaining,
+    emergencyFundProgress,
+    emergencyFundMonthsToGoal,
+    creditCardSummary,
   }
 }
+
+// ---------------------------------------------------------------------------
+// Hook
+// ---------------------------------------------------------------------------
 
 export function useFinancas() {
   const [storedScenarios, setScenarios] = useLocalStorage<FinanceScenario[]>(
     SCENARIOS_STORAGE_KEY,
     loadInitialScenarios(),
   )
-  const [activeScenarioId, setActiveScenarioId] = useLocalStorage<string>(
-    ACTIVE_SCENARIO_STORAGE_KEY,
-    storedScenarios[0]?.id ?? '',
-  )
   const scenarios = useMemo(
     () => (Array.isArray(storedScenarios) ? storedScenarios.map(normalizeScenario) : []),
     [storedScenarios],
+  )
+  const [activeScenarioId, setActiveScenarioId] = useLocalStorage<string>(
+    ACTIVE_SCENARIO_STORAGE_KEY,
+    loadInitialActiveScenarioId(scenarios),
   )
 
   useEffect(() => {
@@ -550,20 +605,17 @@ export function useFinancas() {
     }
   }, [activeScenarioId, scenarios, setActiveScenarioId, setScenarios])
 
-  useEffect(() => {
-    if (JSON.stringify(storedScenarios) !== JSON.stringify(scenarios)) {
-      setScenarios(scenarios)
-    }
-  }, [scenarios, setScenarios, storedScenarios])
-
-  const activeScenario = scenarios.find((scenario) => scenario.id === activeScenarioId) ?? scenarios[0] ?? createDefaultScenario('Atual')
+  const activeScenario =
+    scenarios.find((scenario) => scenario.id === activeScenarioId) ?? scenarios[0] ?? createDefaultScenario('Atual')
   const activeId = activeScenario?.id ?? ''
 
   const updateActiveScenario = useCallback(
     (updater: (scenario: FinanceScenario) => FinanceScenario) => {
       setScenarios((prev) =>
         prev.map((scenario) =>
-          scenario.id === activeId ? { ...updater(normalizeScenario(scenario)), updatedAt: nowIso() } : normalizeScenario(scenario),
+          scenario.id === activeId
+            ? { ...updater(normalizeScenario(scenario)), updatedAt: nowIso() }
+            : scenario,
         ),
       )
     },
@@ -577,8 +629,9 @@ export function useFinancas() {
     [updateActiveScenario],
   )
 
+  // Cenários
   const createScenario = useCallback(
-    (name = `Cenario ${scenarios.length + 1}`) => {
+    (name = `Cenário ${scenarios.length + 1}`) => {
       const scenario = createDefaultScenario(name)
       setScenarios((prev) => [...prev, scenario])
       setActiveScenarioId(scenario.id)
@@ -590,7 +643,7 @@ export function useFinancas() {
     (sourceId = activeId) => {
       const source = scenarios.find((scenario) => scenario.id === sourceId) ?? activeScenario
       if (!source) return
-      const scenario = cloneScenario(source, `${source.name} - futuro`)
+      const scenario = cloneScenario(source, `${source.name} (cópia)`)
       setScenarios((prev) => [...prev, scenario])
       setActiveScenarioId(scenario.id)
     },
@@ -622,7 +675,7 @@ export function useFinancas() {
     [activeId, scenarios, setActiveScenarioId, setScenarios],
   )
 
-  // Costs CRUD
+  // Custos
   const addCost = useCallback(
     (name: string, value: number, category: CostCategory) => {
       updateActiveScenario((scenario) => ({
@@ -643,12 +696,12 @@ export function useFinancas() {
     [updateActiveScenario],
   )
 
-  // Wants CRUD
+  // Desejos
   const addWant = useCallback(
-    (name: string, mode: 'percentage' | 'fixed' = 'percentage', fixedAmount = 0) => {
+    (name: string, plannedAmount = 0) => {
       updateActiveScenario((scenario) => ({
         ...scenario,
-        wants: [...scenario.wants, { id: uid(), name, mode, percentage: 0, fixedAmount }],
+        wants: [...scenario.wants, { id: uid(), name, plannedAmount: Math.max(0, plannedAmount) }],
       }))
     },
     [updateActiveScenario],
@@ -664,48 +717,19 @@ export function useFinancas() {
     [updateActiveScenario],
   )
 
-  const updateWantPercentage = useCallback(
-    (id: string, percentage: number) => {
+  const updateWantAmount = useCallback(
+    (id: string, plannedAmount: number) => {
       updateActiveScenario((scenario) => ({
         ...scenario,
         wants: scenario.wants.map((w) =>
-          w.id === id ? { ...w, percentage: Math.max(0, Math.min(100, percentage)) } : w,
+          w.id === id ? { ...w, plannedAmount: Math.max(0, plannedAmount) } : w,
         ),
       }))
     },
     [updateActiveScenario],
   )
 
-  const updateWantFixedAmount = useCallback(
-    (id: string, fixedAmount: number) => {
-      updateActiveScenario((scenario) => ({
-        ...scenario,
-        wants: scenario.wants.map((w) => (w.id === id ? { ...w, fixedAmount: Math.max(0, fixedAmount) } : w)),
-      }))
-    },
-    [updateActiveScenario],
-  )
-
-  const updateWantMode = useCallback(
-    (id: string, mode: 'percentage' | 'fixed') => {
-      updateActiveScenario((scenario) => ({
-        ...scenario,
-        wants: scenario.wants.map((w) =>
-          w.id === id
-            ? {
-                ...w,
-                mode,
-                percentage: mode === 'percentage' ? w.percentage : 0,
-                fixedAmount: mode === 'fixed' ? w.fixedAmount ?? 0 : 0,
-              }
-            : w,
-        ),
-      }))
-    },
-    [updateActiveScenario],
-  )
-
-  // Deductions CRUD
+  // Descontos em folha
   const addDeduction = useCallback(
     (name: string, value: number, type: DeductionType, employerContribution = 0) => {
       updateActiveScenario((scenario) => ({
@@ -738,7 +762,7 @@ export function useFinancas() {
     [updateActiveScenario],
   )
 
-  // Diversification
+  // Diversificação
   const updateDiversification = useCallback(
     (slices: DiversificationSlice[]) => {
       setScenarioField('diversification', slices)
@@ -766,31 +790,28 @@ export function useFinancas() {
     [updateActiveScenario],
   )
 
-  const addAllocationTransfer = useCallback(
-    (from: BudgetArea, to: BudgetArea, amount: number) => {
-      if (from === to || amount <= 0) return
+  // Reserva de emergência
+  const setEmergencyFundCurrent = useCallback(
+    (value: number) => {
       updateActiveScenario((scenario) => ({
         ...scenario,
-        allocationTransfers: [...scenario.allocationTransfers, { id: uid(), from, to, amount }],
+        emergencyFund: { ...scenario.emergencyFund, current: Math.max(0, value) },
       }))
     },
     [updateActiveScenario],
   )
 
-  const removeAllocationTransfer = useCallback(
-    (id: string) => {
+  const setEmergencyFundTargetMonths = useCallback(
+    (months: number) => {
       updateActiveScenario((scenario) => ({
         ...scenario,
-        allocationTransfers: scenario.allocationTransfers.filter((transfer) => transfer.id !== id),
+        emergencyFund: { ...scenario.emergencyFund, targetMonths: Math.max(1, Math.round(months)) },
       }))
     },
     [updateActiveScenario],
   )
 
-  const clearAllocationTransfers = useCallback(() => {
-    updateActiveScenario((scenario) => ({ ...scenario, allocationTransfers: [] }))
-  }, [updateActiveScenario])
-
+  // Cartões de crédito (inalterado)
   const addCreditCardEntry = useCallback(
     (entry: Omit<CreditCardEntry, 'id'>) => {
       updateActiveScenario((scenario) => {
@@ -949,30 +970,22 @@ export function useFinancas() {
     () =>
       scenarios.map((scenario) => {
         const summary = calculateScenario(scenario)
-        const savingsRate =
-          summary.availableForBudget > 0
-            ? (summary.budgetComparison.investimentos.actual / summary.availableForBudget) * 100
-            : 0
-
         return {
           id: scenario.id,
           name: scenario.name,
-          salaryNet: scenario.salaryNet,
-          paycheckInAccount: summary.paycheckInAccount,
           availableForBudget: summary.availableForBudget,
           totalCosts: summary.totalCosts,
           totalWantsAmount: summary.totalWantsAmount,
-          investmentDeductions: summary.investmentDeductions,
-          employerInvestmentContributions: summary.employerInvestmentContributions,
-          directInvestmentTarget: summary.directInvestmentTarget,
-          balanceAfterCosts: summary.balanceAfterCosts,
-          savingsRate,
+          totalPlannedInvestment: summary.totalPlannedInvestment,
+          balanceAfterPlan: summary.balanceAfterPlan,
+          savingsRate: summary.savingsRate,
         }
       }),
     [scenarios],
   )
 
   return {
+    // Cenários
     scenarios,
     activeScenario,
     activeScenarioId: activeId,
@@ -982,63 +995,39 @@ export function useFinancas() {
     renameScenario,
     removeScenario,
     scenarioSummaries,
+
+    // Estado bruto do cenário ativo
     salaryNet: activeScenario.salaryNet,
     setSalaryNet: (value: number) => setScenarioField('salaryNet', value),
     salaryInputMode: activeScenario.salaryInputMode,
     setSalaryInputMode: (mode: SalaryInputMode) => setScenarioField('salaryInputMode', mode),
-    paycheckInAccount: metrics.paycheckInAccount,
     costs: activeScenario.costs,
     addCost,
     removeCost,
     wants: activeScenario.wants,
     addWant,
     removeWant,
-    updateWantPercentage,
-    updateWantFixedAmount,
-    updateWantMode,
-    wantAllocations: metrics.wantAllocations,
-    totalWantsPercentage: metrics.totalWantsPercentage,
-    fixedWantsAmount: metrics.fixedWantsAmount,
-    variableWantsBase: metrics.variableWantsBase,
-    totalWantsAmount: metrics.totalWantsAmount,
+    updateWantAmount,
     deductions: activeScenario.deductions,
     addDeduction,
     removeDeduction,
     updateDeductionEmployerContribution,
     selectedModelId: activeScenario.selectedModelId,
     setSelectedModelId: (id: string) => setScenarioField('selectedModelId', id),
-    selectedModel: metrics.selectedModel,
     customModel: activeScenario.customModel,
     setCustomModel: (model: { n: number; d: number; i: number }) => setScenarioField('customModel', model),
     diversification: activeScenario.diversification,
     updateDiversification,
     addDiversificationSlice,
     removeDiversificationSlice,
-    totalCosts: metrics.totalCosts,
-    totalDeductions: metrics.totalDeductions,
-    investmentDeductions: metrics.investmentDeductions,
-    employerInvestmentContributions: metrics.employerInvestmentContributions,
-    benefitDeductions: metrics.benefitDeductions,
-    availableForBudget: metrics.availableForBudget,
-    baseBudgetAllocation: metrics.baseBudgetAllocation,
-    budgetAllocation: metrics.budgetAllocation,
-    allocationTransfers: activeScenario.allocationTransfers,
-    addAllocationTransfer,
-    removeAllocationTransfer,
-    clearAllocationTransfers,
-    necessidadesSurplus: metrics.necessidadesSurplus,
-    surplusToDesejos: activeScenario.surplusToDesejos,
-    setSurplusToDesejos: (value: number) => setScenarioField('surplusToDesejos', value),
-    budgetComparison: metrics.budgetComparison,
-    directInvestmentTarget: metrics.directInvestmentTarget,
-    totalDiversificationPercentage: metrics.totalDiversificationPercentage,
-    investmentAllocation: metrics.investmentAllocation,
-    fixedIncomeMonthlyAllocation: metrics.fixedIncomeMonthlyAllocation,
-    costsByCategory: metrics.costsByCategory,
-    balanceAfterCosts: metrics.balanceAfterCosts,
-    unallocatedMoney: metrics.unallocatedMoney,
-    emergencyFundCurrent: activeScenario.emergencyFundCurrent,
-    setEmergencyFundCurrent: (value: number) => setScenarioField('emergencyFundCurrent', value),
+    emergencyFund: activeScenario.emergencyFund,
+    setEmergencyFundCurrent,
+    setEmergencyFundTargetMonths,
+
+    // Métricas calculadas
+    metrics,
+
+    // Cartões de crédito
     creditCardEntries: activeScenario.creditCardEntries,
     creditCardSettings: activeScenario.creditCardSettings,
     creditCardSummary: metrics.creditCardSummary,
