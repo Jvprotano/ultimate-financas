@@ -15,12 +15,23 @@ import type {
   CreditCardSummary,
   EmergencyFundState,
   EmergencyFundTransaction,
+  InvestmentAssetClass,
+  InvestmentHolding,
+  InvestmentTransaction,
+  InvestmentsSummary,
+  AssetClassSummary,
+  HoldingSummary,
   SalaryInputMode,
   FinanceScenario,
   FinanceScenarioData,
   ScenarioSummary,
 } from '../types'
-import { BUDGET_MODELS, DEFAULT_DIVERSIFICATION, INVESTMENT_DEDUCTION_TYPES } from '../types/constants'
+import {
+  BUDGET_MODELS,
+  DEFAULT_DIVERSIFICATION,
+  DEFAULT_INVESTMENT_CLASSES,
+  INVESTMENT_DEDUCTION_TYPES,
+} from '../types/constants'
 
 const SCENARIOS_STORAGE_KEY = 'uf_scenarios_v3'
 const ACTIVE_SCENARIO_STORAGE_KEY = 'uf_active_scenario_v3'
@@ -28,6 +39,9 @@ const LEGACY_SCENARIOS_KEY = 'uf_scenarios_v2'
 const LEGACY_ACTIVE_SCENARIO_KEY = 'uf_active_scenario_v2'
 const CREDIT_CARD_ENTRIES_STORAGE_KEY = 'uf_credit_card_entries_v1'
 const CREDIT_CARD_SETTINGS_STORAGE_KEY = 'uf_credit_card_settings_v1'
+const EMERGENCY_FUND_STORAGE_KEY = 'uf_emergency_fund_v1'
+const INVESTMENT_HOLDINGS_STORAGE_KEY = 'uf_investment_holdings_v1'
+const INVESTMENT_CLASSES_STORAGE_KEY = 'uf_investment_classes_v1'
 const DEFAULT_EMERGENCY_FUND: EmergencyFundState = { current: 0, targetMonths: 6, transactions: [] }
 const DEFAULT_CREDIT_CARD_SETTINGS: CreditCardSettings = {
   paymentDate: '05/07',
@@ -244,14 +258,12 @@ function calculateCreditCardSummary(
 // transações. Saldos antigos (que só tinham `current`) são migrados de forma
 // não destrutiva para uma única transação "Saldo inicial" — com id/data
 // determinísticos para a normalização ser estável entre renders.
-function normalizeEmergencyFund(scenario: {
-  id?: string
-  createdAt?: string
-  emergencyFund?: Partial<EmergencyFundState>
-}): EmergencyFundState {
-  const raw = scenario.emergencyFund
+function normalizeEmergencyFund(
+  raw: Partial<EmergencyFundState> | undefined,
+  seedId = 'ef-initial',
+  seedDate = nowIso(),
+): EmergencyFundState {
   const targetMonths = Math.max(1, Math.round(finiteNumber(raw?.targetMonths, 6)))
-  const seedDate = scenario.createdAt || nowIso()
 
   let transactions: EmergencyFundTransaction[] = Array.isArray(raw?.transactions)
     ? raw.transactions
@@ -266,22 +278,116 @@ function normalizeEmergencyFund(scenario: {
 
   const legacyCurrent = Math.max(0, finiteNumber(raw?.current))
   if (transactions.length === 0 && legacyCurrent > 0) {
-    transactions = [
-      { id: `${scenario.id ?? 'seed'}-seed`, amount: legacyCurrent, date: seedDate, note: 'Saldo inicial' },
-    ]
+    transactions = [{ id: seedId, amount: legacyCurrent, date: seedDate, note: 'Saldo inicial' }]
   }
 
   const current = Math.max(0, transactions.reduce((sum, tx) => sum + tx.amount, 0))
   return { current, targetMonths, transactions }
 }
 
+// Normaliza uma posição de investimento e deriva rendimento (valor de mercado
+// menos o total aportado).
+function normalizeHolding(raw: Partial<InvestmentHolding> | undefined): InvestmentHolding {
+  const transactions: InvestmentTransaction[] = Array.isArray(raw?.transactions)
+    ? raw.transactions
+        .map((tx) => ({
+          id: tx?.id || uid(),
+          amount: finiteNumber(tx?.amount),
+          date: tx?.date || nowIso(),
+          note: tx?.note?.trim() || undefined,
+        }))
+        .filter((tx) => tx.amount !== 0)
+    : []
+
+  return {
+    id: raw?.id || uid(),
+    name: raw?.name?.trim() || 'Posição',
+    assetClassId: raw?.assetClassId || 'outros',
+    institution: raw?.institution?.trim() || undefined,
+    marketValue: Math.max(0, finiteNumber(raw?.marketValue)),
+    transactions,
+  }
+}
+
+function normalizeAssetClass(raw: Partial<InvestmentAssetClass> | undefined, index = 0): InvestmentAssetClass {
+  return {
+    id: raw?.id || uid(),
+    name: raw?.name?.trim() || `Classe ${index + 1}`,
+    color: raw?.color || DEFAULT_INVESTMENT_CLASSES[index % DEFAULT_INVESTMENT_CLASSES.length].color,
+  }
+}
+
+function calculateInvestmentsSummary(
+  holdings: InvestmentHolding[],
+  classes: InvestmentAssetClass[],
+): InvestmentsSummary {
+  const holdingSummaries: HoldingSummary[] = holdings.map((holding) => {
+    const invested = holding.transactions.reduce((sum, tx) => sum + tx.amount, 0)
+    const gain = holding.marketValue - invested
+    return {
+      ...holding,
+      invested,
+      gain,
+      gainPct: invested > 0 ? (gain / invested) * 100 : 0,
+    }
+  })
+
+  const totalMarketValue = holdingSummaries.reduce((sum, h) => sum + h.marketValue, 0)
+  const totalInvested = holdingSummaries.reduce((sum, h) => sum + h.invested, 0)
+  const totalGain = totalMarketValue - totalInvested
+
+  // Classes com posições (na ordem cadastrada) seguidas de eventuais órfãs.
+  const orphanClassIds = holdingSummaries
+    .map((h) => h.assetClassId)
+    .filter((id) => !classes.some((c) => c.id === id))
+  const orderedClasses: InvestmentAssetClass[] = [
+    ...classes,
+    ...Array.from(new Set(orphanClassIds)).map((id, index) => ({
+      id,
+      name: 'Sem classe',
+      color: DEFAULT_INVESTMENT_CLASSES[index % DEFAULT_INVESTMENT_CLASSES.length].color,
+    })),
+  ]
+
+  const classSummaries: AssetClassSummary[] = orderedClasses
+    .map((assetClass) => {
+      const classHoldings = holdingSummaries.filter((h) => h.assetClassId === assetClass.id)
+      const marketValue = classHoldings.reduce((sum, h) => sum + h.marketValue, 0)
+      const invested = classHoldings.reduce((sum, h) => sum + h.invested, 0)
+      const gain = marketValue - invested
+      return {
+        id: assetClass.id,
+        name: assetClass.name,
+        color: assetClass.color,
+        marketValue,
+        invested,
+        gain,
+        gainPct: invested > 0 ? (gain / invested) * 100 : 0,
+        allocationPct: totalMarketValue > 0 ? (marketValue / totalMarketValue) * 100 : 0,
+        holdings: classHoldings,
+      }
+    })
+    .filter((summary) => summary.holdings.length > 0)
+
+  return {
+    totalMarketValue,
+    totalInvested,
+    totalGain,
+    totalGainPct: totalInvested > 0 ? (totalGain / totalInvested) * 100 : 0,
+    classes: classSummaries,
+  }
+}
+
 function normalizeScenario(scenario: FinanceScenario): FinanceScenario {
   // Cenários salvos antes do cartão virar um módulo global podem trazer
   // creditCardEntries/creditCardSettings embutidos: descartamos ao normalizar.
-  const rest = { ...scenario } as Partial<Record<'creditCardEntries' | 'creditCardSettings', unknown>> &
-    FinanceScenario
+  const rest = {
+    ...scenario,
+  } as Partial<Record<'creditCardEntries' | 'creditCardSettings' | 'emergencyFund', unknown>> & FinanceScenario
   delete rest.creditCardEntries
   delete rest.creditCardSettings
+  // Reserva virou módulo global (uf_emergency_fund_v1); descarta o campo antigo.
+  delete rest.emergencyFund
 
   return {
     ...rest,
@@ -309,7 +415,6 @@ function normalizeScenario(scenario: FinanceScenario): FinanceScenario {
       ? scenario.diversification
       : DEFAULT_DIVERSIFICATION,
     customModel: scenario.customModel ?? { n: 50, d: 30, i: 20 },
-    emergencyFund: normalizeEmergencyFund(scenario),
   }
 }
 
@@ -329,7 +434,6 @@ function createDefaultScenario(name = 'Atual'): FinanceScenario {
     selectedModelId: '50-30-20',
     diversification: DEFAULT_DIVERSIFICATION,
     customModel: { n: 50, d: 30, i: 20 },
-    emergencyFund: DEFAULT_EMERGENCY_FUND,
   }
 }
 
@@ -437,7 +541,6 @@ function convertLegacyScenario(legacy: LegacyScenario): FinanceScenario {
     selectedModelId: legacy.selectedModelId || '50-30-20',
     diversification: Array.isArray(legacy.diversification) ? legacy.diversification : DEFAULT_DIVERSIFICATION,
     customModel: legacy.customModel ?? { n: 50, d: 30, i: 20 },
-    emergencyFund: { current: finiteNumber(legacy.emergencyFundCurrent), targetMonths: 6, transactions: [] },
   })
 }
 
@@ -449,6 +552,48 @@ function loadInitialScenarios(): FinanceScenario[] {
   if (legacy?.length) return legacy.map(convertLegacyScenario)
 
   return [createDefaultScenario('Atual')]
+}
+
+// A reserva virou módulo global. Na primeira carga, herda o saldo que vivia
+// dentro dos cenários (preferindo o cenário ativo, ou o primeiro com dados),
+// de forma não destrutiva.
+function loadInitialEmergencyFund(): EmergencyFundState {
+  const stored = readJson<Partial<EmergencyFundState> | null>(EMERGENCY_FUND_STORAGE_KEY, null)
+  if (stored) return normalizeEmergencyFund(stored)
+
+  type ScenarioWithFund = { id?: string; createdAt?: string; emergencyFund?: Partial<EmergencyFundState> }
+  const hasFundData = (fund?: Partial<EmergencyFundState>) =>
+    !!fund && (finiteNumber(fund.current) > 0 || (Array.isArray(fund.transactions) && fund.transactions.length > 0))
+
+  const scenarios = readJson<ScenarioWithFund[] | null>(SCENARIOS_STORAGE_KEY, null)
+  if (Array.isArray(scenarios) && scenarios.length) {
+    const activeId = readJson<string>(ACTIVE_SCENARIO_STORAGE_KEY, '')
+    const active = scenarios.find((scenario) => scenario.id === activeId)
+    const source =
+      active && hasFundData(active.emergencyFund)
+        ? active
+        : scenarios.find((scenario) => hasFundData(scenario.emergencyFund)) ?? active ?? scenarios[0]
+    return normalizeEmergencyFund(source?.emergencyFund, `${source?.id ?? 'ef'}-seed`, source?.createdAt || nowIso())
+  }
+
+  const legacy = readJson<Array<{ emergencyFundCurrent?: number }> | null>(LEGACY_SCENARIOS_KEY, null)
+  if (Array.isArray(legacy) && legacy.length) {
+    const current = legacy.reduce((max, item) => Math.max(max, finiteNumber(item.emergencyFundCurrent)), 0)
+    return normalizeEmergencyFund({ current, targetMonths: 6, transactions: [] })
+  }
+
+  return DEFAULT_EMERGENCY_FUND
+}
+
+function loadInitialInvestmentClasses(): InvestmentAssetClass[] {
+  const stored = readJson<InvestmentAssetClass[] | null>(INVESTMENT_CLASSES_STORAGE_KEY, null)
+  if (Array.isArray(stored) && stored.length) return stored.map((item, index) => normalizeAssetClass(item, index))
+  return DEFAULT_INVESTMENT_CLASSES
+}
+
+function loadInitialHoldings(): InvestmentHolding[] {
+  const stored = readJson<InvestmentHolding[] | null>(INVESTMENT_HOLDINGS_STORAGE_KEY, null)
+  return Array.isArray(stored) ? stored.map(normalizeHolding) : []
 }
 
 function loadInitialActiveScenarioId(scenarios: FinanceScenario[]): string {
@@ -515,7 +660,7 @@ function buildBucket(target: number, actual: number): BudgetBucket {
 
 export type ScenarioMetrics = ReturnType<typeof calculateScenario>
 
-function calculateScenario(state: FinanceScenario) {
+function calculateScenario(state: FinanceScenario, emergencyFund: EmergencyFundState) {
   const selectedModel = getSelectedModel(state)
   const totalCosts = state.costs.reduce((sum, c) => sum + c.value, 0)
   const totalDeductions = state.deductions.reduce((sum, d) => sum + d.value, 0)
@@ -578,10 +723,10 @@ function calculateScenario(state: FinanceScenario) {
     costsByCategory.set(c.category, (costsByCategory.get(c.category) || 0) + c.value)
   }
 
-  const emergencyFundTarget = totalCosts * state.emergencyFund.targetMonths
-  const emergencyFundRemaining = Math.max(0, emergencyFundTarget - state.emergencyFund.current)
+  const emergencyFundTarget = totalCosts * emergencyFund.targetMonths
+  const emergencyFundRemaining = Math.max(0, emergencyFundTarget - emergencyFund.current)
   const emergencyFundProgress =
-    emergencyFundTarget > 0 ? Math.min(100, (state.emergencyFund.current / emergencyFundTarget) * 100) : 0
+    emergencyFundTarget > 0 ? Math.min(100, (emergencyFund.current / emergencyFundTarget) * 100) : 0
   const emergencyFundMonthsToGoal =
     emergencyFundRemaining > 0 && fixedIncomeMonthlyAllocation > 0
       ? Math.ceil(emergencyFundRemaining / fixedIncomeMonthlyAllocation)
@@ -661,6 +806,43 @@ export function useFinancas() {
   const [creditCardSettings, setCreditCardSettingsRaw] = useLocalStorage<CreditCardSettings>(
     CREDIT_CARD_SETTINGS_STORAGE_KEY,
     DEFAULT_CREDIT_CARD_SETTINGS,
+  )
+
+  // Reserva de emergência: módulo global (antes vivia dentro de cada cenário).
+  const [storedEmergencyFund, setStoredEmergencyFund] = useLocalStorage<EmergencyFundState>(
+    EMERGENCY_FUND_STORAGE_KEY,
+    loadInitialEmergencyFund(),
+  )
+  const emergencyFund = useMemo(() => normalizeEmergencyFund(storedEmergencyFund), [storedEmergencyFund])
+
+  // A reserva migrada dos cenários vive só em memória até a primeira gravação.
+  // Persiste-a no store global logo no mount, antes que uma edição de cenário
+  // apague o campo `emergencyFund` antigo e a origem da migração se perca.
+  useEffect(() => {
+    if (window.localStorage.getItem(EMERGENCY_FUND_STORAGE_KEY) === null) {
+      setStoredEmergencyFund((prev) => normalizeEmergencyFund(prev))
+    }
+  }, [setStoredEmergencyFund])
+
+  // Investimentos (patrimônio): módulo global.
+  const [storedHoldings, setHoldings] = useLocalStorage<InvestmentHolding[]>(
+    INVESTMENT_HOLDINGS_STORAGE_KEY,
+    loadInitialHoldings(),
+  )
+  const holdings = useMemo(
+    () => (Array.isArray(storedHoldings) ? storedHoldings.map(normalizeHolding) : []),
+    [storedHoldings],
+  )
+  const [storedInvestmentClasses, setInvestmentClasses] = useLocalStorage<InvestmentAssetClass[]>(
+    INVESTMENT_CLASSES_STORAGE_KEY,
+    loadInitialInvestmentClasses(),
+  )
+  const investmentClasses = useMemo(
+    () =>
+      Array.isArray(storedInvestmentClasses) && storedInvestmentClasses.length
+        ? storedInvestmentClasses.map((item, index) => normalizeAssetClass(item, index))
+        : DEFAULT_INVESTMENT_CLASSES,
+    [storedInvestmentClasses],
   )
 
   const updateActiveScenario = useCallback(
@@ -844,58 +1026,142 @@ export function useFinancas() {
     [updateActiveScenario],
   )
 
-  // Reserva de emergência: livro-razão de aportes e retiradas.
+  // Reserva de emergência: livro-razão de aportes e retiradas (módulo global).
   const addEmergencyFundTransaction = useCallback(
     (amount: number, note?: string) => {
-      updateActiveScenario((scenario) => {
-        const transactions = scenario.emergencyFund.transactions
-        const balance = transactions.reduce((sum, tx) => sum + tx.amount, 0)
+      setStoredEmergencyFund((prev) => {
+        const fund = normalizeEmergencyFund(prev)
+        const balance = fund.current
         // Retirada não pode deixar o saldo negativo: limita ao disponível.
         const delta = amount < 0 ? -Math.min(-amount, balance) : amount
-        if (delta === 0) return scenario
+        if (delta === 0) return fund
 
-        const nextTransactions: EmergencyFundTransaction[] = [
-          ...transactions,
+        const transactions: EmergencyFundTransaction[] = [
+          ...fund.transactions,
           { id: uid(), amount: delta, date: nowIso(), note: note?.trim() || undefined },
         ]
-        return {
-          ...scenario,
-          emergencyFund: {
-            ...scenario.emergencyFund,
-            transactions: nextTransactions,
-            current: nextTransactions.reduce((sum, tx) => sum + tx.amount, 0),
-          },
-        }
+        return { ...fund, transactions, current: transactions.reduce((sum, tx) => sum + tx.amount, 0) }
       })
     },
-    [updateActiveScenario],
+    [setStoredEmergencyFund],
   )
 
   const removeEmergencyFundTransaction = useCallback(
     (id: string) => {
-      updateActiveScenario((scenario) => {
-        const nextTransactions = scenario.emergencyFund.transactions.filter((tx) => tx.id !== id)
-        return {
-          ...scenario,
-          emergencyFund: {
-            ...scenario.emergencyFund,
-            transactions: nextTransactions,
-            current: Math.max(0, nextTransactions.reduce((sum, tx) => sum + tx.amount, 0)),
-          },
-        }
+      setStoredEmergencyFund((prev) => {
+        const fund = normalizeEmergencyFund(prev)
+        const transactions = fund.transactions.filter((tx) => tx.id !== id)
+        return { ...fund, transactions, current: Math.max(0, transactions.reduce((sum, tx) => sum + tx.amount, 0)) }
       })
     },
-    [updateActiveScenario],
+    [setStoredEmergencyFund],
   )
 
   const setEmergencyFundTargetMonths = useCallback(
     (months: number) => {
-      updateActiveScenario((scenario) => ({
-        ...scenario,
-        emergencyFund: { ...scenario.emergencyFund, targetMonths: Math.max(1, Math.round(months)) },
+      setStoredEmergencyFund((prev) => ({
+        ...normalizeEmergencyFund(prev),
+        targetMonths: Math.max(1, Math.round(months)),
       }))
     },
-    [updateActiveScenario],
+    [setStoredEmergencyFund],
+  )
+
+  // Investimentos: posições (livro-razão de aportes/retiradas + valor de mercado)
+  // agrupadas por classe de ativo personalizável.
+  const addInvestmentHolding = useCallback(
+    (input: { name: string; assetClassId: string; institution?: string; initialAmount?: number; note?: string }) => {
+      const now = nowIso()
+      const initial = Math.max(0, finiteNumber(input.initialAmount))
+      const holding = normalizeHolding({
+        id: uid(),
+        name: input.name,
+        assetClassId: input.assetClassId,
+        institution: input.institution,
+        marketValue: initial,
+        transactions: initial > 0 ? [{ id: uid(), amount: initial, date: now, note: input.note?.trim() || 'Aporte inicial' }] : [],
+      })
+      setHoldings((prev) => [...prev, holding])
+    },
+    [setHoldings],
+  )
+
+  const updateInvestmentHolding = useCallback(
+    (id: string, patch: Partial<Pick<InvestmentHolding, 'name' | 'assetClassId' | 'institution' | 'marketValue'>>) => {
+      setHoldings((prev) => prev.map((holding) => (holding.id === id ? normalizeHolding({ ...holding, ...patch }) : holding)))
+    },
+    [setHoldings],
+  )
+
+  const removeInvestmentHolding = useCallback(
+    (id: string) => setHoldings((prev) => prev.filter((holding) => holding.id !== id)),
+    [setHoldings],
+  )
+
+  // Aporte/retirada: ajusta também o valor de mercado (retirada limitada a ele).
+  const addInvestmentTransaction = useCallback(
+    (holdingId: string, amount: number, note?: string) => {
+      setHoldings((prev) =>
+        prev.map((holding) => {
+          if (holding.id !== holdingId) return holding
+          const delta = amount < 0 ? -Math.min(-amount, holding.marketValue) : amount
+          if (delta === 0) return holding
+          const transactions: InvestmentTransaction[] = [
+            ...holding.transactions,
+            { id: uid(), amount: delta, date: nowIso(), note: note?.trim() || undefined },
+          ]
+          return { ...holding, transactions, marketValue: Math.max(0, holding.marketValue + delta) }
+        }),
+      )
+    },
+    [setHoldings],
+  )
+
+  const removeInvestmentTransaction = useCallback(
+    (holdingId: string, transactionId: string) => {
+      setHoldings((prev) =>
+        prev.map((holding) => {
+          if (holding.id !== holdingId) return holding
+          const removed = holding.transactions.find((tx) => tx.id === transactionId)
+          if (!removed) return holding
+          const transactions = holding.transactions.filter((tx) => tx.id !== transactionId)
+          // Reverte o efeito da transação sobre o valor de mercado.
+          return { ...holding, transactions, marketValue: Math.max(0, holding.marketValue - removed.amount) }
+        }),
+      )
+    },
+    [setHoldings],
+  )
+
+  // Marcação a mercado: define o saldo atual sem registrar aporte/retirada.
+  const setInvestmentMarketValue = useCallback(
+    (holdingId: string, value: number) => {
+      setHoldings((prev) =>
+        prev.map((holding) => (holding.id === holdingId ? { ...holding, marketValue: Math.max(0, value) } : holding)),
+      )
+    },
+    [setHoldings],
+  )
+
+  const addInvestmentClass = useCallback(
+    (name: string, color: string) => {
+      const trimmed = name.trim()
+      if (!trimmed) return
+      setInvestmentClasses((prev) => {
+        const list = Array.isArray(prev) && prev.length ? prev : DEFAULT_INVESTMENT_CLASSES
+        return [...list, { id: uid(), name: trimmed, color }]
+      })
+    },
+    [setInvestmentClasses],
+  )
+
+  const removeInvestmentClass = useCallback(
+    (id: string) => {
+      // Só remove classes vazias, para não deixar posições órfãs.
+      if (holdings.some((holding) => holding.assetClassId === id)) return
+      setInvestmentClasses((prev) => (Array.isArray(prev) ? prev.filter((item) => item.id !== id) : prev))
+    },
+    [holdings, setInvestmentClasses],
   )
 
   // Cartões de crédito: módulo global, não pertence a nenhum cenário específico.
@@ -1041,12 +1307,17 @@ export function useFinancas() {
     [creditCardEntries, creditCardSettings],
   )
 
-  const metrics = useMemo(() => calculateScenario(activeScenario), [activeScenario])
+  const metrics = useMemo(() => calculateScenario(activeScenario, emergencyFund), [activeScenario, emergencyFund])
+
+  const investmentsSummary = useMemo(
+    () => calculateInvestmentsSummary(holdings, investmentClasses),
+    [holdings, investmentClasses],
+  )
 
   const scenarioSummaries = useMemo<ScenarioSummary[]>(
     () =>
       scenarios.map((scenario) => {
-        const summary = calculateScenario(scenario)
+        const summary = calculateScenario(scenario, emergencyFund)
         return {
           id: scenario.id,
           name: scenario.name,
@@ -1058,7 +1329,7 @@ export function useFinancas() {
           savingsRate: summary.savingsRate,
         }
       }),
-    [scenarios],
+    [scenarios, emergencyFund],
   )
 
   return {
@@ -1097,10 +1368,25 @@ export function useFinancas() {
     updateDiversification,
     addDiversificationSlice,
     removeDiversificationSlice,
-    emergencyFund: activeScenario.emergencyFund,
+
+    // Reserva de emergência (módulo global)
+    emergencyFund,
     addEmergencyFundTransaction,
     removeEmergencyFundTransaction,
     setEmergencyFundTargetMonths,
+
+    // Investimentos / patrimônio (módulo global)
+    holdings,
+    investmentClasses,
+    investmentsSummary,
+    addInvestmentHolding,
+    updateInvestmentHolding,
+    removeInvestmentHolding,
+    addInvestmentTransaction,
+    removeInvestmentTransaction,
+    setInvestmentMarketValue,
+    addInvestmentClass,
+    removeInvestmentClass,
 
     // Métricas calculadas
     metrics,

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import {
   CreditCard,
   Download,
+  Landmark,
   LayoutDashboard,
   MoreVertical,
   RotateCcw,
@@ -17,15 +18,17 @@ import { WantsManager } from "./components/WantsManager";
 import { InvestmentPlan } from "./components/InvestmentPlan";
 import { EmergencyFund } from "./components/EmergencyFund";
 import { CreditCardManager } from "./components/CreditCardManager";
+import { InvestmentsManager } from "./components/InvestmentsManager";
 import { ScenarioSwitcher } from "./components/ScenarioSwitcher";
 
 const APP_STORAGE_PREFIX = "uf_";
 
-type View = "overview" | "planning" | "cards";
+type View = "overview" | "planning" | "investments" | "cards";
 
 const VIEWS: { id: View; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "overview", label: "Visão geral", icon: LayoutDashboard },
   { id: "planning", label: "Planejamento", icon: SlidersHorizontal },
+  { id: "investments", label: "Investimentos", icon: Landmark },
   { id: "cards", label: "Cartões", icon: CreditCard },
 ];
 
@@ -73,7 +76,7 @@ function TabBar({
 }) {
   return (
     <nav
-      className={`grid grid-cols-3 gap-1 rounded-lg border border-dark-border bg-dark-surface p-1 ${className}`}
+      className={`grid grid-cols-4 gap-1 rounded-lg border border-dark-border bg-dark-surface p-1 ${className}`}
     >
       {VIEWS.map(({ id, label, icon: Icon }) => (
         <button
@@ -368,6 +371,20 @@ function App() {
               />
             </div>
           </div>
+        )}
+
+        {activeView === "investments" && (
+          <InvestmentsManager
+            summary={f.investmentsSummary}
+            classes={f.investmentClasses}
+            addHolding={f.addInvestmentHolding}
+            updateHolding={f.updateInvestmentHolding}
+            removeHolding={f.removeInvestmentHolding}
+            addTransaction={f.addInvestmentTransaction}
+            removeTransaction={f.removeInvestmentTransaction}
+            setMarketValue={f.setInvestmentMarketValue}
+            addClass={f.addInvestmentClass}
+          />
         )}
 
         {activeView === "cards" && (

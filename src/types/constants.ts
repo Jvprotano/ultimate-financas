@@ -4,6 +4,7 @@ import type {
   DiversificationSlice,
   CostCategory,
   DeductionType,
+  InvestmentAssetClass,
 } from './index'
 
 export const BUDGET_MODELS: BudgetModel[] = [
@@ -76,6 +77,26 @@ export const DEFAULT_DIVERSIFICATION: DiversificationSlice[] = [
   { id: 'acoes', name: 'Ações', percentage: 30, color: CHART_PALETTE.aqua },
   { id: 'fiis', name: 'Fundos Imobiliários', percentage: 10, color: CHART_PALETTE.yellow },
   { id: 'cripto', name: 'Criptomoedas', percentage: 10, color: CHART_PALETTE.violet },
+]
+
+export const DEFAULT_INVESTMENT_CLASSES: InvestmentAssetClass[] = [
+  { id: 'renda-fixa', name: 'Renda Fixa', color: CHART_PALETTE.blue },
+  { id: 'acoes', name: 'Ações', color: CHART_PALETTE.aqua },
+  { id: 'fiis', name: 'Fundos Imobiliários', color: CHART_PALETTE.yellow },
+  { id: 'acoes-int', name: 'Ações Internacionais', color: CHART_PALETTE.orange },
+  { id: 'etfs', name: 'ETFs', color: CHART_PALETTE.green },
+  { id: 'cripto', name: 'Criptomoedas', color: CHART_PALETTE.violet },
+]
+
+export const INVESTMENT_CLASS_PRESET_COLORS: string[] = [
+  CHART_PALETTE.blue,
+  CHART_PALETTE.aqua,
+  CHART_PALETTE.yellow,
+  CHART_PALETTE.orange,
+  CHART_PALETTE.green,
+  CHART_PALETTE.violet,
+  CHART_PALETTE.magenta,
+  CHART_PALETTE.red,
 ]
 
 export const DIVERSIFICATION_PRESET_COLORS: string[] = [

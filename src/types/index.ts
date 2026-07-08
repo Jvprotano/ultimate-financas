@@ -69,6 +69,63 @@ export interface EmergencyFundState {
   transactions: EmergencyFundTransaction[]
 }
 
+// ---------------------------------------------------------------------------
+// Investimentos (patrimônio) — módulo global, independente de cenário.
+// Uma classe de ativo (ex.: Renda Fixa) agrupa posições (ex.: CDB Itaú).
+// Cada posição tem um livro-razão de aportes/retiradas e um valor de mercado
+// atual; o rendimento é valor de mercado menos o total aportado.
+// ---------------------------------------------------------------------------
+
+export interface InvestmentTransaction {
+  id: string
+  /** Positivo = aporte, negativo = retirada. */
+  amount: number
+  date: string
+  note?: string
+}
+
+export interface InvestmentAssetClass {
+  id: string
+  name: string
+  color: string
+}
+
+export interface InvestmentHolding {
+  id: string
+  name: string
+  assetClassId: string
+  institution?: string
+  /** Saldo atual de mercado, atualizado pelo usuário (marcação a mercado). */
+  marketValue: number
+  transactions: InvestmentTransaction[]
+}
+
+export interface HoldingSummary extends InvestmentHolding {
+  invested: number
+  gain: number
+  gainPct: number
+}
+
+export interface AssetClassSummary {
+  id: string
+  name: string
+  color: string
+  marketValue: number
+  invested: number
+  gain: number
+  gainPct: number
+  allocationPct: number
+  holdings: HoldingSummary[]
+}
+
+export interface InvestmentsSummary {
+  totalMarketValue: number
+  totalInvested: number
+  totalGain: number
+  totalGainPct: number
+  classes: AssetClassSummary[]
+}
+
 export type CreditCardCycle = 'current' | 'next'
 
 export interface CreditCardEntry {
@@ -139,7 +196,6 @@ export interface FinanceScenarioData {
   selectedModelId: string
   diversification: DiversificationSlice[]
   customModel: { n: number; d: number; i: number }
-  emergencyFund: EmergencyFundState
 }
 
 export interface FinanceScenario extends FinanceScenarioData {
