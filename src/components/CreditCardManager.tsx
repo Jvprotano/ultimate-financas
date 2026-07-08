@@ -1,7 +1,10 @@
 import { useMemo, useRef, useState } from 'react'
 import {
+  ArrowUpDown,
   Calendar,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   CreditCard,
   FastForward,
   FileText,
@@ -9,8 +12,11 @@ import {
   HandCoins,
   Plus,
   Repeat,
+  Search,
   Trash2,
+  Undo2,
   Upload,
+  X,
   Zap,
 } from 'lucide-react'
 import { Card } from './Card'
@@ -49,6 +55,16 @@ const RECURRING_MARKERS = ['sim', 's', 'x', '1', 'true', 'verdadeiro', 'assinatu
 function todayShort() {
   const now = new Date()
   return `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+type SortKey = 'description' | 'purchaseDate' | 'cardName' | 'amount'
+type SortState = { key: SortKey; dir: 'asc' | 'desc' }
+
+// Converte "dd/mm" num inteiro comparável (mm*100+dd). Sem data vai para o fim.
+function dateSortValue(raw: string) {
+  const match = raw.match(/(\d{1,2})\s*\/\s*(\d{1,2})/)
+  if (!match) return Number.MAX_SAFE_INTEGER
+  return Number(match[2]) * 100 + Number(match[1])
 }
 
 function normalizeText(value: string) {
@@ -209,6 +225,8 @@ export function CreditCardManager({
   const [newIsRecurring, setNewIsRecurring] = useState(false)
 
   const [ownerFilter, setOwnerFilter] = useState('all')
+  const [search, setSearch] = useState('')
+  const [sort, setSort] = useState<SortState | null>(null)
   const [importText, setImportText] = useState('')
   const [importCycle, setImportCycle] = useState<CreditCardCycle>('current')
   const [replaceOnImport, setReplaceOnImport] = useState(true)
@@ -216,16 +234,62 @@ export function CreditCardManager({
   const [anticipateId, setAnticipateId] = useState<string | null>(null)
   const [anticipateCount, setAnticipateCount] = useState(1)
 
+  const [confirmingPay, setConfirmingPay] = useState(false)
+
+  // Exclusão com desfazer: guarda o último lançamento removido por alguns segundos.
+  const [pendingUndo, setPendingUndo] = useState<CreditCardEntry | null>(null)
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const visibleCycle: CreditCardCycle = view === 'next' ? 'next' : 'current'
 
-  const visibleEntries = entries.filter((entry) => {
+  const normalizedSearch = normalizeText(search)
+  const filteredEntries = entries.filter((entry) => {
     if (entry.cycle !== visibleCycle) return false
+    if (
+      normalizedSearch &&
+      !normalizeText(`${entry.description} ${entry.cardName} ${entry.ownerName ?? ''} ${entry.ownerNote ?? ''}`).includes(
+        normalizedSearch,
+      )
+    ) {
+      return false
+    }
     if (ownerFilter === 'all') return true
     if (ownerFilter === 'mine') return entry.personalAmount > 0
     if (ownerFilter === 'third-party') return entry.amount - entry.personalAmount > 0
     if (ownerFilter === 'prepaid') return entry.isPrepaid === true
     return (entry.ownerName || entry.ownerNote || 'Outro') === ownerFilter
   })
+
+  const visibleEntries = sort
+    ? [...filteredEntries].sort((a, b) => {
+        const dir = sort.dir === 'asc' ? 1 : -1
+        if (sort.key === 'amount') return dir * (a.amount - b.amount)
+        if (sort.key === 'purchaseDate') return dir * (dateSortValue(a.purchaseDate) - dateSortValue(b.purchaseDate))
+        return dir * (a[sort.key] || '').localeCompare(b[sort.key] || '', 'pt-BR')
+      })
+    : filteredEntries
+
+  const toggleSort = (key: SortKey) =>
+    setSort((prev) => {
+      if (!prev || prev.key !== key) return { key, dir: 'asc' }
+      return prev.dir === 'asc' ? { key, dir: 'desc' } : null
+    })
+
+  const handleDelete = (entry: CreditCardEntry) => {
+    removeEntry(entry.id)
+    setPendingUndo(entry)
+    if (undoTimer.current) clearTimeout(undoTimer.current)
+    undoTimer.current = setTimeout(() => setPendingUndo(null), 6000)
+  }
+
+  const handleUndoDelete = () => {
+    if (!pendingUndo) return
+    const { id: _id, ...rest } = pendingUndo
+    void _id
+    addEntry(rest)
+    setPendingUndo(null)
+    if (undoTimer.current) clearTimeout(undoTimer.current)
+  }
 
   const parsedImport = useMemo(() => parseSpreadsheet(importText), [importText])
 
@@ -307,10 +371,31 @@ export function CreditCardManager({
     descriptionInputRef.current?.focus()
   }
 
-  const handlePayBill = () => {
-    if (!window.confirm("Marcar a fatura atual como paga? Os lançamentos da Próxima Fatura viram a nova Fatura Atual e a próxima fatura é gerada automaticamente.")) return
+  const handleConfirmPay = () => {
     payInvoice()
+    setConfirmingPay(false)
     setView('current')
+  }
+
+  const renderSortHeader = (key: SortKey, label: string, align: 'left' | 'right' | 'center' = 'left') => {
+    const active = sort?.key === key
+    const alignClass = align === 'right' ? 'justify-end pr-2' : align === 'center' ? 'justify-center' : 'justify-start'
+    return (
+      <button
+        type="button"
+        onClick={() => toggleSort(key)}
+        className={`flex items-center gap-1 ${alignClass} font-bold uppercase tracking-wider transition-colors hover:text-dark-text ${
+          active ? 'text-sky-300' : ''
+        }`}
+      >
+        {label}
+        {active ? (
+          sort?.dir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />
+        ) : (
+          <ArrowUpDown size={11} className="opacity-30" />
+        )}
+      </button>
+    )
   }
 
   const handleImport = () => {
@@ -368,9 +453,12 @@ export function CreditCardManager({
             <span className="block text-xs font-semibold uppercase tracking-wide text-primary-300/80">Meu total</span>
             <strong className="mt-1 block text-lg text-primary-100">{formatCurrency(summary.currentPersonalTotal)}</strong>
           </div>
-          <div className="rounded-xl border border-dark-border bg-dark-surface px-4 py-3 shadow-sm">
-            <span className="block text-xs font-semibold uppercase tracking-wide text-dark-text-muted">Limite esperado</span>
-            <strong className="mt-1 block text-lg text-dark-text">{formatCurrency(settings.personalSpendingLimit)}</strong>
+          <div className="rounded-xl border border-violet-500/20 bg-violet-500/10 px-4 py-3 shadow-sm transition-all hover:bg-violet-500/15">
+            <span className="block text-xs font-semibold uppercase tracking-wide text-violet-300/80">Não é meu</span>
+            <strong className="mt-1 block text-lg text-violet-100">{formatCurrency(summary.currentThirdPartyTotal)}</strong>
+            {summary.currentThirdPartyTotal > 0 && (
+              <span className="mt-0.5 block text-[11px] font-medium text-violet-300/60">a receber de terceiros</span>
+            )}
           </div>
           <div
             className={`rounded-xl border px-4 py-3 shadow-sm transition-all ${
@@ -447,13 +535,34 @@ export function CreditCardManager({
 
             <div className="flex items-center gap-2 px-2">
                {view === 'current' && (
-                 <button
-                    onClick={handlePayBill}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 px-4 py-1.5 text-sm font-bold hover:bg-emerald-500/30 hover:text-emerald-300 transition-all border border-emerald-500/30"
-                 >
-                    <CheckCircle2 size={16} />
-                    Pagar Fatura
-                 </button>
+                 confirmingPay ? (
+                   <div className="flex items-center gap-2">
+                     <span className="text-xs text-dark-text-secondary">
+                       Virar a fatura? A próxima vira a atual.
+                     </span>
+                     <button
+                       onClick={handleConfirmPay}
+                       className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 px-3 py-1.5 text-sm font-bold hover:bg-emerald-500/30 transition-all border border-emerald-500/40"
+                     >
+                       <CheckCircle2 size={15} />
+                       Confirmar
+                     </button>
+                     <button
+                       onClick={() => setConfirmingPay(false)}
+                       className="rounded-lg px-3 py-1.5 text-sm text-dark-text-muted transition-colors hover:text-dark-text"
+                     >
+                       Cancelar
+                     </button>
+                   </div>
+                 ) : (
+                   <button
+                      onClick={() => setConfirmingPay(true)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 px-4 py-1.5 text-sm font-bold hover:bg-emerald-500/30 hover:text-emerald-300 transition-all border border-emerald-500/30"
+                   >
+                      <CheckCircle2 size={16} />
+                      Pagar Fatura
+                   </button>
+                 )
                )}
                {view === 'next' && (
                  <span className="flex items-center gap-1.5 text-xs text-dark-text-muted">
@@ -491,8 +600,27 @@ export function CreditCardManager({
                   {item.label}
                 </button>
               ))}
+              <div className="relative ml-auto">
+                <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-dark-text-muted" />
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Buscar..."
+                  className="w-40 rounded-lg border border-dark-border bg-dark-input py-1.5 pl-8 pr-7 text-xs text-dark-text outline-none transition-all focus:border-sky-500 focus:ring-2 focus:ring-sky-500/25"
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch('')}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-dark-text-muted transition-colors hover:text-dark-text"
+                    title="Limpar busca"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
             </div>
-            
+
             {anticipatingEntry && anticipateMax > 0 && (
               <div className="flex flex-wrap items-center gap-3 border-b border-amber-500/20 bg-amber-500/10 px-4 py-3">
                 <FastForward size={15} className="shrink-0 text-amber-400" />
@@ -539,11 +667,11 @@ export function CreditCardManager({
             <div className="overflow-x-auto">
                 <div className="min-w-[820px]">
                     <div className={`grid ${TABLE_COLS} gap-2 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-dark-text-muted border-b border-dark-border bg-dark-surface/80`}>
-                        <div>Descrição</div>
+                        {renderSortHeader('description', 'Descrição')}
                         <div className="text-center">Parc.</div>
-                        <div>Data</div>
-                        <div>Cartão</div>
-                        <div className="text-right pr-2">Fatura</div>
+                        {renderSortHeader('purchaseDate', 'Data')}
+                        {renderSortHeader('cardName', 'Cartão')}
+                        {renderSortHeader('amount', 'Fatura', 'right')}
                         <div className="text-right pr-2">É meu</div>
                         <div className="text-right pr-2">Restante</div>
                         <div>Obs / De</div>
@@ -655,7 +783,9 @@ export function CreditCardManager({
                     <div className="divide-y divide-dark-border/40">
                         {visibleEntries.length === 0 ? (
                             <div className="px-4 py-8 text-center text-sm text-dark-text-muted">
-                                Nenhum lançamento nesta fatura.
+                                {search || ownerFilter !== 'all'
+                                  ? 'Nenhum lançamento corresponde ao filtro.'
+                                  : 'Nenhum lançamento nesta fatura.'}
                             </div>
                         ) : (
                             visibleEntries.map((entry) => (
@@ -781,7 +911,7 @@ export function CreditCardManager({
                                       </button>
                                     )}
                                     <button
-                                        onClick={() => removeEntry(entry.id)}
+                                        onClick={() => handleDelete(entry)}
                                         className="flex h-7 w-7 items-center justify-center rounded-md text-dark-text-muted hover:bg-rose-500/20 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-all"
                                         title="Remover"
                                     >
@@ -930,6 +1060,31 @@ export function CreditCardManager({
           </div>
         </div>
       </div>
+
+      {pendingUndo && (
+        <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-dark-border bg-dark-surface/95 px-4 py-3 shadow-2xl backdrop-blur">
+          <Trash2 size={15} className="shrink-0 text-rose-400" />
+          <span className="text-sm text-dark-text">
+            <strong className="font-semibold">{pendingUndo.description}</strong> removido
+          </span>
+          <button
+            type="button"
+            onClick={handleUndoDelete}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-bold text-white transition-colors hover:bg-sky-500"
+          >
+            <Undo2 size={15} />
+            Desfazer
+          </button>
+          <button
+            type="button"
+            onClick={() => setPendingUndo(null)}
+            className="text-dark-text-muted transition-colors hover:text-dark-text"
+            title="Dispensar"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
     </Card>
   )
 }
