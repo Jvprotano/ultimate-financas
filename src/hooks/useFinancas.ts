@@ -14,6 +14,7 @@ import type {
   CreditCardSettings,
   CreditCardSummary,
   EmergencyFundState,
+  EmergencyFundTransaction,
   SalaryInputMode,
   FinanceScenario,
   FinanceScenarioData,
@@ -27,7 +28,7 @@ const LEGACY_SCENARIOS_KEY = 'uf_scenarios_v2'
 const LEGACY_ACTIVE_SCENARIO_KEY = 'uf_active_scenario_v2'
 const CREDIT_CARD_ENTRIES_STORAGE_KEY = 'uf_credit_card_entries_v1'
 const CREDIT_CARD_SETTINGS_STORAGE_KEY = 'uf_credit_card_settings_v1'
-const DEFAULT_EMERGENCY_FUND: EmergencyFundState = { current: 0, targetMonths: 6 }
+const DEFAULT_EMERGENCY_FUND: EmergencyFundState = { current: 0, targetMonths: 6, transactions: [] }
 const DEFAULT_CREDIT_CARD_SETTINGS: CreditCardSettings = {
   paymentDate: '05/07',
   personalSpendingLimit: 1500,
@@ -239,6 +240,41 @@ function calculateCreditCardSummary(
 // Normalização e migração
 // ---------------------------------------------------------------------------
 
+// A reserva é um livro-razão: o saldo (`current`) é sempre a soma das
+// transações. Saldos antigos (que só tinham `current`) são migrados de forma
+// não destrutiva para uma única transação "Saldo inicial" — com id/data
+// determinísticos para a normalização ser estável entre renders.
+function normalizeEmergencyFund(scenario: {
+  id?: string
+  createdAt?: string
+  emergencyFund?: Partial<EmergencyFundState>
+}): EmergencyFundState {
+  const raw = scenario.emergencyFund
+  const targetMonths = Math.max(1, Math.round(finiteNumber(raw?.targetMonths, 6)))
+  const seedDate = scenario.createdAt || nowIso()
+
+  let transactions: EmergencyFundTransaction[] = Array.isArray(raw?.transactions)
+    ? raw.transactions
+        .map((tx) => ({
+          id: tx?.id || uid(),
+          amount: finiteNumber(tx?.amount),
+          date: tx?.date || seedDate,
+          note: tx?.note?.trim() || undefined,
+        }))
+        .filter((tx) => tx.amount !== 0)
+    : []
+
+  const legacyCurrent = Math.max(0, finiteNumber(raw?.current))
+  if (transactions.length === 0 && legacyCurrent > 0) {
+    transactions = [
+      { id: `${scenario.id ?? 'seed'}-seed`, amount: legacyCurrent, date: seedDate, note: 'Saldo inicial' },
+    ]
+  }
+
+  const current = Math.max(0, transactions.reduce((sum, tx) => sum + tx.amount, 0))
+  return { current, targetMonths, transactions }
+}
+
 function normalizeScenario(scenario: FinanceScenario): FinanceScenario {
   // Cenários salvos antes do cartão virar um módulo global podem trazer
   // creditCardEntries/creditCardSettings embutidos: descartamos ao normalizar.
@@ -273,10 +309,7 @@ function normalizeScenario(scenario: FinanceScenario): FinanceScenario {
       ? scenario.diversification
       : DEFAULT_DIVERSIFICATION,
     customModel: scenario.customModel ?? { n: 50, d: 30, i: 20 },
-    emergencyFund: {
-      current: Math.max(0, finiteNumber(scenario.emergencyFund?.current)),
-      targetMonths: Math.max(1, Math.round(finiteNumber(scenario.emergencyFund?.targetMonths, 6))),
-    },
+    emergencyFund: normalizeEmergencyFund(scenario),
   }
 }
 
@@ -404,7 +437,7 @@ function convertLegacyScenario(legacy: LegacyScenario): FinanceScenario {
     selectedModelId: legacy.selectedModelId || '50-30-20',
     diversification: Array.isArray(legacy.diversification) ? legacy.diversification : DEFAULT_DIVERSIFICATION,
     customModel: legacy.customModel ?? { n: 50, d: 30, i: 20 },
-    emergencyFund: { current: finiteNumber(legacy.emergencyFundCurrent), targetMonths: 6 },
+    emergencyFund: { current: finiteNumber(legacy.emergencyFundCurrent), targetMonths: 6, transactions: [] },
   })
 }
 
@@ -811,13 +844,46 @@ export function useFinancas() {
     [updateActiveScenario],
   )
 
-  // Reserva de emergência
-  const setEmergencyFundCurrent = useCallback(
-    (value: number) => {
-      updateActiveScenario((scenario) => ({
-        ...scenario,
-        emergencyFund: { ...scenario.emergencyFund, current: Math.max(0, value) },
-      }))
+  // Reserva de emergência: livro-razão de aportes e retiradas.
+  const addEmergencyFundTransaction = useCallback(
+    (amount: number, note?: string) => {
+      updateActiveScenario((scenario) => {
+        const transactions = scenario.emergencyFund.transactions
+        const balance = transactions.reduce((sum, tx) => sum + tx.amount, 0)
+        // Retirada não pode deixar o saldo negativo: limita ao disponível.
+        const delta = amount < 0 ? -Math.min(-amount, balance) : amount
+        if (delta === 0) return scenario
+
+        const nextTransactions: EmergencyFundTransaction[] = [
+          ...transactions,
+          { id: uid(), amount: delta, date: nowIso(), note: note?.trim() || undefined },
+        ]
+        return {
+          ...scenario,
+          emergencyFund: {
+            ...scenario.emergencyFund,
+            transactions: nextTransactions,
+            current: nextTransactions.reduce((sum, tx) => sum + tx.amount, 0),
+          },
+        }
+      })
+    },
+    [updateActiveScenario],
+  )
+
+  const removeEmergencyFundTransaction = useCallback(
+    (id: string) => {
+      updateActiveScenario((scenario) => {
+        const nextTransactions = scenario.emergencyFund.transactions.filter((tx) => tx.id !== id)
+        return {
+          ...scenario,
+          emergencyFund: {
+            ...scenario.emergencyFund,
+            transactions: nextTransactions,
+            current: Math.max(0, nextTransactions.reduce((sum, tx) => sum + tx.amount, 0)),
+          },
+        }
+      })
     },
     [updateActiveScenario],
   )
@@ -1032,7 +1098,8 @@ export function useFinancas() {
     addDiversificationSlice,
     removeDiversificationSlice,
     emergencyFund: activeScenario.emergencyFund,
-    setEmergencyFundCurrent,
+    addEmergencyFundTransaction,
+    removeEmergencyFundTransaction,
     setEmergencyFundTargetMonths,
 
     // Métricas calculadas

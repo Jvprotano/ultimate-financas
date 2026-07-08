@@ -7,7 +7,6 @@ import {
   RotateCcw,
   SlidersHorizontal,
   Upload,
-  WalletCards,
 } from "lucide-react";
 import { useFinancas } from "./hooks/useFinancas";
 import { Dashboard } from "./components/Dashboard";
@@ -325,7 +324,8 @@ function App() {
               />
               <EmergencyFund
                 emergencyFund={f.emergencyFund}
-                setCurrent={f.setEmergencyFundCurrent}
+                addTransaction={f.addEmergencyFundTransaction}
+                removeTransaction={f.removeEmergencyFundTransaction}
                 setTargetMonths={f.setEmergencyFundTargetMonths}
                 totalCosts={m.totalCosts}
                 target={m.emergencyFundTarget}

@@ -54,9 +54,19 @@ export interface DiversificationSlice {
   color: string
 }
 
+export interface EmergencyFundTransaction {
+  id: string
+  /** Positivo = aporte, negativo = retirada. */
+  amount: number
+  date: string
+  note?: string
+}
+
 export interface EmergencyFundState {
+  /** Saldo guardado — derivado da soma das transações. */
   current: number
   targetMonths: number
+  transactions: EmergencyFundTransaction[]
 }
 
 export type CreditCardCycle = 'current' | 'next'
