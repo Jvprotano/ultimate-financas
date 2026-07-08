@@ -6,6 +6,7 @@ import {
   Minus,
   Plus,
   PlusCircle,
+  Shield,
   Trash2,
   TrendingDown,
   TrendingUp,
@@ -13,10 +14,13 @@ import {
 import { Card } from './Card'
 import { CurrencyInput } from './CurrencyInput'
 import { HeaderMetric } from './HeaderMetric'
-import { SegmentedBar } from './ui'
-import type { HoldingSummary, InvestmentAssetClass, InvestmentsSummary } from '../types'
-import { INVESTMENT_CLASS_PRESET_COLORS } from '../types/constants'
+import { Meter, SegmentedBar } from './ui'
+import type { EmergencyFundState, HoldingSummary, InvestmentAssetClass, InvestmentsSummary } from '../types'
+import { CHART_PALETTE, INVESTMENT_CLASS_PRESET_COLORS } from '../types/constants'
 import { formatCurrency } from '../utils'
+
+const RESERVE_MONTH_OPTIONS = [3, 6, 12]
+const RESERVE_COLOR = CHART_PALETTE.muted
 
 interface Props {
   summary: InvestmentsSummary
@@ -37,6 +41,13 @@ interface Props {
   removeTransaction: (holdingId: string, transactionId: string) => void
   setMarketValue: (holdingId: string, value: number) => void
   addClass: (name: string, color: string) => void
+  emergencyFund: EmergencyFundState
+  addEmergencyFundTransaction: (amount: number, note?: string) => void
+  removeEmergencyFundTransaction: (id: string) => void
+  setEmergencyFundTargetMonths: (months: number) => void
+  emergencyTarget: number
+  emergencyRemaining: number
+  emergencyProgress: number
 }
 
 function formatGainPct(pct: number) {
@@ -277,6 +288,171 @@ function HoldingRow({
   )
 }
 
+function ReserveSection({
+  emergencyFund,
+  addTransaction,
+  removeTransaction,
+  setTargetMonths,
+  target,
+  remaining,
+  progress,
+}: {
+  emergencyFund: EmergencyFundState
+  addTransaction: Props['addEmergencyFundTransaction']
+  removeTransaction: Props['removeEmergencyFundTransaction']
+  setTargetMonths: Props['setEmergencyFundTargetMonths']
+  target: number
+  remaining: number
+  progress: number
+}) {
+  const [amount, setAmount] = useState(0)
+  const [note, setNote] = useState('')
+
+  const commit = (sign: 1 | -1) => {
+    if (amount <= 0) return
+    addTransaction(sign * amount, note)
+    setAmount(0)
+    setNote('')
+  }
+
+  const history = [...emergencyFund.transactions].reverse()
+
+  return (
+    <div className="rounded-xl border border-dark-border bg-dark-card">
+      <div className="flex flex-wrap items-center gap-3 border-b border-dark-border/60 px-4 py-3">
+        <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: RESERVE_COLOR }} />
+        <h3 className="flex items-center gap-1.5 text-sm font-bold text-dark-text">
+          <Shield size={14} className="text-dark-text-muted" />
+          Reserva de emergência
+        </h3>
+        <div className="ml-auto text-right">
+          <p className="text-sm font-semibold tabular-nums text-dark-text">{formatCurrency(emergencyFund.current)}</p>
+          {target > 0 && (
+            <p className="text-[11px] text-dark-text-muted">
+              {progress.toFixed(0)}% da meta ({emergencyFund.targetMonths} meses)
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-3 p-4">
+        {target > 0 && (
+          <div>
+            <div className="mb-1.5 flex items-baseline justify-between text-xs">
+              <span className="text-dark-text-muted">Meta: {formatCurrency(target)}</span>
+              <span className="text-dark-text-muted">
+                {remaining <= 0 ? 'Meta completa' : `Faltam ${formatCurrency(remaining)}`}
+              </span>
+            </div>
+            <Meter value={Math.min(emergencyFund.current, target)} max={target} color={CHART_PALETTE.blue} height={8} />
+          </div>
+        )}
+
+        <div>
+          <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-dark-text-muted">
+            Meta em meses de custo
+          </span>
+          <div className="grid grid-cols-3 gap-1 rounded-lg border border-dark-border bg-dark-input p-1">
+            {RESERVE_MONTH_OPTIONS.map((months) => (
+              <button
+                key={months}
+                type="button"
+                onClick={() => setTargetMonths(months)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  emergencyFund.targetMonths === months
+                    ? 'bg-dark-surface text-dark-text shadow-sm'
+                    : 'text-dark-text-muted hover:text-dark-text'
+                }`}
+              >
+                {months}m
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            commit(1)
+          }}
+          className="space-y-2"
+        >
+          <span className="block text-xs font-semibold uppercase tracking-wide text-dark-text-muted">Movimentar</span>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="sm:flex-1">
+              <CurrencyInput value={amount} onChange={setAmount} className="!py-2" />
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={amount <= 0}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-500/20 px-3 py-2 text-sm font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/30 disabled:opacity-40 sm:flex-none"
+              >
+                <Plus size={14} />
+                Adicionar
+              </button>
+              <button
+                type="button"
+                onClick={() => commit(-1)}
+                disabled={amount <= 0 || emergencyFund.current <= 0}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-rose-500/15 px-3 py-2 text-sm font-semibold text-rose-300 transition-colors hover:bg-rose-500/25 disabled:opacity-40 sm:flex-none"
+              >
+                <Minus size={14} />
+                Remover
+              </button>
+            </div>
+          </div>
+          <input
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder="Nota (opcional) — ex.: aporte mensal, resgate para conserto do carro"
+            className="w-full rounded-lg border border-dark-border bg-dark-input px-3 py-1.5 text-sm text-dark-text outline-none transition-colors placeholder:text-dark-text-muted focus:border-primary-500 focus:ring-2 focus:ring-primary-500/25"
+          />
+        </form>
+
+        {history.length > 0 && (
+          <div>
+            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-dark-text-muted">
+              Movimentações
+            </span>
+            <ul className="max-h-44 space-y-1 overflow-y-auto pr-1">
+              {history.map((tx) => {
+                const isDeposit = tx.amount >= 0
+                return (
+                  <li key={tx.id} className="group flex items-center gap-2.5 rounded-md bg-dark-input/50 px-2.5 py-1.5">
+                    <span className={isDeposit ? 'text-emerald-400' : 'text-rose-400'}>
+                      {isDeposit ? <Plus size={13} /> : <Minus size={13} />}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs text-dark-text">{tx.note || (isDeposit ? 'Aporte' : 'Retirada')}</p>
+                      <p className="text-[10px] text-dark-text-muted">{formatTransactionDate(tx.date)}</p>
+                    </div>
+                    <span
+                      className={`shrink-0 text-xs font-semibold tabular-nums ${
+                        isDeposit ? 'text-emerald-400' : 'text-rose-400'
+                      }`}
+                    >
+                      {isDeposit ? '+' : '−'} {formatCurrency(Math.abs(tx.amount))}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeTransaction(tx.id)}
+                      className="text-dark-text-muted opacity-0 transition-all hover:text-rose-400 group-hover:opacity-100"
+                      title="Remover movimentação"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function InvestmentsManager({
   summary,
   classes,
@@ -287,6 +463,13 @@ export function InvestmentsManager({
   removeTransaction,
   setMarketValue,
   addClass,
+  emergencyFund,
+  addEmergencyFundTransaction,
+  removeEmergencyFundTransaction,
+  setEmergencyFundTargetMonths,
+  emergencyTarget,
+  emergencyRemaining,
+  emergencyProgress,
 }: Props) {
   const [name, setName] = useState('')
   const [institution, setInstitution] = useState('')
@@ -320,6 +503,8 @@ export function InvestmentsManager({
   }
 
   const totalPositive = summary.totalGain >= 0
+  const reserveBalance = emergencyFund.current
+  const totalPatrimonio = summary.totalMarketValue + reserveBalance
 
   return (
     <Card
@@ -327,20 +512,24 @@ export function InvestmentsManager({
       icon={<Landmark size={18} />}
       collapsible
       storageKey="investments"
-      headerExtra={<HeaderMetric amount={summary.totalMarketValue} baseAmount={0} label="Patrimônio" tone="primary" />}
+      headerExtra={<HeaderMetric amount={totalPatrimonio} baseAmount={0} label="Patrimônio" tone="primary" />}
     >
       <div className="space-y-5">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-xl border border-primary-500/20 bg-primary-500/10 px-4 py-3">
-            <span className="block text-xs font-semibold uppercase tracking-wide text-primary-300/80">Patrimônio</span>
+            <span className="block text-xs font-semibold uppercase tracking-wide text-primary-300/80">
+              Patrimônio total
+            </span>
             <strong className="mt-1 block text-lg tabular-nums text-primary-100">
-              {formatCurrency(summary.totalMarketValue)}
+              {formatCurrency(totalPatrimonio)}
             </strong>
           </div>
           <div className="rounded-xl border border-dark-border bg-dark-surface px-4 py-3">
-            <span className="block text-xs font-semibold uppercase tracking-wide text-dark-text-muted">Aportado</span>
+            <span className="block text-xs font-semibold uppercase tracking-wide text-dark-text-muted">
+              Investimentos
+            </span>
             <strong className="mt-1 block text-lg tabular-nums text-dark-text">
-              {formatCurrency(summary.totalInvested)}
+              {formatCurrency(summary.totalMarketValue)}
             </strong>
           </div>
           <div
@@ -363,23 +552,45 @@ export function InvestmentsManager({
               />
             </strong>
           </div>
+          <div className="rounded-xl border border-dark-border bg-dark-surface px-4 py-3">
+            <span className="block text-xs font-semibold uppercase tracking-wide text-dark-text-muted">Reserva</span>
+            <strong className="mt-1 block text-lg tabular-nums text-dark-text">{formatCurrency(reserveBalance)}</strong>
+            {emergencyTarget > 0 && (
+              <span className="mt-0.5 block text-[11px] text-dark-text-muted">{emergencyProgress.toFixed(0)}% da meta</span>
+            )}
+          </div>
         </div>
 
-        {summary.totalMarketValue > 0 && (
+        {totalPatrimonio > 0 && (
           <div className="rounded-xl border border-dark-border bg-dark-card p-4">
-            <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-dark-text-muted">Alocação por classe</h3>
+            <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-dark-text-muted">Alocação do patrimônio</h3>
             <SegmentedBar
-              segments={summary.classes.map((assetClass) => ({
-                id: assetClass.id,
-                label: assetClass.name,
-                value: assetClass.marketValue,
-                color: assetClass.color,
-              }))}
-              total={summary.totalMarketValue}
+              segments={[
+                ...summary.classes.map((assetClass) => ({
+                  id: assetClass.id,
+                  label: assetClass.name,
+                  value: assetClass.marketValue,
+                  color: assetClass.color,
+                })),
+                ...(reserveBalance > 0
+                  ? [{ id: 'reserva', label: 'Reserva de emergência', value: reserveBalance, color: RESERVE_COLOR }]
+                  : []),
+              ]}
+              total={totalPatrimonio}
               height={12}
             />
           </div>
         )}
+
+        <ReserveSection
+          emergencyFund={emergencyFund}
+          addTransaction={addEmergencyFundTransaction}
+          removeTransaction={removeEmergencyFundTransaction}
+          setTargetMonths={setEmergencyFundTargetMonths}
+          target={emergencyTarget}
+          remaining={emergencyRemaining}
+          progress={emergencyProgress}
+        />
 
         <div className="rounded-xl border border-dark-border bg-dark-card p-4">
           <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-dark-text">

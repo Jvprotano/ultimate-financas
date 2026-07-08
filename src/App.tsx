@@ -327,15 +327,13 @@ function App() {
               />
               <EmergencyFund
                 emergencyFund={f.emergencyFund}
-                addTransaction={f.addEmergencyFundTransaction}
-                removeTransaction={f.removeEmergencyFundTransaction}
-                setTargetMonths={f.setEmergencyFundTargetMonths}
                 totalCosts={m.totalCosts}
                 target={m.emergencyFundTarget}
                 remaining={m.emergencyFundRemaining}
                 progress={m.emergencyFundProgress}
                 monthsToGoal={m.emergencyFundMonthsToGoal}
                 fixedIncomeMonthlyAllocation={m.fixedIncomeMonthlyAllocation}
+                onManage={() => setActiveView("investments")}
               />
             </div>
 
@@ -384,6 +382,13 @@ function App() {
             removeTransaction={f.removeInvestmentTransaction}
             setMarketValue={f.setInvestmentMarketValue}
             addClass={f.addInvestmentClass}
+            emergencyFund={f.emergencyFund}
+            addEmergencyFundTransaction={f.addEmergencyFundTransaction}
+            removeEmergencyFundTransaction={f.removeEmergencyFundTransaction}
+            setEmergencyFundTargetMonths={f.setEmergencyFundTargetMonths}
+            emergencyTarget={m.emergencyFundTarget}
+            emergencyRemaining={m.emergencyFundRemaining}
+            emergencyProgress={m.emergencyFundProgress}
           />
         )}
 
