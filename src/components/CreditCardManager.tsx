@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   Calendar,
   CheckCircle2,
@@ -6,6 +6,7 @@ import {
   FastForward,
   FileText,
   Filter,
+  HandCoins,
   Plus,
   Repeat,
   Trash2,
@@ -44,6 +45,11 @@ type ParsedCardEntry = Omit<CreditCardEntry, 'id' | 'cycle'>
 const KNOWN_CARDS = ['Itaú', 'XP', 'Inter', 'Nu']
 const TABLE_COLS = "grid-cols-[minmax(140px,1.5fr)_92px_70px_100px_110px_110px_110px_minmax(80px,1fr)_60px]"
 const RECURRING_MARKERS = ['sim', 's', 'x', '1', 'true', 'verdadeiro', 'assinatura', 'recorrente']
+
+function todayShort() {
+  const now = new Date()
+  return `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}`
+}
 
 function normalizeText(value: string) {
   return value
@@ -121,6 +127,7 @@ function parseSpreadsheet(text: string): ParsedCardEntry[] {
     personal: detectColumnIndex(headers, ['e meu', 'meu']),
     remaining: detectColumnIndex(headers, ['restante', 'antec', 'parcelas']),
     recurring: detectColumnIndex(headers, ['assinatura', 'recorrente']),
+    prepaid: detectColumnIndex(headers, ['pago', 'quitado']),
   }
 
   const parsedRows: Array<ParsedCardEntry | null> = body.map((line) => {
@@ -142,8 +149,10 @@ function parseSpreadsheet(text: string): ParsedCardEntry[] {
         : buildRemainingAmount(amount, installmentCurrent, installmentTotal)
       const recurringRaw = indexes.recurring >= 0 ? normalizeText(cells[indexes.recurring] ?? '') : ''
       const isRecurring = RECURRING_MARKERS.includes(recurringRaw)
+      const prepaidRaw = indexes.prepaid >= 0 ? normalizeText(cells[indexes.prepaid] ?? '') : ''
+      const isPrepaid = RECURRING_MARKERS.includes(prepaidRaw) || prepaidRaw === 'pago'
       const extraText = cells
-        .filter((_, cellIndex) => cellIndex >= 6 && cellIndex !== indexes.recurring)
+        .filter((_, cellIndex) => cellIndex >= 6 && cellIndex !== indexes.recurring && cellIndex !== indexes.prepaid)
         .join(' ')
         .trim()
 
@@ -161,6 +170,7 @@ function parseSpreadsheet(text: string): ParsedCardEntry[] {
         installmentCurrent,
         installmentTotal,
         isRecurring: isRecurring || undefined,
+        isPrepaid: isPrepaid || undefined,
       }
     })
 
@@ -186,8 +196,9 @@ export function CreditCardManager({
   const [view, setView] = useState<View>('current')
 
   // New Entry Form State
+  const descriptionInputRef = useRef<HTMLInputElement>(null)
   const [description, setDescription] = useState('')
-  const [purchaseDate, setPurchaseDate] = useState('')
+  const [purchaseDate, setPurchaseDate] = useState(todayShort)
   const [cardName, setCardName] = useState('Itaú')
   const [amount, setAmount] = useState(0)
   const [personalAmount, setPersonalAmount] = useState(0)
@@ -212,6 +223,7 @@ export function CreditCardManager({
     if (ownerFilter === 'all') return true
     if (ownerFilter === 'mine') return entry.personalAmount > 0
     if (ownerFilter === 'third-party') return entry.amount - entry.personalAmount > 0
+    if (ownerFilter === 'prepaid') return entry.isPrepaid === true
     return (entry.ownerName || entry.ownerNote || 'Outro') === ownerFilter
   })
 
@@ -284,7 +296,7 @@ export function CreditCardManager({
     })
 
     setDescription('')
-    setPurchaseDate('')
+    // Data e cartão são mantidos: em geral várias compras seguidas compartilham os dois.
     setAmount(0)
     setPersonalAmount(0)
     setRemainingAmount(0)
@@ -292,6 +304,7 @@ export function CreditCardManager({
     setNewInstallmentCurrent('')
     setNewInstallmentTotal('')
     setNewIsRecurring(false)
+    descriptionInputRef.current?.focus()
   }
 
   const handlePayBill = () => {
@@ -345,6 +358,11 @@ export function CreditCardManager({
           <div className="rounded-xl border border-sky-500/20 bg-sky-500/10 px-4 py-3 shadow-sm transition-all hover:bg-sky-500/15">
             <span className="block text-xs font-semibold uppercase tracking-wide text-sky-300/80">Total dos cartões</span>
             <strong className="mt-1 block text-lg text-sky-100">{formatCurrency(summary.currentTotal)}</strong>
+            {summary.currentPrepaidTotal > 0 && (
+              <span className="mt-0.5 block text-[11px] font-semibold text-emerald-300/90">
+                + {formatCurrency(summary.currentPrepaidTotal)} já pago antecipado
+              </span>
+            )}
           </div>
           <div className="rounded-xl border border-primary-500/20 bg-primary-500/10 px-4 py-3 shadow-sm transition-all hover:bg-primary-500/15">
             <span className="block text-xs font-semibold uppercase tracking-wide text-primary-300/80">Meu total</span>
@@ -457,6 +475,7 @@ export function CreditCardManager({
                 { key: 'all', label: 'Todos' },
                 { key: 'mine', label: 'Meus' },
                 { key: 'third-party', label: 'Não são meus' },
+                ...(entries.some((entry) => entry.isPrepaid) ? [{ key: 'prepaid', label: 'Pagos' }] : []),
                 ...knownOwners.map((owner) => ({ key: owner, label: owner })),
               ].map((item) => (
                 <button
@@ -531,8 +550,15 @@ export function CreditCardManager({
                         <div></div>
                     </div>
 
-                    <div className={`grid ${TABLE_COLS} gap-2 px-3 py-2 items-center bg-sky-900/10 border-b border-sky-500/20`}>
+                    <form
+                        onSubmit={(event) => {
+                          event.preventDefault()
+                          handleAdd()
+                        }}
+                        className={`grid ${TABLE_COLS} gap-2 px-3 py-2 items-center bg-sky-900/10 border-b border-sky-500/20`}
+                    >
                         <input
+                            ref={descriptionInputRef}
                             placeholder="Nova compra..."
                             value={description}
                             onChange={e => setDescription(e.target.value)}
@@ -616,15 +642,15 @@ export function CreditCardManager({
                             onChange={e => setOwnerNote(e.target.value)}
                             className="w-full bg-dark-input border border-dark-border/50 focus:border-sky-500/50 rounded-md px-2 py-1.5 text-sm outline-none placeholder:text-sky-200/30 transition-all"
                         />
-                        <button 
-                            onClick={handleAdd}
+                        <button
+                            type="submit"
                             disabled={!description.trim() || amount === 0}
                             className="flex h-8 w-8 items-center justify-center rounded-md bg-sky-600 text-white hover:bg-sky-500 disabled:opacity-40 transition-all shadow-sm"
-                            title="Adicionar lançamento"
+                            title="Adicionar lançamento (Enter)"
                         >
                             <Plus size={18} />
                         </button>
-                    </div>
+                    </form>
 
                     <div className="divide-y divide-dark-border/40">
                         {visibleEntries.length === 0 ? (
@@ -633,17 +659,25 @@ export function CreditCardManager({
                             </div>
                         ) : (
                             visibleEntries.map((entry) => (
-                            <div key={entry.id} className={`grid ${TABLE_COLS} gap-2 px-3 py-1.5 items-center hover:bg-white/[0.03] transition-colors group`}>
+                            <div key={entry.id} className={`grid ${TABLE_COLS} gap-2 px-3 py-1.5 items-center hover:bg-white/[0.03] transition-colors group ${entry.isPrepaid ? 'bg-emerald-500/[0.05]' : ''}`}>
                                 <div className="flex min-w-0 items-center gap-1.5">
                                     {entry.autoGenerated && (
                                       <span title="Gerado automaticamente a partir da fatura atual" className="shrink-0 text-sky-400/70">
                                         <Zap size={12} />
                                       </span>
                                     )}
+                                    {entry.isPrepaid && (
+                                      <span
+                                        title="Pago antecipadamente — fora do total da fatura"
+                                        className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-300"
+                                      >
+                                        Pago
+                                      </span>
+                                    )}
                                     <input
                                         value={entry.description}
                                         onChange={e => updateEntry(entry.id, { description: e.target.value })}
-                                        className="w-full bg-transparent border border-transparent focus:bg-dark-input focus:border-dark-border rounded px-2 py-1 text-sm font-medium outline-none transition-all"
+                                        className={`w-full bg-transparent border border-transparent focus:bg-dark-input focus:border-dark-border rounded px-2 py-1 text-sm font-medium outline-none transition-all ${entry.isPrepaid ? 'text-emerald-200/80' : ''}`}
                                     />
                                 </div>
                                 <div className="flex items-center justify-center gap-1">
@@ -697,15 +731,15 @@ export function CreditCardManager({
                                     onChange={e => updateEntry(entry.id, { cardName: e.target.value })}
                                     className="w-full bg-transparent border border-transparent focus:bg-dark-input focus:border-dark-border rounded px-1 py-1 text-sm outline-none text-center transition-all"
                                 />
-                                <CurrencyInput 
-                                    value={formatNumberInputValue(entry.amount)} 
+                                <CurrencyInput
+                                    value={formatNumberInputValue(entry.amount)}
                                     onChange={v => updateEntry(entry.id, { amount: v })}
-                                    className="!py-1 !px-2 !pl-6 !bg-transparent !border-transparent hover:!bg-white/5 focus:!bg-dark-input focus:!border-dark-border text-sm transition-all"
+                                    className={`!py-1 !px-2 !pl-6 !bg-transparent !border-transparent hover:!bg-white/5 focus:!bg-dark-input focus:!border-dark-border text-sm transition-all ${entry.isPrepaid ? '!text-emerald-400 line-through' : ''}`}
                                 />
-                                <CurrencyInput 
-                                    value={formatNumberInputValue(entry.personalAmount)} 
+                                <CurrencyInput
+                                    value={formatNumberInputValue(entry.personalAmount)}
                                     onChange={v => updateEntry(entry.id, { personalAmount: v })}
-                                    className="!py-1 !px-2 !pl-6 !bg-transparent !border-transparent hover:!bg-white/5 focus:!bg-dark-input focus:!border-dark-border text-sm transition-all"
+                                    className={`!py-1 !px-2 !pl-6 !bg-transparent !border-transparent hover:!bg-white/5 focus:!bg-dark-input focus:!border-dark-border text-sm transition-all ${entry.isPrepaid ? '!text-emerald-400 line-through' : ''}`}
                                 />
                                 <CurrencyInput 
                                     value={formatNumberInputValue(entry.remainingAmount)} 
@@ -719,6 +753,21 @@ export function CreditCardManager({
                                     placeholder="-"
                                 />
                                 <div className="flex items-center justify-end gap-0.5">
+                                    <button
+                                        onClick={() => updateEntry(entry.id, { isPrepaid: !entry.isPrepaid })}
+                                        className={`flex h-7 w-7 items-center justify-center rounded-md transition-all ${
+                                          entry.isPrepaid
+                                            ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
+                                            : 'text-dark-text-muted hover:bg-emerald-500/20 hover:text-emerald-400 opacity-0 group-hover:opacity-100'
+                                        }`}
+                                        title={
+                                          entry.isPrepaid
+                                            ? 'Pago antecipadamente — clique para devolver ao total da fatura'
+                                            : 'Já paguei antecipado (tira do total da fatura)'
+                                        }
+                                    >
+                                        <HandCoins size={15} />
+                                    </button>
                                     {visibleCycle === 'current' &&
                                       !entry.isRecurring &&
                                       (entry.installmentCurrent ?? 0) > 0 &&
@@ -746,12 +795,18 @@ export function CreditCardManager({
                 </div>
             </div>
             
-            <div className="bg-dark-surface px-4 py-3 border-t border-dark-border flex justify-between items-center">
+            <div className="bg-dark-surface px-4 py-3 border-t border-dark-border flex flex-wrap justify-between items-center gap-2">
                 <div className="text-xs text-dark-text-muted">
                     {visibleCycle === 'current'
                     ? `${summary.currentEntriesCount} lançamentos cadastrados`
                     : `${summary.nextEntriesCount} lançamentos previstos`}
                 </div>
+                {visibleCycle === 'current' && summary.currentPrepaidTotal > 0 && (
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
+                    <HandCoins size={13} />
+                    {formatCurrency(summary.currentPrepaidTotal)} pagos antecipadamente, fora do total da fatura
+                  </div>
+                )}
             </div>
           </div>
         ) : (
@@ -763,8 +818,9 @@ export function CreditCardManager({
                   Colar planilha do cartão
                 </h3>
                 <p className="mt-1.5 text-xs leading-relaxed text-dark-text-muted max-w-lg">
-                  Cole linhas do Sheets com colunas na ordem parecida: Descrição, Data, Cartão, Fatura, É meu, Restante e Assinatura.
-                  Parcelas como "3/10" no nome são detectadas e movidas para a coluna Parc.; marque "sim" em Assinatura para compras recorrentes.
+                  Cole linhas do Sheets com colunas na ordem parecida: Descrição, Data, Cartão, Fatura, É meu, Restante, Assinatura e Pago.
+                  Parcelas como "3/10" no nome são detectadas e movidas para a coluna Parc.; marque "sim" em Assinatura para compras recorrentes
+                  e "sim" em Pago para compras já pagas antecipadamente.
                 </p>
               </div>
               <span className="rounded-lg border border-sky-500/20 bg-sky-500/10 px-3 py-1.5 text-xs font-bold text-sky-300">
