@@ -1,29 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, Copy, Layers3, Pencil, Plus, Trash2, X } from 'lucide-react'
-import type { FinanceScenario, ScenarioSummary } from '../types'
-import { formatCurrency } from '../utils'
+import { formatCurrency } from '../lib/format'
+import { useFinancasStore } from '../context/financasStore'
 
-interface Props {
-  scenarios: FinanceScenario[]
-  activeScenarioId: string
-  setActiveScenarioId: (id: string) => void
-  createScenario: () => void
-  duplicateScenario: (id?: string) => void
-  renameScenario: (id: string, name: string) => void
-  removeScenario: (id: string) => void
-  summaries: ScenarioSummary[]
-}
+export function ScenarioSwitcher() {
+  const store = useFinancasStore()
+  const {
+    scenarios,
+    activeScenarioId,
+    setActiveScenarioId,
+    createScenario,
+    duplicateScenario,
+    renameScenario,
+    removeScenario,
+  } = store.scenarios
+  const summaries = store.scenarioSummaries
 
-export function ScenarioSwitcher({
-  scenarios,
-  activeScenarioId,
-  setActiveScenarioId,
-  createScenario,
-  duplicateScenario,
-  renameScenario,
-  removeScenario,
-  summaries,
-}: Props) {
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draftName, setDraftName] = useState('')
@@ -53,11 +45,15 @@ export function ScenarioSwitcher({
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
         className="flex items-center gap-2 rounded-lg border border-dark-border bg-dark-surface px-3 py-2 text-sm font-medium text-dark-text transition-colors hover:border-dark-text-muted/40"
       >
         <Layers3 size={14} className="text-dark-text-muted" />
         <span className="max-w-36 truncate">{activeScenario?.name ?? 'Cenário'}</span>
-        <ChevronDown size={14} className={`text-dark-text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown
+          size={14}
+          className={`text-dark-text-muted transition-transform ${open ? 'rotate-180' : ''}`}
+        />
       </button>
 
       {open && (
@@ -78,6 +74,7 @@ export function ScenarioSwitcher({
                         if (event.key === 'Escape') setEditingId(null)
                       }}
                       className="min-w-0 flex-1 rounded-md border border-dark-border bg-dark-input px-2 py-1.5 text-sm text-dark-text outline-none focus:border-primary-500"
+                      aria-label="Novo nome do cenário"
                       autoFocus
                     />
                     <button
@@ -115,19 +112,27 @@ export function ScenarioSwitcher({
                     }}
                     className="min-w-0 flex-1 text-left"
                   >
-                    <span className={`block truncate text-sm font-medium ${isActive ? 'text-primary-300' : 'text-dark-text'}`}>
+                    <span
+                      className={`block truncate text-sm font-medium ${
+                        isActive ? 'text-primary-300' : 'text-dark-text'
+                      }`}
+                    >
                       {scenario.name}
                     </span>
                     {summary && (
                       <span className="block text-[11px] tabular-nums text-dark-text-muted">
                         base {formatCurrency(summary.availableForBudget)} · livre{' '}
-                        <span className={summary.balanceAfterPlan >= 0 ? 'text-primary-400' : 'text-rose-400'}>
+                        <span
+                          className={
+                            summary.balanceAfterPlan >= 0 ? 'text-primary-400' : 'text-rose-400'
+                          }
+                        >
                           {formatCurrency(summary.balanceAfterPlan)}
                         </span>
                       </span>
                     )}
                   </button>
-                  <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
                     <button
                       type="button"
                       onClick={() => {

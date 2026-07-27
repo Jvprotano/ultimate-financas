@@ -1,120 +1,47 @@
 import { useState } from 'react'
-import {
-  Building2,
-  ChevronDown,
-  Landmark,
-  Minus,
-  Plus,
-  PlusCircle,
-  Shield,
-  Trash2,
-  TrendingDown,
-  TrendingUp,
-} from 'lucide-react'
-import { Card } from './Card'
+import { Building2, ChevronDown, Landmark, Plus, Trash2, X } from 'lucide-react'
 import { CurrencyInput } from './CurrencyInput'
-import { HeaderMetric } from './HeaderMetric'
-import { Meter, SegmentedBar } from './ui'
-import type { EmergencyFundState, HoldingSummary, InvestmentAssetClass, InvestmentsSummary } from '../types'
+import { LedgerList, LedgerMoveForm } from './Ledger'
+import { ReserveSection } from './ReserveSection'
+import { GoalsSection } from './GoalsSection'
+import {
+  EmptyState,
+  GainLabel,
+  Panel,
+  PanelHeader,
+  PrimaryButton,
+  SecondaryButton,
+  SegmentedBar,
+  StatTile,
+  Tag,
+} from './ui'
+import { formatCurrency, inputClass } from '../lib/format'
+import { useInvestmentsStore } from '../context/financasStore'
+import type { HoldingSummary } from '../types'
 import { CHART_PALETTE, INVESTMENT_CLASS_PRESET_COLORS } from '../types/constants'
-import { formatCurrency } from '../utils'
 
-const RESERVE_MONTH_OPTIONS = [3, 6, 12]
 const RESERVE_COLOR = CHART_PALETTE.muted
+const GOALS_COLOR = CHART_PALETTE.violet
 
-interface Props {
-  summary: InvestmentsSummary
-  classes: InvestmentAssetClass[]
-  addHolding: (input: {
-    name: string
-    assetClassId: string
-    institution?: string
-    initialAmount?: number
-    note?: string
-  }) => void
-  updateHolding: (
-    id: string,
-    patch: Partial<{ name: string; assetClassId: string; institution: string; marketValue: number }>,
-  ) => void
-  removeHolding: (id: string) => void
-  addTransaction: (holdingId: string, amount: number, note?: string) => void
-  removeTransaction: (holdingId: string, transactionId: string) => void
-  setMarketValue: (holdingId: string, value: number) => void
-  addClass: (name: string, color: string) => void
-  emergencyFund: EmergencyFundState
-  addEmergencyFundTransaction: (amount: number, note?: string) => void
-  removeEmergencyFundTransaction: (id: string) => void
-  setEmergencyFundTargetMonths: (months: number) => void
-  emergencyTarget: number
-  emergencyRemaining: number
-  emergencyProgress: number
-}
-
-function formatGainPct(pct: number) {
-  return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`
-}
-
-function formatTransactionDate(iso: string) {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return ''
-  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
-}
-
-function GainLabel({ gain, pct, className = '' }: { gain: number; pct: number | null; className?: string }) {
-  const positive = gain >= 0
-  return (
-    <span className={`tabular-nums ${positive ? 'text-emerald-400' : 'text-rose-400'} ${className}`}>
-      {positive ? '+' : '−'} {formatCurrency(Math.abs(gain))}
-      {pct !== null && ` (${formatGainPct(pct)})`}
-    </span>
-  )
-}
-
-function HoldingRow({
-  holding,
-  classes,
-  updateHolding,
-  removeHolding,
-  addTransaction,
-  removeTransaction,
-  setMarketValue,
-}: {
-  holding: HoldingSummary
-  classes: InvestmentAssetClass[]
-  updateHolding: Props['updateHolding']
-  removeHolding: Props['removeHolding']
-  addTransaction: Props['addTransaction']
-  removeTransaction: Props['removeTransaction']
-  setMarketValue: Props['setMarketValue']
-}) {
+function HoldingRow({ holding }: { holding: HoldingSummary }) {
+  const {
+    investmentClasses,
+    updateHolding,
+    removeHolding,
+    addHoldingTransaction,
+    removeHoldingTransaction,
+    setMarketValue,
+  } = useInvestmentsStore()
   const [expanded, setExpanded] = useState(false)
-  const [moveAmount, setMoveAmount] = useState(0)
-  const [moveNote, setMoveNote] = useState('')
-
-  const commit = (sign: 1 | -1) => {
-    if (moveAmount <= 0) return
-    addTransaction(holding.id, sign * moveAmount, moveNote)
-    setMoveAmount(0)
-    setMoveNote('')
-  }
-
-  const history = [...holding.transactions].reverse()
-  const positive = holding.gain >= 0
 
   return (
     <div className="rounded-lg border border-dark-border/60 bg-dark-surface/40">
       <button
         type="button"
         onClick={() => setExpanded((prev) => !prev)}
+        aria-expanded={expanded}
         className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-white/[0.03]"
       >
-        <span
-          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
-            positive ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'
-          }`}
-        >
-          {positive ? <TrendingUp size={15} /> : <TrendingDown size={15} />}
-        </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-dark-text">{holding.name}</p>
           {holding.institution && (
@@ -125,73 +52,61 @@ function HoldingRow({
           )}
         </div>
         <div className="shrink-0 text-right">
-          <p className="text-sm font-semibold tabular-nums text-dark-text">{formatCurrency(holding.marketValue)}</p>
+          <p className="text-sm font-semibold tabular-nums text-dark-text">
+            {formatCurrency(holding.marketValue)}
+          </p>
           <p className="text-[11px]">
             <GainLabel gain={holding.gain} pct={holding.invested > 0 ? holding.gainPct : null} />
+            {holding.annualizedPct !== null && (
+              <span className="ml-1.5 text-dark-text-muted">
+                {holding.annualizedPct >= 0 ? '+' : ''}
+                {holding.annualizedPct.toFixed(1)}% a.a.
+              </span>
+            )}
           </p>
         </div>
         <ChevronDown
           size={15}
-          className={`shrink-0 text-dark-text-muted transition-transform ${expanded ? 'rotate-180' : ''}`}
+          className={`shrink-0 text-dark-text-muted transition-transform ${
+            expanded ? 'rotate-180' : ''
+          }`}
         />
       </button>
 
       {expanded && (
         <div className="space-y-3 border-t border-dark-border/60 px-3 py-3">
-          <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
             <div className="rounded-md bg-dark-input/60 px-2.5 py-1.5">
               <span className="block text-dark-text-muted">Aportado</span>
-              <strong className="tabular-nums text-dark-text">{formatCurrency(holding.invested)}</strong>
+              <strong className="tabular-nums text-dark-text">
+                {formatCurrency(holding.invested)}
+              </strong>
             </div>
             <div className="rounded-md bg-dark-input/60 px-2.5 py-1.5">
               <span className="block text-dark-text-muted">Rendimento</span>
               <strong>
-                <GainLabel gain={holding.gain} pct={holding.invested > 0 ? holding.gainPct : null} />
+                <GainLabel
+                  gain={holding.gain}
+                  pct={holding.invested > 0 ? holding.gainPct : null}
+                />
+              </strong>
+            </div>
+            <div className="rounded-md bg-dark-input/60 px-2.5 py-1.5">
+              <span className="block text-dark-text-muted">Ao ano</span>
+              <strong className="tabular-nums text-dark-text">
+                {holding.annualizedPct === null
+                  ? '—'
+                  : `${holding.annualizedPct >= 0 ? '+' : ''}${holding.annualizedPct.toFixed(1)}%`}
               </strong>
             </div>
           </div>
 
-          <form
-            onSubmit={(event) => {
-              event.preventDefault()
-              commit(1)
-            }}
-            className="space-y-2"
-          >
-            <span className="block text-xs font-semibold uppercase tracking-wide text-dark-text-muted">
-              Movimentar
-            </span>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <div className="sm:flex-1">
-                <CurrencyInput value={moveAmount} onChange={setMoveAmount} className="!py-2" />
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  disabled={moveAmount <= 0}
-                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-500/20 px-3 py-2 text-sm font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/30 disabled:opacity-40 sm:flex-none"
-                >
-                  <Plus size={14} />
-                  Aportar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => commit(-1)}
-                  disabled={moveAmount <= 0 || holding.marketValue <= 0}
-                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-rose-500/15 px-3 py-2 text-sm font-semibold text-rose-300 transition-colors hover:bg-rose-500/25 disabled:opacity-40 sm:flex-none"
-                >
-                  <Minus size={14} />
-                  Resgatar
-                </button>
-              </div>
-            </div>
-            <input
-              value={moveNote}
-              onChange={(event) => setMoveNote(event.target.value)}
-              placeholder="Nota (opcional)"
-              className="w-full rounded-lg border border-dark-border bg-dark-input px-3 py-1.5 text-sm text-dark-text outline-none transition-colors placeholder:text-dark-text-muted focus:border-primary-500 focus:ring-2 focus:ring-primary-500/25"
-            />
-          </form>
+          <LedgerMoveForm
+            onMove={(amount, note) => addHoldingTransaction(holding.id, amount, note)}
+            inLabel="Aportar"
+            outLabel="Resgatar"
+            disableOut={holding.marketValue <= 0}
+          />
 
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="block">
@@ -210,10 +125,12 @@ function HoldingRow({
               </span>
               <select
                 value={holding.assetClassId}
-                onChange={(event) => updateHolding(holding.id, { assetClassId: event.target.value })}
-                className="h-[42px] w-full rounded-lg border border-dark-border bg-dark-input px-3 text-sm text-dark-text outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/25"
+                onChange={(event) =>
+                  updateHolding(holding.id, { assetClassId: event.target.value })
+                }
+                className={`${inputClass} h-[42px]`}
               >
-                {classes.map((assetClass) => (
+                {investmentClasses.map((assetClass) => (
                   <option key={assetClass.id} value={assetClass.id}>
                     {assetClass.name}
                   </option>
@@ -222,57 +139,29 @@ function HoldingRow({
             </label>
           </div>
 
-          <input
-            value={holding.name}
-            onChange={(event) => updateHolding(holding.id, { name: event.target.value })}
-            className="w-full rounded-lg border border-dark-border bg-dark-input px-3 py-1.5 text-sm text-dark-text outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/25"
-            placeholder="Nome da posição"
-          />
-          <input
-            value={holding.institution ?? ''}
-            onChange={(event) => updateHolding(holding.id, { institution: event.target.value })}
-            className="w-full rounded-lg border border-dark-border bg-dark-input px-3 py-1.5 text-sm text-dark-text outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/25"
-            placeholder="Instituição (opcional) — ex.: Itaú, XP"
-          />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <input
+              value={holding.name}
+              onChange={(event) => updateHolding(holding.id, { name: event.target.value })}
+              className={`${inputClass} !py-1.5`}
+              placeholder="Nome da posição"
+              aria-label="Nome da posição"
+            />
+            <input
+              value={holding.institution ?? ''}
+              onChange={(event) => updateHolding(holding.id, { institution: event.target.value })}
+              className={`${inputClass} !py-1.5`}
+              placeholder="Instituição (opcional) — ex.: Itaú, XP"
+              aria-label="Instituição"
+            />
+          </div>
 
-          {history.length > 0 && (
-            <div>
-              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-dark-text-muted">
-                Movimentações
-              </span>
-              <ul className="max-h-44 space-y-1 overflow-y-auto pr-1">
-                {history.map((tx) => {
-                  const isDeposit = tx.amount >= 0
-                  return (
-                    <li key={tx.id} className="group flex items-center gap-2.5 rounded-md bg-dark-input/50 px-2.5 py-1.5">
-                      <span className={isDeposit ? 'text-emerald-400' : 'text-rose-400'}>
-                        {isDeposit ? <Plus size={13} /> : <Minus size={13} />}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs text-dark-text">{tx.note || (isDeposit ? 'Aporte' : 'Resgate')}</p>
-                        <p className="text-[10px] text-dark-text-muted">{formatTransactionDate(tx.date)}</p>
-                      </div>
-                      <span
-                        className={`shrink-0 text-xs font-semibold tabular-nums ${
-                          isDeposit ? 'text-emerald-400' : 'text-rose-400'
-                        }`}
-                      >
-                        {isDeposit ? '+' : '−'} {formatCurrency(Math.abs(tx.amount))}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeTransaction(holding.id, tx.id)}
-                        className="text-dark-text-muted opacity-0 transition-all hover:text-rose-400 group-hover:opacity-100"
-                        title="Remover movimentação"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
-          )}
+          <LedgerList
+            transactions={holding.transactions}
+            onRemove={(id) => removeHoldingTransaction(holding.id, id)}
+            inLabel="Aporte"
+            outLabel="Resgate"
+          />
 
           <button
             type="button"
@@ -288,282 +177,208 @@ function HoldingRow({
   )
 }
 
-function ReserveSection({
-  emergencyFund,
-  addTransaction,
-  removeTransaction,
-  setTargetMonths,
-  target,
-  remaining,
-  progress,
-}: {
-  emergencyFund: EmergencyFundState
-  addTransaction: Props['addEmergencyFundTransaction']
-  removeTransaction: Props['removeEmergencyFundTransaction']
-  setTargetMonths: Props['setEmergencyFundTargetMonths']
-  target: number
-  remaining: number
-  progress: number
-}) {
-  const [amount, setAmount] = useState(0)
-  const [note, setNote] = useState('')
-
-  const commit = (sign: 1 | -1) => {
-    if (amount <= 0) return
-    addTransaction(sign * amount, note)
-    setAmount(0)
-    setNote('')
-  }
-
-  const history = [...emergencyFund.transactions].reverse()
-
-  return (
-    <div className="rounded-xl border border-dark-border bg-dark-card">
-      <div className="flex flex-wrap items-center gap-3 border-b border-dark-border/60 px-4 py-3">
-        <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: RESERVE_COLOR }} />
-        <h3 className="flex items-center gap-1.5 text-sm font-bold text-dark-text">
-          <Shield size={14} className="text-dark-text-muted" />
-          Reserva de emergência
-        </h3>
-        <div className="ml-auto text-right">
-          <p className="text-sm font-semibold tabular-nums text-dark-text">{formatCurrency(emergencyFund.current)}</p>
-          {target > 0 && (
-            <p className="text-[11px] text-dark-text-muted">
-              {progress.toFixed(0)}% da meta ({emergencyFund.targetMonths} meses)
-            </p>
-          )}
-        </div>
-      </div>
-
-      <div className="space-y-3 p-4">
-        {target > 0 && (
-          <div>
-            <div className="mb-1.5 flex items-baseline justify-between text-xs">
-              <span className="text-dark-text-muted">Meta: {formatCurrency(target)}</span>
-              <span className="text-dark-text-muted">
-                {remaining <= 0 ? 'Meta completa' : `Faltam ${formatCurrency(remaining)}`}
-              </span>
-            </div>
-            <Meter value={Math.min(emergencyFund.current, target)} max={target} color={CHART_PALETTE.blue} height={8} />
-          </div>
-        )}
-
-        <div>
-          <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-dark-text-muted">
-            Meta em meses de custo
-          </span>
-          <div className="grid grid-cols-3 gap-1 rounded-lg border border-dark-border bg-dark-input p-1">
-            {RESERVE_MONTH_OPTIONS.map((months) => (
-              <button
-                key={months}
-                type="button"
-                onClick={() => setTargetMonths(months)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  emergencyFund.targetMonths === months
-                    ? 'bg-dark-surface text-dark-text shadow-sm'
-                    : 'text-dark-text-muted hover:text-dark-text'
-                }`}
-              >
-                {months}m
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <form
-          onSubmit={(event) => {
-            event.preventDefault()
-            commit(1)
-          }}
-          className="space-y-2"
-        >
-          <span className="block text-xs font-semibold uppercase tracking-wide text-dark-text-muted">Movimentar</span>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <div className="sm:flex-1">
-              <CurrencyInput value={amount} onChange={setAmount} className="!py-2" />
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                disabled={amount <= 0}
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-500/20 px-3 py-2 text-sm font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/30 disabled:opacity-40 sm:flex-none"
-              >
-                <Plus size={14} />
-                Adicionar
-              </button>
-              <button
-                type="button"
-                onClick={() => commit(-1)}
-                disabled={amount <= 0 || emergencyFund.current <= 0}
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-rose-500/15 px-3 py-2 text-sm font-semibold text-rose-300 transition-colors hover:bg-rose-500/25 disabled:opacity-40 sm:flex-none"
-              >
-                <Minus size={14} />
-                Remover
-              </button>
-            </div>
-          </div>
-          <input
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            placeholder="Nota (opcional) — ex.: aporte mensal, resgate para conserto do carro"
-            className="w-full rounded-lg border border-dark-border bg-dark-input px-3 py-1.5 text-sm text-dark-text outline-none transition-colors placeholder:text-dark-text-muted focus:border-primary-500 focus:ring-2 focus:ring-primary-500/25"
-          />
-        </form>
-
-        {history.length > 0 && (
-          <div>
-            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-dark-text-muted">
-              Movimentações
-            </span>
-            <ul className="max-h-44 space-y-1 overflow-y-auto pr-1">
-              {history.map((tx) => {
-                const isDeposit = tx.amount >= 0
-                return (
-                  <li key={tx.id} className="group flex items-center gap-2.5 rounded-md bg-dark-input/50 px-2.5 py-1.5">
-                    <span className={isDeposit ? 'text-emerald-400' : 'text-rose-400'}>
-                      {isDeposit ? <Plus size={13} /> : <Minus size={13} />}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs text-dark-text">{tx.note || (isDeposit ? 'Aporte' : 'Retirada')}</p>
-                      <p className="text-[10px] text-dark-text-muted">{formatTransactionDate(tx.date)}</p>
-                    </div>
-                    <span
-                      className={`shrink-0 text-xs font-semibold tabular-nums ${
-                        isDeposit ? 'text-emerald-400' : 'text-rose-400'
-                      }`}
-                    >
-                      {isDeposit ? '+' : '−'} {formatCurrency(Math.abs(tx.amount))}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeTransaction(tx.id)}
-                      className="text-dark-text-muted opacity-0 transition-all hover:text-rose-400 group-hover:opacity-100"
-                      title="Remover movimentação"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-export function InvestmentsManager({
-  summary,
-  classes,
-  addHolding,
-  updateHolding,
-  removeHolding,
-  addTransaction,
-  removeTransaction,
-  setMarketValue,
-  addClass,
-  emergencyFund,
-  addEmergencyFundTransaction,
-  removeEmergencyFundTransaction,
-  setEmergencyFundTargetMonths,
-  emergencyTarget,
-  emergencyRemaining,
-  emergencyProgress,
-}: Props) {
+function NewHoldingForm({ onClose }: { onClose: () => void }) {
+  const { investmentClasses, addHolding, addClass, removeClass, holdings } = useInvestmentsStore()
   const [name, setName] = useState('')
   const [institution, setInstitution] = useState('')
-  const [assetClassId, setAssetClassId] = useState(classes[0]?.id ?? '')
+  const [assetClassId, setAssetClassId] = useState(investmentClasses[0]?.id ?? '')
   const [initialAmount, setInitialAmount] = useState(0)
   const [newClassName, setNewClassName] = useState('')
   const [showNewClass, setShowNewClass] = useState(false)
 
-  const selectedClassId = classes.some((item) => item.id === assetClassId) ? assetClassId : classes[0]?.id ?? ''
+  const selectedClassId = investmentClasses.some((item) => item.id === assetClassId)
+    ? assetClassId
+    : (investmentClasses[0]?.id ?? '')
 
   const handleAdd = () => {
     if (!name.trim() || !selectedClassId) return
-    addHolding({
-      name,
-      assetClassId: selectedClassId,
-      institution,
-      initialAmount,
-    })
+    addHolding({ name, assetClassId: selectedClassId, institution, initialAmount })
     setName('')
     setInstitution('')
     setInitialAmount(0)
+    onClose()
   }
 
   const handleAddClass = () => {
     const trimmed = newClassName.trim()
     if (!trimmed) return
-    const color = INVESTMENT_CLASS_PRESET_COLORS[classes.length % INVESTMENT_CLASS_PRESET_COLORS.length]
-    addClass(trimmed, color)
+    addClass(
+      trimmed,
+      INVESTMENT_CLASS_PRESET_COLORS[investmentClasses.length % INVESTMENT_CLASS_PRESET_COLORS.length],
+    )
     setNewClassName('')
     setShowNewClass(false)
   }
 
-  const totalPositive = summary.totalGain >= 0
-  const reserveBalance = emergencyFund.current
-  const totalPatrimonio = summary.totalMarketValue + reserveBalance
+  return (
+    <div className="mt-4 space-y-3 rounded-lg border border-dark-border bg-dark-surface/60 p-3">
+      <div className="grid gap-2 sm:grid-cols-2">
+        <input
+          autoFocus
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          onKeyDown={(event) => event.key === 'Enter' && handleAdd()}
+          placeholder="Nome — ex.: CDB Itaú 110% CDI"
+          className={inputClass}
+          aria-label="Nome da posição"
+        />
+        <input
+          value={institution}
+          onChange={(event) => setInstitution(event.target.value)}
+          onKeyDown={(event) => event.key === 'Enter' && handleAdd()}
+          placeholder="Instituição (opcional)"
+          className={inputClass}
+          aria-label="Instituição"
+        />
+      </div>
+
+      <div>
+        <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-dark-text-muted">
+          Classe de ativo
+        </span>
+        <div className="flex flex-wrap gap-1.5">
+          {investmentClasses.map((assetClass) => {
+            const isSelected = selectedClassId === assetClass.id
+            const isEmpty = !holdings.some((holding) => holding.assetClassId === assetClass.id)
+            return (
+              <span
+                key={assetClass.id}
+                className={`group inline-flex items-center rounded-lg border transition-all ${
+                  isSelected
+                    ? 'border-primary-500/60 bg-primary-500/10'
+                    : 'border-transparent bg-dark-input hover:bg-white/[0.06]'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setAssetClassId(assetClass.id)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold ${
+                    isSelected ? 'text-primary-200' : 'text-dark-text-muted hover:text-dark-text'
+                  }`}
+                >
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={{ backgroundColor: assetClass.color }}
+                  />
+                  {assetClass.name}
+                </button>
+                {isEmpty && (
+                  <button
+                    type="button"
+                    onClick={() => removeClass(assetClass.id)}
+                    className="pr-2 text-dark-text-muted opacity-0 transition-opacity hover:text-rose-400 focus-visible:opacity-100 group-hover:opacity-100"
+                    title={`Remover a classe ${assetClass.name}`}
+                    aria-label={`Remover a classe ${assetClass.name}`}
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </span>
+            )
+          })}
+
+          {showNewClass ? (
+            <span className="inline-flex items-center gap-1 rounded-lg border border-primary-500/40 bg-dark-input px-2 py-1">
+              <input
+                autoFocus
+                value={newClassName}
+                onChange={(event) => setNewClassName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') handleAddClass()
+                  if (event.key === 'Escape') setShowNewClass(false)
+                }}
+                placeholder="Nova classe"
+                className="w-28 bg-transparent text-xs text-dark-text outline-none placeholder:text-dark-text-muted"
+                aria-label="Nome da nova classe"
+              />
+              <button
+                type="button"
+                onClick={handleAddClass}
+                className="text-primary-300 hover:text-primary-200"
+                title="Criar classe"
+              >
+                <Plus size={13} />
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowNewClass(true)}
+              className="inline-flex items-center gap-1 rounded-lg border border-dashed border-dark-border px-3 py-1.5 text-xs font-medium text-dark-text-muted transition-colors hover:border-primary-500/50 hover:text-primary-300"
+            >
+              <Plus size={12} />
+              Nova classe
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+        <label className="block sm:flex-1">
+          <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-dark-text-muted">
+            Valor aplicado hoje
+          </span>
+          <CurrencyInput value={initialAmount} onChange={setInitialAmount} />
+        </label>
+        <div className="flex gap-2">
+          <PrimaryButton onClick={handleAdd} disabled={!name.trim() || !selectedClassId}>
+            <Plus size={16} />
+            Adicionar posição
+          </PrimaryButton>
+          <SecondaryButton onClick={onClose}>Cancelar</SecondaryButton>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function InvestmentsManager() {
+  const { summary, goals } = useInvestmentsStore()
+  const [showForm, setShowForm] = useState(false)
+
+  const { netWorth, reserveBalance, goalsBalance, totalMarketValue, totalGain, totalInvested } =
+    summary
+  const activeGoals = goals.filter((goal) => !goal.isComplete).length
 
   return (
-    <Card
-      title="Investimentos"
-      icon={<Landmark size={18} />}
-      collapsible
-      storageKey="investments"
-      headerExtra={<HeaderMetric amount={totalPatrimonio} baseAmount={0} label="Patrimônio" tone="primary" />}
-    >
-      <div className="space-y-5">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-primary-500/20 bg-primary-500/10 px-4 py-3">
-            <span className="block text-xs font-semibold uppercase tracking-wide text-primary-300/80">
-              Patrimônio total
-            </span>
-            <strong className="mt-1 block text-lg tabular-nums text-primary-100">
-              {formatCurrency(totalPatrimonio)}
-            </strong>
-          </div>
-          <div className="rounded-xl border border-dark-border bg-dark-surface px-4 py-3">
-            <span className="block text-xs font-semibold uppercase tracking-wide text-dark-text-muted">
-              Investimentos
-            </span>
-            <strong className="mt-1 block text-lg tabular-nums text-dark-text">
-              {formatCurrency(summary.totalMarketValue)}
-            </strong>
-          </div>
-          <div
-            className={`rounded-xl border px-4 py-3 ${
-              totalPositive ? 'border-emerald-500/20 bg-emerald-500/10' : 'border-rose-500/20 bg-rose-500/10'
-            }`}
-          >
-            <span
-              className={`block text-xs font-semibold uppercase tracking-wide ${
-                totalPositive ? 'text-emerald-300/80' : 'text-rose-300/80'
-              }`}
-            >
-              Rendimento
-            </span>
-            <strong className="mt-1 block text-lg">
-              <GainLabel
-                gain={summary.totalGain}
-                pct={summary.totalInvested > 0 ? summary.totalGainPct : null}
-                className="text-lg font-bold"
-              />
-            </strong>
-          </div>
-          <div className="rounded-xl border border-dark-border bg-dark-surface px-4 py-3">
-            <span className="block text-xs font-semibold uppercase tracking-wide text-dark-text-muted">Reserva</span>
-            <strong className="mt-1 block text-lg tabular-nums text-dark-text">{formatCurrency(reserveBalance)}</strong>
-            {emergencyTarget > 0 && (
-              <span className="mt-0.5 block text-[11px] text-dark-text-muted">{emergencyProgress.toFixed(0)}% da meta</span>
-            )}
-          </div>
-        </div>
+    <div className="space-y-4">
+      <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile
+          label="Patrimônio total"
+          value={formatCurrency(netWorth)}
+          detail="investimentos + reserva + metas"
+          tone="accent"
+        />
+        <StatTile
+          label="Investimentos"
+          value={formatCurrency(totalMarketValue)}
+          detail={totalInvested > 0 ? `${formatCurrency(totalInvested)} aportados` : undefined}
+        />
+        <StatTile
+          label="Rendimento"
+          value={`${totalGain >= 0 ? '+' : '−'} ${formatCurrency(Math.abs(totalGain))}`}
+          detail={
+            totalInvested > 0
+              ? `${summary.totalGainPct >= 0 ? '+' : ''}${summary.totalGainPct.toFixed(1)}% sobre o aportado`
+              : undefined
+          }
+          tone={totalGain >= 0 ? 'positive' : 'negative'}
+        />
+        <StatTile
+          label="Reserva e metas"
+          value={formatCurrency(reserveBalance + goalsBalance)}
+          detail={
+            activeGoals > 0
+              ? `${formatCurrency(reserveBalance)} de reserva · ${activeGoals} meta${activeGoals > 1 ? 's' : ''} em aberto`
+              : `${formatCurrency(reserveBalance)} de reserva`
+          }
+        />
+      </div>
 
-        {totalPatrimonio > 0 && (
-          <div className="rounded-xl border border-dark-border bg-dark-card p-4">
-            <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-dark-text-muted">Alocação do patrimônio</h3>
+      {netWorth > 0 && (
+        <Panel>
+          <PanelHeader title="Alocação do patrimônio" />
+          <div className="mt-4">
             <SegmentedBar
               segments={[
                 ...summary.classes.map((assetClass) => ({
@@ -573,168 +388,99 @@ export function InvestmentsManager({
                   color: assetClass.color,
                 })),
                 ...(reserveBalance > 0
-                  ? [{ id: 'reserva', label: 'Reserva de emergência', value: reserveBalance, color: RESERVE_COLOR }]
+                  ? [
+                      {
+                        id: 'reserva',
+                        label: 'Reserva de emergência',
+                        value: reserveBalance,
+                        color: RESERVE_COLOR,
+                      },
+                    ]
+                  : []),
+                ...(goalsBalance > 0
+                  ? [{ id: 'metas', label: 'Metas', value: goalsBalance, color: GOALS_COLOR }]
                   : []),
               ]}
-              total={totalPatrimonio}
+              total={netWorth}
               height={12}
             />
           </div>
-        )}
+        </Panel>
+      )}
 
-        <ReserveSection
-          emergencyFund={emergencyFund}
-          addTransaction={addEmergencyFundTransaction}
-          removeTransaction={removeEmergencyFundTransaction}
-          setTargetMonths={setEmergencyFundTargetMonths}
-          target={emergencyTarget}
-          remaining={emergencyRemaining}
-          progress={emergencyProgress}
+      <div className="grid gap-4 xl:grid-cols-2">
+        <ReserveSection />
+        <GoalsSection />
+      </div>
+
+      <Panel>
+        <PanelHeader
+          title="Posições"
+          icon={<Landmark size={16} />}
+          description="Cada posição tem um livro-razão de aportes e um valor de mercado que você atualiza."
+          actions={
+            !showForm && (
+              <SecondaryButton onClick={() => setShowForm(true)}>
+                <Plus size={14} />
+                Nova posição
+              </SecondaryButton>
+            )
+          }
         />
 
-        <div className="rounded-xl border border-dark-border bg-dark-card p-4">
-          <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-dark-text">
-            <PlusCircle size={16} className="text-primary-400" />
-            Nova posição
-          </h3>
-          <div className="space-y-3">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                onKeyDown={(event) => event.key === 'Enter' && handleAdd()}
-                placeholder="Nome — ex.: CDB Itaú 110% CDI"
-                className="w-full rounded-lg border border-dark-border bg-dark-input px-3 py-2.5 text-sm text-dark-text outline-none transition-colors placeholder:text-dark-text-muted focus:border-primary-500 focus:ring-2 focus:ring-primary-500/25"
-              />
-              <input
-                value={institution}
-                onChange={(event) => setInstitution(event.target.value)}
-                onKeyDown={(event) => event.key === 'Enter' && handleAdd()}
-                placeholder="Instituição (opcional)"
-                className="w-full rounded-lg border border-dark-border bg-dark-input px-3 py-2.5 text-sm text-dark-text outline-none transition-colors placeholder:text-dark-text-muted focus:border-primary-500 focus:ring-2 focus:ring-primary-500/25"
-              />
-            </div>
+        {showForm && <NewHoldingForm onClose={() => setShowForm(false)} />}
 
-            <div>
-              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-dark-text-muted">
-                Classe de ativo
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {classes.map((assetClass) => (
-                  <button
-                    key={assetClass.id}
-                    type="button"
-                    onClick={() => setAssetClassId(assetClass.id)}
-                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all ${
-                      selectedClassId === assetClass.id
-                        ? 'border-primary-500 bg-primary-500/20 text-primary-200'
-                        : 'border-transparent bg-dark-input text-dark-text-muted hover:text-dark-text hover:bg-white/10'
-                    }`}
-                  >
-                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: assetClass.color }} />
-                    {assetClass.name}
-                  </button>
-                ))}
-                {showNewClass ? (
-                  <span className="inline-flex items-center gap-1 rounded-lg border border-primary-500/40 bg-dark-input px-2 py-1">
-                    <input
-                      autoFocus
-                      value={newClassName}
-                      onChange={(event) => setNewClassName(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') handleAddClass()
-                        if (event.key === 'Escape') setShowNewClass(false)
-                      }}
-                      placeholder="Nova classe"
-                      className="w-28 bg-transparent text-xs text-dark-text outline-none placeholder:text-dark-text-muted"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddClass}
-                      className="text-primary-300 hover:text-primary-200"
-                      title="Criar classe"
-                    >
-                      <Plus size={13} />
-                    </button>
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setShowNewClass(true)}
-                    className="inline-flex items-center gap-1 rounded-lg border border-dashed border-dark-border px-3 py-1.5 text-xs font-medium text-dark-text-muted transition-colors hover:border-primary-500/50 hover:text-primary-300"
-                  >
-                    <Plus size={12} />
-                    Nova classe
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-              <label className="block sm:flex-1">
-                <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-dark-text-muted">
-                  Valor aplicado hoje
-                </span>
-                <CurrencyInput value={initialAmount} onChange={setInitialAmount} className="!py-2.5" />
-              </label>
-              <button
-                type="button"
-                onClick={handleAdd}
-                disabled={!name.trim() || !selectedClassId}
-                className="inline-flex h-[42px] items-center justify-center gap-1.5 rounded-lg bg-primary-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <Plus size={16} />
-                Adicionar posição
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {summary.classes.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-dark-border bg-dark-card/40 px-4 py-10 text-center">
-            <Landmark size={26} className="mx-auto mb-2 text-dark-text-muted/50" />
-            <p className="text-sm text-dark-text-muted">
-              Cadastre sua primeira posição para acompanhar seu patrimônio e a rentabilidade por classe de ativo.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {summary.classes.map((assetClass) => (
-                <div key={assetClass.id} className="rounded-xl border border-dark-border bg-dark-card">
+        <div className="mt-4">
+          {summary.classes.length === 0 ? (
+            <EmptyState
+              icon={<Landmark size={26} />}
+              title="Nenhuma posição cadastrada"
+              action={
+                !showForm && (
+                  <PrimaryButton onClick={() => setShowForm(true)}>
+                    <Plus size={15} />
+                    Adicionar a primeira
+                  </PrimaryButton>
+                )
+              }
+            >
+              Cadastre onde seu dinheiro está para acompanhar patrimônio, alocação e rentabilidade
+              por classe de ativo.
+            </EmptyState>
+          ) : (
+            <div className="space-y-4">
+              {summary.classes.map((assetClass) => (
+                <div key={assetClass.id} className="rounded-xl border border-dark-border">
                   <div className="flex flex-wrap items-center gap-3 border-b border-dark-border/60 px-4 py-3">
-                    <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: assetClass.color }} />
-                    <h3 className="text-sm font-bold text-dark-text">{assetClass.name}</h3>
-                    <span className="rounded-full bg-dark-input px-2 py-0.5 text-[11px] font-medium text-dark-text-muted">
-                      {assetClass.allocationPct.toFixed(0)}% do patrimônio
-                    </span>
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: assetClass.color }}
+                    />
+                    <h4 className="text-sm font-semibold text-dark-text">{assetClass.name}</h4>
+                    <Tag>{assetClass.allocationPct.toFixed(0)}% do patrimônio</Tag>
                     <div className="ml-auto text-right">
                       <p className="text-sm font-semibold tabular-nums text-dark-text">
                         {formatCurrency(assetClass.marketValue)}
                       </p>
                       <p className="text-[11px]">
-                        <GainLabel gain={assetClass.gain} pct={assetClass.invested > 0 ? assetClass.gainPct : null} />
+                        <GainLabel
+                          gain={assetClass.gain}
+                          pct={assetClass.invested > 0 ? assetClass.gainPct : null}
+                        />
                       </p>
                     </div>
                   </div>
                   <div className="space-y-2 p-3">
                     {assetClass.holdings.map((holding) => (
-                      <HoldingRow
-                        key={holding.id}
-                        holding={holding}
-                        classes={classes}
-                        updateHolding={updateHolding}
-                        removeHolding={removeHolding}
-                        addTransaction={addTransaction}
-                        removeTransaction={removeTransaction}
-                        setMarketValue={setMarketValue}
-                      />
+                      <HoldingRow key={holding.id} holding={holding} />
                     ))}
                   </div>
                 </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      </Panel>
+    </div>
   )
 }

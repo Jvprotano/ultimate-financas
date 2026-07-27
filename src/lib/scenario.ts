@@ -1,0 +1,389 @@
+import type {
+  BudgetArea,
+  BudgetBucket,
+  CostCategory,
+  CostItem,
+  DeductionItem,
+  DiversificationSlice,
+  EmergencyFundState,
+  FinanceScenario,
+  FinanceScenarioData,
+  SalaryInputMode,
+  WantItem,
+} from '../types'
+import { BUDGET_MODELS, DEFAULT_DIVERSIFICATION, INVESTMENT_DEDUCTION_TYPES } from '../types/constants'
+import { finiteNumber, nowIso, normalizeText, uid } from './shared'
+
+const EMPTY_REALIZED: Record<BudgetArea, number> = { necessidades: 0, desejos: 0, investimentos: 0 }
+
+// ---------------------------------------------------------------------------
+// Normalização
+// ---------------------------------------------------------------------------
+
+/** Parte do custo que sai do seu bolso (o rateio com terceiros fica de fora). */
+export function personalCostValue(cost: CostItem): number {
+  const shared = Math.max(0, Math.min(finiteNumber(cost.sharedAmount), cost.value))
+  return Math.max(0, cost.value - shared)
+}
+
+function normalizeCost(raw: Partial<CostItem> | undefined): CostItem {
+  const value = Math.max(0, finiteNumber(raw?.value))
+  return {
+    id: raw?.id || uid(),
+    name: raw?.name?.trim() || 'Custo',
+    value,
+    category: (raw?.category as CostCategory) || 'outros',
+    sharedAmount: raw?.sharedAmount ? Math.max(0, Math.min(finiteNumber(raw.sharedAmount), value)) : undefined,
+    sharedWith: raw?.sharedWith?.trim() || undefined,
+  }
+}
+
+export function normalizeScenario(scenario: FinanceScenario): FinanceScenario {
+  // Cenários antigos podem trazer cartões/reserva embutidos: hoje são módulos
+  // globais e o campo é descartado na normalização.
+  const rest = { ...scenario } as Partial<
+    Record<'creditCardEntries' | 'creditCardSettings' | 'emergencyFund', unknown>
+  > &
+    FinanceScenario
+  delete rest.creditCardEntries
+  delete rest.creditCardSettings
+  delete rest.emergencyFund
+
+  return {
+    ...rest,
+    salaryNet: finiteNumber(scenario.salaryNet),
+    salaryInputMode:
+      scenario.salaryInputMode === 'take_home' ? 'take_home' : 'before_payroll_deductions',
+    costs: Array.isArray(scenario.costs) ? scenario.costs.map(normalizeCost) : [],
+    wants: Array.isArray(scenario.wants)
+      ? scenario.wants.map((want) => ({
+          id: want.id || uid(),
+          name: want.name || 'Desejo',
+          plannedAmount: Math.max(0, finiteNumber(want.plannedAmount)),
+        }))
+      : [],
+    deductions: Array.isArray(scenario.deductions)
+      ? scenario.deductions.map((deduction) => ({
+          ...deduction,
+          value: finiteNumber(deduction.value),
+          employerContribution: finiteNumber(deduction.employerContribution),
+        }))
+      : [],
+    selectedModelId: BUDGET_MODELS.some((m) => m.id === scenario.selectedModelId)
+      ? scenario.selectedModelId
+      : '50-30-20',
+    diversification: Array.isArray(scenario.diversification)
+      ? scenario.diversification
+      : DEFAULT_DIVERSIFICATION,
+    customModel: scenario.customModel ?? { n: 50, d: 30, i: 20 },
+  }
+}
+
+export function createDefaultScenario(name = 'Atual'): FinanceScenario {
+  const timestamp = nowIso()
+
+  return {
+    id: uid(),
+    name,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    salaryNet: 0,
+    salaryInputMode: 'before_payroll_deductions',
+    costs: [],
+    wants: [],
+    deductions: [],
+    selectedModelId: '50-30-20',
+    diversification: DEFAULT_DIVERSIFICATION,
+    customModel: { n: 50, d: 30, i: 20 },
+  }
+}
+
+export function cloneScenario(source: FinanceScenario, name: string): FinanceScenario {
+  const timestamp = nowIso()
+  return { ...structuredClone(source), id: uid(), name, createdAt: timestamp, updatedAt: timestamp }
+}
+
+// ---------------------------------------------------------------------------
+// Migração do formato v2
+// ---------------------------------------------------------------------------
+
+interface LegacyWantItem {
+  id: string
+  name: string
+  mode?: 'percentage' | 'fixed'
+  percentage?: number
+  fixedAmount?: number
+}
+
+interface LegacyAllocationTransfer {
+  from: BudgetArea
+  to: BudgetArea
+  amount: number
+}
+
+export interface LegacyScenario {
+  id?: string
+  name?: string
+  createdAt?: string
+  updatedAt?: string
+  salaryNet?: number
+  salaryInputMode?: SalaryInputMode
+  costs?: CostItem[]
+  wants?: LegacyWantItem[]
+  deductions?: DeductionItem[]
+  selectedModelId?: string
+  diversification?: DiversificationSlice[]
+  customModel?: { n: number; d: number; i: number }
+  allocationTransfers?: LegacyAllocationTransfer[]
+  emergencyFundCurrent?: number
+}
+
+function resolveModelPercentages(
+  selectedModelId?: string,
+  customModel?: { n: number; d: number; i: number },
+) {
+  const model = BUDGET_MODELS.find((m) => m.id === selectedModelId) ?? BUDGET_MODELS[0]
+  if (model.id === 'custom' && customModel) {
+    return { necessidades: customModel.n, desejos: customModel.d, investimentos: customModel.i }
+  }
+  return {
+    necessidades: model.necessidades,
+    desejos: model.desejos,
+    investimentos: model.investimentos,
+  }
+}
+
+/**
+ * Converte um cenário v2 para o v3. Desejos percentuais viram valores planejados
+ * equivalentes ao que a fórmula antiga exibia (incluindo o efeito das
+ * transferências de meta, que deixam de existir no v3).
+ */
+export function convertLegacyScenario(legacy: LegacyScenario): FinanceScenario {
+  const timestamp = nowIso()
+  const salaryNet = finiteNumber(legacy.salaryNet)
+  const salaryInputMode: SalaryInputMode =
+    legacy.salaryInputMode === 'take_home' ? 'take_home' : 'before_payroll_deductions'
+  const deductions = Array.isArray(legacy.deductions) ? legacy.deductions : []
+  const totalDeductions = deductions.reduce((sum, d) => sum + finiteNumber(d.value), 0)
+  const investmentDeductions = deductions
+    .filter((d) => INVESTMENT_DEDUCTION_TYPES.includes(d.type))
+    .reduce((sum, d) => sum + finiteNumber(d.value), 0)
+  const benefitDeductions = totalDeductions - investmentDeductions
+  const availableForBudget =
+    salaryInputMode === 'before_payroll_deductions'
+      ? Math.max(0, salaryNet - benefitDeductions)
+      : salaryNet + investmentDeductions
+
+  const model = resolveModelPercentages(legacy.selectedModelId, legacy.customModel)
+  const allocation: Record<BudgetArea, number> = {
+    necessidades: (availableForBudget * model.necessidades) / 100,
+    desejos: (availableForBudget * model.desejos) / 100,
+    investimentos: (availableForBudget * model.investimentos) / 100,
+  }
+
+  for (const transfer of legacy.allocationTransfers ?? []) {
+    if (!transfer || transfer.from === transfer.to) continue
+    const amount = Math.min(finiteNumber(transfer.amount), allocation[transfer.from] ?? 0)
+    if (amount <= 0) continue
+    allocation[transfer.from] -= amount
+    allocation[transfer.to] += amount
+  }
+
+  const legacyWants = Array.isArray(legacy.wants) ? legacy.wants : []
+  const fixedWantsAmount = legacyWants
+    .filter((w) => w.mode === 'fixed')
+    .reduce((sum, w) => sum + finiteNumber(w.fixedAmount), 0)
+  const variableWantsBase = Math.max(0, allocation.desejos - fixedWantsAmount)
+
+  const wants: WantItem[] = legacyWants.map((want) => ({
+    id: want.id || uid(),
+    name: want.name || 'Desejo',
+    plannedAmount:
+      want.mode === 'fixed'
+        ? Math.max(0, finiteNumber(want.fixedAmount))
+        : Math.round(variableWantsBase * finiteNumber(want.percentage)) / 100,
+  }))
+
+  return normalizeScenario({
+    id: legacy.id || uid(),
+    name: legacy.name || 'Atual',
+    createdAt: legacy.createdAt || timestamp,
+    updatedAt: timestamp,
+    salaryNet,
+    salaryInputMode,
+    costs: Array.isArray(legacy.costs) ? legacy.costs : [],
+    wants,
+    deductions,
+    selectedModelId: legacy.selectedModelId || '50-30-20',
+    diversification: Array.isArray(legacy.diversification)
+      ? legacy.diversification
+      : DEFAULT_DIVERSIFICATION,
+    customModel: legacy.customModel ?? { n: 50, d: 30, i: 20 },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Cálculo
+// ---------------------------------------------------------------------------
+
+function getSelectedModel(state: FinanceScenarioData) {
+  const model = BUDGET_MODELS.find((m) => m.id === state.selectedModelId) ?? BUDGET_MODELS[0]
+  if (model.id === 'custom') {
+    return {
+      ...model,
+      necessidades: state.customModel.n,
+      desejos: state.customModel.d,
+      investimentos: state.customModel.i,
+    }
+  }
+  return model
+}
+
+function isFixedIncomeSlice(name: string) {
+  const normalized = normalizeText(name)
+  return (
+    normalized.includes('renda fixa') ||
+    normalized.includes('tesouro') ||
+    normalized.includes('selic') ||
+    normalized.includes('cdb') ||
+    normalized.includes('poupanca') ||
+    normalized.includes('liquidez')
+  )
+}
+
+function buildBucket(target: number, actual: number, realized: number): BudgetBucket {
+  return {
+    target,
+    actual,
+    realized,
+    diff: target - actual,
+    percentage: target > 0 ? (actual / target) * 100 : 0,
+  }
+}
+
+export type ScenarioMetrics = ReturnType<typeof calculateScenario>
+
+export function calculateScenario(
+  state: FinanceScenario,
+  emergencyFund: EmergencyFundState,
+  /** Gasto pessoal já realizado no cartão, por área do orçamento. */
+  realizedByArea: Record<BudgetArea, number> = EMPTY_REALIZED,
+) {
+  const selectedModel = getSelectedModel(state)
+
+  // Custos: o orçamento enxerga apenas a sua parte; o valor cheio fica visível
+  // para você saber o tamanho real da conta e o quanto tem a receber.
+  const totalCostsGross = state.costs.reduce((sum, c) => sum + c.value, 0)
+  const totalCosts = state.costs.reduce((sum, c) => sum + personalCostValue(c), 0)
+  const totalCostsShared = totalCostsGross - totalCosts
+
+  const totalDeductions = state.deductions.reduce((sum, d) => sum + d.value, 0)
+  const investmentDeductions = state.deductions
+    .filter((d) => INVESTMENT_DEDUCTION_TYPES.includes(d.type))
+    .reduce((sum, d) => sum + d.value, 0)
+  const employerInvestmentContributions = state.deductions
+    .filter((d) => INVESTMENT_DEDUCTION_TYPES.includes(d.type))
+    .reduce((sum, d) => sum + (d.employerContribution ?? 0), 0)
+  const benefitDeductions = totalDeductions - investmentDeductions
+
+  // "Cai na conta": o que sobra do salário depois de toda a folha.
+  const paycheckInAccount =
+    state.salaryInputMode === 'before_payroll_deductions'
+      ? Math.max(0, state.salaryNet - totalDeductions)
+      : state.salaryNet
+
+  // Base do orçamento: benefícios (VA, plano etc.) ficam fora porque não são
+  // dinheiro livre; previdência descontada em folha continua contando, porque
+  // é investimento seu.
+  const availableForBudget =
+    state.salaryInputMode === 'before_payroll_deductions'
+      ? Math.max(0, state.salaryNet - benefitDeductions)
+      : state.salaryNet + investmentDeductions
+
+  const budgetAllocation: Record<BudgetArea, number> = {
+    necessidades: (availableForBudget * selectedModel.necessidades) / 100,
+    desejos: (availableForBudget * selectedModel.desejos) / 100,
+    investimentos: (availableForBudget * selectedModel.investimentos) / 100,
+  }
+
+  const totalWantsAmount = state.wants.reduce((sum, w) => sum + w.plannedAmount, 0)
+
+  // Quanto ainda precisa ser aportado pela conta, além do que já sai em folha.
+  const directInvestmentTarget = Math.max(0, budgetAllocation.investimentos - investmentDeductions)
+  const totalPlannedInvestment = investmentDeductions + directInvestmentTarget
+  const savingsRate =
+    availableForBudget > 0 ? (totalPlannedInvestment / availableForBudget) * 100 : 0
+
+  // Saldo se o plano inteiro for executado: custos pagos, desejos gastos e
+  // aporte direto feito por completo.
+  const balanceAfterPlan =
+    paycheckInAccount - totalCosts - totalWantsAmount - directInvestmentTarget
+
+  const budgetComparison: Record<BudgetArea, BudgetBucket> = {
+    necessidades: buildBucket(
+      budgetAllocation.necessidades,
+      totalCosts,
+      realizedByArea.necessidades,
+    ),
+    desejos: buildBucket(budgetAllocation.desejos, totalWantsAmount, realizedByArea.desejos),
+    investimentos: buildBucket(
+      budgetAllocation.investimentos,
+      totalPlannedInvestment,
+      realizedByArea.investimentos,
+    ),
+  }
+
+  const totalDiversificationPercentage = state.diversification.reduce(
+    (sum, slice) => sum + slice.percentage,
+    0,
+  )
+  const investmentAllocation = state.diversification.map((slice) => ({
+    ...slice,
+    amount: (directInvestmentTarget * slice.percentage) / 100,
+  }))
+  const fixedIncomeMonthlyAllocation = investmentAllocation
+    .filter((slice) => isFixedIncomeSlice(slice.name))
+    .reduce((sum, slice) => sum + slice.amount, 0)
+
+  const costsByCategory = new Map<CostCategory, number>()
+  for (const cost of state.costs) {
+    costsByCategory.set(cost.category, (costsByCategory.get(cost.category) || 0) + personalCostValue(cost))
+  }
+
+  const emergencyFundTarget = totalCosts * emergencyFund.targetMonths
+  const emergencyFundRemaining = Math.max(0, emergencyFundTarget - emergencyFund.current)
+  const emergencyFundProgress =
+    emergencyFundTarget > 0 ? Math.min(100, (emergencyFund.current / emergencyFundTarget) * 100) : 0
+  const emergencyFundMonthsToGoal =
+    emergencyFundRemaining > 0 && fixedIncomeMonthlyAllocation > 0
+      ? Math.ceil(emergencyFundRemaining / fixedIncomeMonthlyAllocation)
+      : 0
+
+  return {
+    selectedModel,
+    totalCosts,
+    totalCostsGross,
+    totalCostsShared,
+    totalDeductions,
+    investmentDeductions,
+    employerInvestmentContributions,
+    benefitDeductions,
+    paycheckInAccount,
+    availableForBudget,
+    budgetAllocation,
+    totalWantsAmount,
+    directInvestmentTarget,
+    totalPlannedInvestment,
+    savingsRate,
+    balanceAfterPlan,
+    budgetComparison,
+    totalDiversificationPercentage,
+    investmentAllocation,
+    fixedIncomeMonthlyAllocation,
+    costsByCategory,
+    emergencyFundTarget,
+    emergencyFundRemaining,
+    emergencyFundProgress,
+    emergencyFundMonthsToGoal,
+  }
+}

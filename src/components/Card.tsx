@@ -6,8 +6,6 @@ interface CardProps {
   icon: ReactNode
   children: ReactNode
   className?: string
-  /** Mantido por compatibilidade; o estilo atual usa ícones neutros. */
-  accentColor?: string
   collapsible?: boolean
   storageKey?: string
   defaultCollapsed?: boolean
@@ -40,28 +38,46 @@ export function Card({
     if (storageKey) {
       try {
         localStorage.setItem(`uf_collapsed_${storageKey}`, String(next))
-      } catch { /* quota exceeded */ }
+      } catch {
+        /* quota exceeded */
+      }
     }
   }
 
+  const HeaderTag = collapsible ? 'button' : 'div'
+
   return (
-    <section className={`overflow-hidden rounded-xl border border-dark-border bg-dark-card ${className}`}>
-      <div
-        className={`flex items-center gap-2.5 px-5 py-4 ${collapsed ? '' : 'border-b border-dark-border-subtle'} ${
-          collapsible ? 'cursor-pointer select-none transition-colors hover:bg-dark-hover/40' : ''
-        }`}
-        onClick={collapsible ? toggleCollapse : undefined}
+    <section
+      className={`overflow-hidden rounded-xl border border-dark-border bg-dark-card ${className}`}
+    >
+      <HeaderTag
+        {...(collapsible
+          ? { type: 'button' as const, onClick: toggleCollapse, 'aria-expanded': !collapsed }
+          : {})}
+        className={`flex w-full items-center gap-2.5 px-5 py-4 text-left ${
+          collapsed ? '' : 'border-b border-dark-border-subtle'
+        } ${collapsible ? 'select-none transition-colors hover:bg-dark-hover/40' : ''}`}
       >
         <span className="shrink-0 text-dark-text-muted">{icon}</span>
         <h2 className="flex-1 text-[15px] font-semibold tracking-tight text-dark-text">{title}</h2>
-        {headerExtra && <div onClick={(e) => e.stopPropagation()}>{headerExtra}</div>}
+        {headerExtra && (
+          <span
+            onClick={(event) => event.stopPropagation()}
+            className="shrink-0"
+            role="presentation"
+          >
+            {headerExtra}
+          </span>
+        )}
         {collapsible && (
           <ChevronDown
             size={16}
-            className={`shrink-0 text-dark-text-muted transition-transform duration-200 ${collapsed ? '-rotate-90' : ''}`}
+            className={`shrink-0 text-dark-text-muted transition-transform duration-200 ${
+              collapsed ? '-rotate-90' : ''
+            }`}
           />
         )}
-      </div>
+      </HeaderTag>
       {!collapsed && <div className="p-5">{children}</div>}
     </section>
   )

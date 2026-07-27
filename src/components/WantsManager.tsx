@@ -3,20 +3,10 @@ import { Heart, Plus, Trash2 } from 'lucide-react'
 import { Card } from './Card'
 import { CurrencyInput } from './CurrencyInput'
 import { HeaderMetric } from './HeaderMetric'
-import { Meter, PrimaryButton, SuggestionChip, } from './ui'
-import { inputClass } from '../utils'
-import type { WantItem } from '../types'
+import { MeterWithMarker, PrimaryButton, SuggestionChip } from './ui'
+import { formatCurrency, inputClass } from '../lib/format'
+import { useCardsStore, useMetrics, useScenarioStore } from '../context/financasStore'
 import { BUDGET_AREA_COLORS } from '../types/constants'
-import { formatCurrency } from '../utils'
-
-interface Props {
-  wants: WantItem[]
-  addWant: (name: string, plannedAmount?: number) => void
-  removeWant: (id: string) => void
-  updateWantAmount: (id: string, plannedAmount: number) => void
-  totalWantsAmount: number
-  desejosTarget: number
-}
 
 const SUGGESTIONS = [
   'Streaming',
@@ -29,17 +19,17 @@ const SUGGESTIONS = [
   'Presentes',
 ]
 
-export function WantsManager({
-  wants,
-  addWant,
-  removeWant,
-  updateWantAmount,
-  totalWantsAmount,
-  desejosTarget,
-}: Props) {
+export function WantsManager() {
+  const { wants, addWant, removeWant, updateWantAmount } = useScenarioStore()
+  const { totalWantsAmount, budgetAllocation, availableForBudget, selectedModel } = useMetrics()
+  const { summary } = useCardsStore()
+
   const [newName, setNewName] = useState('')
   const [newAmount, setNewAmount] = useState(0)
+
+  const desejosTarget = budgetAllocation.desejos
   const remaining = desejosTarget - totalWantsAmount
+  const realized = summary.personalByArea.desejos
 
   const handleAdd = () => {
     if (!newName.trim()) return
@@ -56,7 +46,13 @@ export function WantsManager({
       storageKey="wants"
       headerExtra={
         totalWantsAmount > 0 ? (
-          <HeaderMetric amount={totalWantsAmount} baseAmount={desejosTarget} label="Planejado" tone="slate" />
+          <HeaderMetric
+            amount={totalWantsAmount}
+            baseAmount={availableForBudget}
+            targetShare={selectedModel.desejos}
+            label="Planejado"
+            tone="slate"
+          />
         ) : undefined
       }
     >
@@ -64,12 +60,36 @@ export function WantsManager({
         {desejosTarget > 0 && (
           <div>
             <div className="mb-1.5 flex items-baseline justify-between text-xs">
-              <span className="text-dark-text-muted">Meta de desejos: {formatCurrency(desejosTarget)}</span>
-              <span className={`font-medium tabular-nums ${remaining >= 0 ? 'text-primary-400' : 'text-rose-400'}`}>
-                {remaining >= 0 ? `${formatCurrency(remaining)} livres` : `${formatCurrency(-remaining)} acima`}
+              <span className="text-dark-text-muted">
+                Meta de desejos: {formatCurrency(desejosTarget)}
+              </span>
+              <span
+                className={`font-medium tabular-nums ${
+                  remaining >= 0 ? 'text-primary-400' : 'text-rose-400'
+                }`}
+              >
+                {remaining >= 0
+                  ? `${formatCurrency(remaining)} livres`
+                  : `${formatCurrency(-remaining)} acima`}
               </span>
             </div>
-            <Meter value={totalWantsAmount} max={desejosTarget} color={BUDGET_AREA_COLORS.desejos} />
+            {/* A barra é o planejado; o traço marca o que já saiu no cartão. */}
+            <MeterWithMarker
+              value={totalWantsAmount}
+              marker={realized}
+              max={desejosTarget}
+              color={BUDGET_AREA_COLORS.desejos}
+              markerLabel={`Já gasto no cartão: ${formatCurrency(realized)}`}
+            />
+            {realized > 0 && (
+              <p className="mt-1.5 text-[11px] text-dark-text-muted">
+                <span className="mr-1 inline-block h-2 w-[2px] translate-y-[1px] bg-dark-text/70" />
+                {formatCurrency(realized)} já gastos no cartão neste ciclo
+                {totalWantsAmount > 0 &&
+                  ` — ${((realized / totalWantsAmount) * 100).toFixed(0)}% do planejado`}
+                .
+              </p>
+            )}
           </div>
         )}
 
@@ -102,8 +122,13 @@ export function WantsManager({
         {wants.length > 0 && (
           <ul className="space-y-1.5">
             {wants.map((want) => (
-              <li key={want.id} className="group flex items-center justify-between gap-3 rounded-lg bg-dark-surface px-3 py-2">
-                <span className="min-w-0 flex-1 truncate text-sm font-medium text-dark-text">{want.name}</span>
+              <li
+                key={want.id}
+                className="group flex items-center justify-between gap-3 rounded-lg bg-dark-surface px-3 py-2"
+              >
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-dark-text">
+                  {want.name}
+                </span>
                 <div className="flex shrink-0 items-center gap-1.5">
                   <div className="w-32">
                     <CurrencyInput
@@ -114,7 +139,7 @@ export function WantsManager({
                   </div>
                   <button
                     onClick={() => removeWant(want.id)}
-                    className="rounded-md p-1.5 text-dark-text-muted opacity-0 transition-all hover:bg-rose-500/10 hover:text-rose-400 group-hover:opacity-100"
+                    className="rounded-md p-1.5 text-dark-text-muted opacity-0 transition-all hover:bg-rose-500/10 hover:text-rose-400 focus-visible:opacity-100 group-hover:opacity-100"
                     aria-label={`Remover ${want.name}`}
                   >
                     <Trash2 size={14} />
@@ -127,8 +152,8 @@ export function WantsManager({
 
         {wants.length > 0 && desejosTarget > 0 && remaining < 0 && (
           <p className="text-xs font-medium text-rose-400">
-            Os desejos passam da meta em {formatCurrency(-remaining)}. Corte algo aqui ou escolha um modelo com mais
-            espaço para desejos.
+            Os desejos passam da meta em {formatCurrency(-remaining)}. Corte algo aqui ou escolha um
+            modelo com mais espaço para desejos.
           </p>
         )}
       </div>

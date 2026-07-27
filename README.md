@@ -1,84 +1,71 @@
-# Ultimate Financas
+# Ultimate Finanças
 
-Plataforma web de planejamento salarial e de investimentos. Organize seu orçamento, controle custos e defina a alocacao ideal dos seus investimentos — tudo em uma unica tela.
+Planejamento financeiro pessoal: orçamento do mês, patrimônio, cartões e o histórico do que realmente aconteceu — tudo em uma única tela, 100% no navegador.
 
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
 
-## Funcionalidades
+## As cinco abas
 
-- **Salario liquido** — input com formatacao em R$ brasileiro
-- **Descontos na fonte** — previdencia privada, plano de saude, VA, VT, seguro de vida
-- **Custos mensais** — 9 categorias com exemplos e sugestoes rapidas (moradia, contas, alimentacao, transporte, saude, educacao, lazer, dividas, outros)
-- **Modelos de orçamento** — 50/30/20, 60/20/20, 70/20/10, 40/30/30 ou personalizado
-- **Videos explicativos** — cada modelo tem um link para video no YouTube explicando a regra
-- **Diversificacao de investimentos** — renda fixa, acoes, FIIs, cripto + adicionar novas classes de ativos
-- **Alocacao calculada** — mostra exatamente quanto investir em cada classe
-- **Cartoes e faturas** — controle da fatura atual e proxima, importacao por colagem do Sheets, totais por cartao, limite pessoal esperado e parcelas restantes
-- **Reserva de emergencia** — calculo automatico para 3, 6 e 12 meses, valor atual e prazo pela alocacao em renda fixa
-- **Dashboard com graficos** — pizza para orçamento e diversificacao, barras para custos por categoria
-- **Alertas inteligentes** — aviso quando custos excedem o disponivel, taxa de economia
-- **Persistencia local** — todos os dados salvos no localStorage do navegador (zero backend)
-- **Dark mode** — tema escuro por padrao, otimizado para uso prolongado
+| Aba | O que faz |
+| --- | --- |
+| **Visão geral** | Saldo livre do mês, metas por caixa (planejado × realizado no cartão), custos por categoria, alertas e comparação de cenários |
+| **Planejamento** | Renda e descontos em folha, custos fixos (com rateio), modelo de orçamento, desejos, plano de aportes e reserva |
+| **Investimentos** | Patrimônio: posições por classe de ativo, rentabilidade anualizada, reserva de emergência e metas com prazo |
+| **Cartões** | Fatura atual e próxima, parcelas e assinaturas geradas automaticamente, importação por colagem do Sheets, limite pessoal |
+| **Histórico** | Fechamento de mês: evolução do patrimônio, custo médio real e comparação entre meses |
 
-## Tech Stack
+## Conceitos
 
-| Tecnologia         | Uso                       |
-| ------------------ | ------------------------- |
-| **React 19**       | UI reativa com hooks      |
-| **TypeScript**     | Tipagem estatica          |
-| **Vite 8**         | Build e dev server        |
-| **Tailwind CSS 4** | Estilizacao utility-first |
-| **Recharts**       | Graficos interativos      |
-| **Lucide React**   | Icones                    |
+- **Base do orçamento** — a renda que vira meta. Benefícios (VA, plano de saúde) saem porque não são dinheiro livre; previdência descontada em folha continua contando, porque é investimento seu.
+- **Custo pessoal** — contas divididas com outra pessoa entram no orçamento só pela sua parte; o valor cheio fica visível para você saber o tamanho real da conta.
+- **Área do orçamento no cartão** — cada compra pode ser marcada como necessidade, desejo ou investimento. É o que liga a fatura ao plano: o traço nas barras de meta mostra o que já saiu de fato.
+- **Patrimônio** — investimentos + reserva de emergência + metas. É a base da alocação e do gráfico de evolução.
+- **Rentabilidade anualizada** — TIR sobre as datas dos aportes, para que quem aportou ontem e quem aportou há três anos não apareçam iguais. Histórico curto demais mostra `—`.
+- **Fechamento de mês** — congela os números de hoje como resultado do mês. Sem isso o app só conhece o plano, nunca o realizado.
 
 ## Como rodar
 
 ```bash
-# Instalar dependencias
 npm install
-
-# Rodar em desenvolvimento
-npm run dev
-
-# Build de producao
-npm run build
-
-# Preview do build
+npm run dev       # http://localhost:5173
+npm run build     # tsc -b && vite build
+npm run lint
 npm run preview
 ```
 
-## Estrutura do projeto
+## Atalhos de teclado
+
+`1`–`5` trocam de aba · `/` foca a busca da fatura · `?` lista os atalhos · `Esc` fecha o que estiver aberto.
+
+## Estrutura
 
 ```
 src/
-  components/       # Componentes React
-    BudgetModelSelector.tsx
-    Card.tsx
-    Charts.tsx
-    CostManager.tsx
-    CurrencyInput.tsx
-    DeductionsManager.tsx
-    DiversificationSelector.tsx
-    EmergencyFund.tsx
-    Summary.tsx
-  hooks/             # Custom hooks
-    useFinancas.ts   # Logica de negocios central
-    useLocalStorage.ts
-  types/             # Tipos e constantes
-    index.ts
-    constants.ts
-  utils.ts           # Formatacao (moeda, porcentagem)
-  App.tsx            # Layout principal
-  main.tsx           # Entry point
+  lib/               # cálculo puro, sem React
+    scenario.ts      # orçamento do mês, normalização e migração v2→v3
+    investments.ts   # patrimônio, alocação, TIR anualizada, metas
+    creditCards.ts   # faturas, parcelas, assinaturas
+    cardImport.ts    # leitura de planilha colada
+    history.ts       # snapshots mensais e estatísticas
+    backup.ts        # exportação, importação e cópias automáticas
+    format.ts        # moeda, meses, datas
+    shared.ts        # ids, datas, livro-razão
+  hooks/             # estado por domínio
+    useScenarios.ts  useCreditCards.ts  useInvestments.ts  useHistory.ts
+    useFinancas.ts   # compõe os quatro e calcula o que cruza domínios
+    useLocalStorage.ts  useKeyboardShortcuts.ts
+  context/           # FinancasProvider + hooks de leitura
+  components/        # ui.tsx é o design system; um arquivo por módulo
+  types/             # modelo de dados e constantes (paleta, categorias, modelos)
 ```
 
-## Privacidade
+## Persistência
 
-Nenhum dado e enviado para servidores externos. Todas as informacoes financeiras sao armazenadas exclusivamente no `localStorage` do seu navegador.
+Tudo vive no `localStorage` deste navegador — nenhum dado sai da máquina. Chaves em `uf_*`; as cópias automáticas semanais ficam em `ufbk_*` (fora do backup, para não crescerem sozinhas). Exporte um backup pelo menu `⋮` para guardar uma cópia, ou restaure uma das cópias automáticas por lá.
 
-## Licenca
+## Licença
 
 MIT

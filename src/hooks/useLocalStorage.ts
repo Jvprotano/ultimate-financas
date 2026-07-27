@@ -1,12 +1,26 @@
 import { useState, useEffect, useCallback } from 'react'
 
-export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((prev: T) => T)) => void] {
+/**
+ * Estado espelhado no localStorage.
+ *
+ * `initialValue` aceita uma função: as migrações deste app leem e normalizam o
+ * storage inteiro para montar o valor inicial, e passar isso como valor direto
+ * faria esse trabalho rodar em *todo* render — o `useState` só usa o resultado
+ * na primeira vez.
+ */
+export function useLocalStorage<T>(
+  key: string,
+  initialValue: T | (() => T),
+): [T, (value: T | ((prev: T) => T)) => void] {
   const [storedValue, setStoredValue] = useState<T>(() => {
+    const resolveInitial = () =>
+      initialValue instanceof Function ? (initialValue as () => T)() : initialValue
+
     try {
       const item = window.localStorage.getItem(key)
-      return item ? (JSON.parse(item) as T) : initialValue
+      return item ? (JSON.parse(item) as T) : resolveInitial()
     } catch {
-      return initialValue
+      return resolveInitial()
     }
   })
 
@@ -27,12 +41,17 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T 
 
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
-      if (e.key === key && e.newValue) {
-        try {
-          setStoredValue(JSON.parse(e.newValue) as T)
-        } catch {
-          // ignore parse errors
-        }
+      if (e.key !== key) return
+      // newValue null = chave removida em outra aba (ex.: "apagar tudo").
+      // Ignorar isso deixava esta aba exibindo dados fantasmas e os regravando.
+      if (e.newValue === null) {
+        window.location.reload()
+        return
+      }
+      try {
+        setStoredValue(JSON.parse(e.newValue) as T)
+      } catch {
+        // ignore parse errors
       }
     }
     window.addEventListener('storage', handleStorage)

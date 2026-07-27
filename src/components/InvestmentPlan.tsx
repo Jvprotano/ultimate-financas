@@ -1,24 +1,11 @@
 import { useState } from 'react'
-import { Plus, Target, Trash2 } from 'lucide-react'
+import { Plus, Scale, Target, Trash2 } from 'lucide-react'
 import { Card } from './Card'
 import { HeaderMetric } from './HeaderMetric'
-import { PrimaryButton, SuggestionChip, } from './ui'
-import { inputClass } from '../utils'
-import type { DiversificationSlice } from '../types'
+import { PrimaryButton, SecondaryButton, SuggestionChip } from './ui'
+import { formatCurrency, inputClass } from '../lib/format'
+import { useMetrics, useScenarioStore } from '../context/financasStore'
 import { DIVERSIFICATION_PRESET_COLORS } from '../types/constants'
-import { formatCurrency } from '../utils'
-
-interface Props {
-  diversification: DiversificationSlice[]
-  updateDiversification: (slices: DiversificationSlice[]) => void
-  addDiversificationSlice: (name: string, percentage: number, color: string) => void
-  removeDiversificationSlice: (id: string) => void
-  investmentAllocation: (DiversificationSlice & { amount: number })[]
-  investmentTarget: number
-  investmentDeductions: number
-  employerInvestmentContributions: number
-  directInvestmentTarget: number
-}
 
 const SUGGESTIONS = [
   'Renda Fixa',
@@ -29,43 +16,63 @@ const SUGGESTIONS = [
   'ETFs',
 ]
 
-export function InvestmentPlan({
-  diversification,
-  updateDiversification,
-  addDiversificationSlice,
-  removeDiversificationSlice,
-  investmentAllocation,
-  investmentTarget,
-  investmentDeductions,
-  employerInvestmentContributions,
-  directInvestmentTarget,
-}: Props) {
+export function InvestmentPlan() {
+  const {
+    diversification,
+    updateDiversification,
+    addDiversificationSlice,
+    removeDiversificationSlice,
+    normalizeDiversification,
+    assignRemainingToSlice,
+  } = useScenarioStore()
+  const {
+    investmentAllocation,
+    budgetAllocation,
+    investmentDeductions,
+    employerInvestmentContributions,
+    directInvestmentTarget,
+    totalPlannedInvestment,
+    availableForBudget,
+    selectedModel,
+  } = useMetrics()
+
   const [newName, setNewName] = useState('')
+  const investmentTarget = budgetAllocation.investimentos
   const totalPct = diversification.reduce((s, d) => s + d.percentage, 0)
   const unallocatedPct = 100 - totalPct
 
   const handlePercentageChange = (id: string, value: number) => {
     const clamped = Math.max(0, Math.min(100, value))
-    updateDiversification(diversification.map((d) => (d.id === id ? { ...d, percentage: clamped } : d)))
+    updateDiversification(
+      diversification.map((d) => (d.id === id ? { ...d, percentage: clamped } : d)),
+    )
   }
 
   const handleAdd = (name: string) => {
     if (!name.trim()) return
     const usedColors = new Set(diversification.map((d) => d.color))
-    const color = DIVERSIFICATION_PRESET_COLORS.find((c) => !usedColors.has(c)) || DIVERSIFICATION_PRESET_COLORS[0]
+    const color =
+      DIVERSIFICATION_PRESET_COLORS.find((c) => !usedColors.has(c)) ||
+      DIVERSIFICATION_PRESET_COLORS[0]
     addDiversificationSlice(name.trim(), 0, color)
     setNewName('')
   }
 
   return (
     <Card
-      title="Investimentos"
+      title="Plano de aportes"
       icon={<Target size={17} />}
       collapsible
-      storageKey="investments"
+      storageKey="investment-plan"
       headerExtra={
-        directInvestmentTarget > 0 ? (
-          <HeaderMetric amount={directInvestmentTarget} baseAmount={0} label="Aporte direto" tone="primary" />
+        totalPlannedInvestment > 0 ? (
+          <HeaderMetric
+            amount={totalPlannedInvestment}
+            baseAmount={availableForBudget}
+            targetShare={selectedModel.investimentos}
+            label="Investimento"
+            tone="primary"
+          />
         ) : undefined
       }
     >
@@ -74,7 +81,9 @@ export function InvestmentPlan({
           <dl className="space-y-1.5 rounded-lg border border-dark-border bg-dark-surface p-3 text-sm">
             <div className="flex justify-between">
               <dt className="text-dark-text-secondary">Meta do mês</dt>
-              <dd className="font-medium tabular-nums text-dark-text">{formatCurrency(investmentTarget)}</dd>
+              <dd className="font-medium tabular-nums text-dark-text">
+                {formatCurrency(investmentTarget)}
+              </dd>
             </div>
             {investmentDeductions > 0 && (
               <div className="flex justify-between">
@@ -86,12 +95,14 @@ export function InvestmentPlan({
             )}
             <div className="flex justify-between border-t border-dark-border-subtle pt-1.5">
               <dt className="font-medium text-dark-text">Aporte direto pela conta</dt>
-              <dd className="font-semibold tabular-nums text-primary-400">{formatCurrency(directInvestmentTarget)}</dd>
+              <dd className="font-semibold tabular-nums text-primary-400">
+                {formatCurrency(directInvestmentTarget)}
+              </dd>
             </div>
             {employerInvestmentContributions > 0 && (
               <p className="pt-1 text-xs text-dark-text-muted">
-                A empresa ainda contribui com {formatCurrency(employerInvestmentContributions)} de previdência — bônus
-                que não reduz sua meta.
+                A empresa ainda contribui com {formatCurrency(employerInvestmentContributions)} de
+                previdência — bônus que não reduz sua meta.
               </p>
             )}
           </dl>
@@ -125,20 +136,47 @@ export function InvestmentPlan({
                 <div key={slice.id} className="group">
                   <div className="mb-1.5 flex items-center justify-between gap-2">
                     <div className="flex min-w-0 flex-1 items-center gap-2">
-                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: slice.color }} />
-                      <span className="truncate text-sm font-medium text-dark-text">{slice.name}</span>
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: slice.color }}
+                      />
+                      <span className="truncate text-sm font-medium text-dark-text">
+                        {slice.name}
+                      </span>
+                      {unallocatedPct > 0 && (
+                        <button
+                          onClick={() => assignRemainingToSlice(slice.id)}
+                          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold text-dark-text-muted opacity-0 transition-all hover:bg-primary-500/10 hover:text-primary-300 focus-visible:opacity-100 group-hover:opacity-100"
+                          title={`Somar os ${unallocatedPct}% que sobraram aqui`}
+                        >
+                          +{unallocatedPct}%
+                        </button>
+                      )}
                       <button
                         onClick={() => removeDiversificationSlice(slice.id)}
-                        className="shrink-0 rounded p-1 text-dark-text-muted opacity-0 transition-all hover:text-rose-400 group-hover:opacity-100"
+                        className="shrink-0 rounded p-1 text-dark-text-muted opacity-0 transition-all hover:text-rose-400 focus-visible:opacity-100 group-hover:opacity-100"
                         aria-label={`Remover ${slice.name}`}
                       >
                         <Trash2 size={12} />
                       </button>
                     </div>
-                    <div className="flex shrink-0 items-center gap-3 text-sm">
-                      <span className="w-10 text-right text-xs font-medium tabular-nums text-dark-text-secondary">
-                        {slice.percentage}%
-                      </span>
+                    <div className="flex shrink-0 items-center gap-2 text-sm">
+                      <div className="relative w-14">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={slice.percentage}
+                          onChange={(e) =>
+                            handlePercentageChange(slice.id, parseInt(e.target.value) || 0)
+                          }
+                          className="w-full rounded-md border border-dark-border bg-dark-input py-1 pl-2 pr-4 text-right text-xs font-medium tabular-nums text-dark-text outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/25"
+                          aria-label={`Percentual de ${slice.name}`}
+                        />
+                        <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-dark-text-muted">
+                          %
+                        </span>
+                      </div>
                       <span className="w-24 text-right font-medium tabular-nums text-dark-text">
                         {allocation ? formatCurrency(allocation.amount) : '—'}
                       </span>
@@ -150,27 +188,38 @@ export function InvestmentPlan({
                     max="100"
                     value={slice.percentage}
                     onChange={(e) => handlePercentageChange(slice.id, parseInt(e.target.value))}
+                    aria-label={`Ajustar ${slice.name}`}
                     className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-dark-border accent-primary-500 [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-primary-400 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary-400"
                   />
                 </div>
               )
             })}
 
-            <div className="flex justify-between border-t border-dark-border-subtle pt-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-dark-border-subtle pt-3 text-sm">
               <span className="text-dark-text-secondary">Distribuído</span>
-              <span className={`font-semibold tabular-nums ${totalPct > 100 ? 'text-rose-400' : 'text-dark-text'}`}>
+              <span
+                className={`font-semibold tabular-nums ${
+                  totalPct > 100 ? 'text-rose-400' : 'text-dark-text'
+                }`}
+              >
                 {totalPct}%
-                {directInvestmentTarget > 0 && ` · ${formatCurrency((directInvestmentTarget * totalPct) / 100)}`}
+                {directInvestmentTarget > 0 &&
+                  ` · ${formatCurrency((directInvestmentTarget * Math.min(100, totalPct)) / 100)}`}
               </span>
             </div>
-            {totalPct > 100 && (
-              <p className="text-xs font-medium text-rose-400">A distribuição passa de 100%. Ajuste os pesos.</p>
-            )}
-            {unallocatedPct > 0 && totalPct <= 100 && directInvestmentTarget > 0 && (
-              <p className="text-xs text-dark-text-muted">
-                {unallocatedPct}% do aporte ({formatCurrency((directInvestmentTarget * unallocatedPct) / 100)}) ainda sem
-                destino.
-              </p>
+
+            {totalPct !== 100 && diversification.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <SecondaryButton onClick={normalizeDiversification}>
+                  <Scale size={14} />
+                  Ajustar para 100%
+                </SecondaryButton>
+                <span className="text-xs text-dark-text-muted">
+                  {totalPct > 100
+                    ? 'Reduz os pesos proporcionalmente.'
+                    : `Distribui os ${unallocatedPct}% restantes mantendo as proporções.`}
+                </span>
+              </div>
             )}
           </div>
         )}

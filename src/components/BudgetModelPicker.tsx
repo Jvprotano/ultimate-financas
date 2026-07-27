@@ -1,17 +1,9 @@
 import { SlidersHorizontal } from 'lucide-react'
 import { Card } from './Card'
+import { formatCurrency } from '../lib/format'
+import { useMetrics, useScenarioStore } from '../context/financasStore'
 import type { BudgetArea } from '../types'
 import { BUDGET_AREA_COLORS, BUDGET_AREA_LABELS, BUDGET_MODELS } from '../types/constants'
-import { formatCurrency } from '../utils'
-
-interface Props {
-  selectedModelId: string
-  setSelectedModelId: (id: string) => void
-  customModel: { n: number; d: number; i: number }
-  setCustomModel: (m: { n: number; d: number; i: number }) => void
-  availableForBudget: number
-  budgetAllocation: Record<BudgetArea, number>
-}
 
 const AREAS: { area: BudgetArea; field: 'n' | 'd' | 'i' }[] = [
   { area: 'necessidades', field: 'n' },
@@ -19,16 +11,13 @@ const AREAS: { area: BudgetArea; field: 'n' | 'd' | 'i' }[] = [
   { area: 'investimentos', field: 'i' },
 ]
 
-export function BudgetModelPicker({
-  selectedModelId,
-  setSelectedModelId,
-  customModel,
-  setCustomModel,
-  availableForBudget,
-  budgetAllocation,
-}: Props) {
+export function BudgetModelPicker() {
+  const { selectedModelId, setSelectedModelId, customModel, setCustomModel } = useScenarioStore()
+  const { availableForBudget, budgetAllocation } = useMetrics()
+
   const isCustom = selectedModelId === 'custom'
   const customTotal = customModel.n + customModel.d + customModel.i
+  const selectedModel = BUDGET_MODELS.find((m) => m.id === selectedModelId) ?? BUDGET_MODELS[0]
 
   const handleCustomChange = (field: 'n' | 'd' | 'i', value: number) => {
     setCustomModel({ ...customModel, [field]: Math.max(0, Math.min(100, value)) })
@@ -41,13 +30,23 @@ export function BudgetModelPicker({
       collapsible
       storageKey="budget-model"
       headerExtra={
-        <span className="text-sm font-semibold text-primary-400">
-          {BUDGET_MODELS.find((m) => m.id === selectedModelId)?.name}
-        </span>
+        <div className="text-right leading-tight">
+          <span className="block text-[10px] font-medium uppercase tracking-wider text-dark-text-muted">
+            Modelo
+          </span>
+          <span className="block text-sm font-semibold text-primary-400">{selectedModel.name}</span>
+          {/* Nos modelos prontos o próprio nome já são as metas; no personalizado
+              elas só apareceriam ao expandir o card. */}
+          {isCustom && (
+            <span className="block whitespace-nowrap text-[11px] tabular-nums text-dark-text-muted">
+              {AREAS.map(({ field }) => `${customModel[field]}%`).join(' / ')}
+            </span>
+          )}
+        </div>
       }
     >
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {BUDGET_MODELS.map((model) => {
             const isSelected = selectedModelId === model.id
             return (
@@ -60,10 +59,16 @@ export function BudgetModelPicker({
                     : 'border-dark-border bg-dark-surface hover:border-dark-text-muted/40'
                 }`}
               >
-                <span className={`block text-sm font-semibold ${isSelected ? 'text-primary-300' : 'text-dark-text'}`}>
+                <span
+                  className={`block whitespace-nowrap text-sm font-semibold ${
+                    isSelected ? 'text-primary-300' : 'text-dark-text'
+                  }`}
+                >
                   {model.name}
                 </span>
-                <span className="mt-0.5 block text-[11px] leading-tight text-dark-text-muted">{model.description}</span>
+                <span className="mt-0.5 block text-[11px] leading-tight text-dark-text-muted">
+                  {model.description}
+                </span>
               </button>
             )
           })}
@@ -75,7 +80,10 @@ export function BudgetModelPicker({
               {AREAS.map(({ area, field }) => (
                 <div key={field}>
                   <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-dark-text-secondary">
-                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: BUDGET_AREA_COLORS[area] }} />
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: BUDGET_AREA_COLORS[area] }}
+                    />
                     {BUDGET_AREA_LABELS[area]}
                   </label>
                   <div className="relative">
@@ -107,7 +115,10 @@ export function BudgetModelPicker({
             {AREAS.map(({ area }) => (
               <div key={area} className="rounded-lg bg-dark-surface px-3 py-2.5">
                 <span className="flex items-center gap-1.5 text-xs text-dark-text-muted">
-                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: BUDGET_AREA_COLORS[area] }} />
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={{ backgroundColor: BUDGET_AREA_COLORS[area] }}
+                  />
                   {BUDGET_AREA_LABELS[area]}
                 </span>
                 <strong className="mt-1 block text-sm font-semibold tabular-nums text-dark-text">

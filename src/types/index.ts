@@ -1,9 +1,25 @@
-export interface CostItem {
+// ---------------------------------------------------------------------------
+// Vocabulário base
+// ---------------------------------------------------------------------------
+
+export type BudgetArea = 'necessidades' | 'desejos' | 'investimentos'
+
+export type SalaryInputMode = 'before_payroll_deductions' | 'take_home'
+
+/**
+ * Movimentação de um livro-razão (reserva, posição de investimento, meta).
+ * Positivo = entrada/aporte, negativo = saída/retirada.
+ */
+export interface LedgerEntry {
   id: string
-  name: string
-  value: number
-  category: CostCategory
+  amount: number
+  date: string
+  note?: string
 }
+
+// ---------------------------------------------------------------------------
+// Orçamento do mês
+// ---------------------------------------------------------------------------
 
 export type CostCategory =
   | 'moradia'
@@ -16,18 +32,22 @@ export type CostCategory =
   | 'dividas'
   | 'outros'
 
+export interface CostItem {
+  id: string
+  name: string
+  /** Valor cheio da conta, incluindo a parte de terceiros. */
+  value: number
+  category: CostCategory
+  /** Parte bancada por outra pessoa — sai do seu orçamento. */
+  sharedAmount?: number
+  /** Com quem o custo é dividido. */
+  sharedWith?: string
+}
+
 export interface WantItem {
   id: string
   name: string
   plannedAmount: number
-}
-
-export interface DeductionItem {
-  id: string
-  name: string
-  value: number
-  type: DeductionType
-  employerContribution?: number
 }
 
 export type DeductionType =
@@ -37,6 +57,14 @@ export type DeductionType =
   | 'vale_transporte'
   | 'seguro_vida'
   | 'outros'
+
+export interface DeductionItem {
+  id: string
+  name: string
+  value: number
+  type: DeductionType
+  employerContribution?: number
+}
 
 export interface BudgetModel {
   id: string
@@ -54,34 +82,49 @@ export interface DiversificationSlice {
   color: string
 }
 
-export interface EmergencyFundTransaction {
-  id: string
-  /** Positivo = aporte, negativo = retirada. */
-  amount: number
-  date: string
-  note?: string
+export interface BudgetBucket {
+  target: number
+  /** O que o plano prevê gastar/investir. */
+  actual: number
+  /** O que já foi de fato gasto no cartão nesta área. */
+  realized: number
+  diff: number
+  percentage: number
 }
+
+// ---------------------------------------------------------------------------
+// Patrimônio — reserva, posições e metas (módulos globais, fora do cenário)
+// ---------------------------------------------------------------------------
 
 export interface EmergencyFundState {
   /** Saldo guardado — derivado da soma das transações. */
   current: number
   targetMonths: number
-  transactions: EmergencyFundTransaction[]
+  transactions: LedgerEntry[]
 }
 
-// ---------------------------------------------------------------------------
-// Investimentos (patrimônio) — módulo global, independente de cenário.
-// Uma classe de ativo (ex.: Renda Fixa) agrupa posições (ex.: CDB Itaú).
-// Cada posição tem um livro-razão de aportes/retiradas e um valor de mercado
-// atual; o rendimento é valor de mercado menos o total aportado.
-// ---------------------------------------------------------------------------
-
-export interface InvestmentTransaction {
+/** Objetivo com nome, valor-alvo e prazo — ex.: "Viagem Japão". */
+export interface FinancialGoal {
   id: string
-  /** Positivo = aporte, negativo = retirada. */
-  amount: number
-  date: string
-  note?: string
+  name: string
+  targetAmount: number
+  /** Mês-alvo no formato AAAA-MM. */
+  targetMonth?: string
+  color: string
+  transactions: LedgerEntry[]
+  createdAt: string
+  completedAt?: string
+}
+
+export interface GoalSummary extends FinancialGoal {
+  current: number
+  remaining: number
+  progress: number
+  /** Meses restantes até o mês-alvo (negativo = atrasada). */
+  monthsLeft: number | null
+  /** Quanto aportar por mês para chegar no prazo. */
+  suggestedMonthly: number
+  isComplete: boolean
 }
 
 export interface InvestmentAssetClass {
@@ -97,13 +140,15 @@ export interface InvestmentHolding {
   institution?: string
   /** Saldo atual de mercado, atualizado pelo usuário (marcação a mercado). */
   marketValue: number
-  transactions: InvestmentTransaction[]
+  transactions: LedgerEntry[]
 }
 
 export interface HoldingSummary extends InvestmentHolding {
   invested: number
   gain: number
   gainPct: number
+  /** Retorno anualizado estimado a partir das datas dos aportes. */
+  annualizedPct: number | null
 }
 
 export interface AssetClassSummary {
@@ -114,6 +159,7 @@ export interface AssetClassSummary {
   invested: number
   gain: number
   gainPct: number
+  /** Fatia do patrimônio total (inclui reserva e metas). */
   allocationPct: number
   holdings: HoldingSummary[]
 }
@@ -123,8 +169,16 @@ export interface InvestmentsSummary {
   totalInvested: number
   totalGain: number
   totalGainPct: number
+  /** Investimentos + reserva + metas. */
+  netWorth: number
+  reserveBalance: number
+  goalsBalance: number
   classes: AssetClassSummary[]
 }
+
+// ---------------------------------------------------------------------------
+// Cartões de crédito
+// ---------------------------------------------------------------------------
 
 export type CreditCardCycle = 'current' | 'next'
 
@@ -137,6 +191,8 @@ export interface CreditCardEntry {
   amount: number
   personalAmount: number
   remainingAmount: number
+  /** Área do orçamento que a compra consome — liga a fatura ao plano. */
+  budgetArea?: BudgetArea
   ownerName?: string
   ownerNote?: string
   installmentCurrent?: number
@@ -174,18 +230,15 @@ export interface CreditCardSummary {
   totalsByOwner: CardTotal[]
   currentEntriesCount: number
   nextEntriesCount: number
+  /** Gasto pessoal do ciclo atual por área do orçamento. */
+  personalByArea: Record<BudgetArea, number>
+  /** Gasto pessoal ainda sem área definida. */
+  unclassifiedPersonal: number
 }
 
-export interface BudgetBucket {
-  target: number
-  actual: number
-  diff: number
-  percentage: number
-}
-
-export type SalaryInputMode = 'before_payroll_deductions' | 'take_home'
-
-export type BudgetArea = 'necessidades' | 'desejos' | 'investimentos'
+// ---------------------------------------------------------------------------
+// Cenários
+// ---------------------------------------------------------------------------
 
 export interface FinanceScenarioData {
   salaryNet: number
@@ -214,4 +267,47 @@ export interface ScenarioSummary {
   totalPlannedInvestment: number
   balanceAfterPlan: number
   savingsRate: number
+}
+
+// ---------------------------------------------------------------------------
+// Histórico — o que de fato aconteceu em cada mês
+// ---------------------------------------------------------------------------
+
+export interface MonthlySnapshot {
+  id: string
+  /** Mês de competência no formato AAAA-MM. */
+  month: string
+  closedAt: string
+  scenarioId: string
+  scenarioName: string
+  availableForBudget: number
+  paycheckInAccount: number
+  costs: number
+  wants: number
+  invested: number
+  balance: number
+  savingsRate: number
+  costsByCategory: Partial<Record<CostCategory, number>>
+  /** Patrimônio no fechamento (investimentos + reserva + metas). */
+  netWorth: number
+  emergencyFund: number
+  cardPersonalTotal: number
+  note?: string
+}
+
+export interface HistoryPoint extends MonthlySnapshot {
+  /** Variação do patrimônio em relação ao mês fechado anterior. */
+  netWorthDelta: number | null
+  costsDelta: number | null
+}
+
+export interface HistoryStats {
+  months: number
+  averageCosts: number
+  averageWants: number
+  averageInvested: number
+  averageSavingsRate: number
+  netWorthGrowth: number
+  netWorthGrowthPct: number
+  bestSavingsMonth: MonthlySnapshot | null
 }

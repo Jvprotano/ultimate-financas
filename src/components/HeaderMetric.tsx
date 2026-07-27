@@ -1,10 +1,15 @@
-import { formatCurrency } from '../utils'
+import { formatCurrency } from '../lib/format'
 
 interface HeaderMetricProps {
   amount: number
+  /** Base do percentual — normalmente a base do orçamento. 0 esconde a fatia. */
   baseAmount: number
   label?: string
   tone?: 'primary' | 'emerald' | 'amber' | 'rose' | 'violet' | 'slate'
+  /** Percentual-alvo da área no modelo de orçamento, para comparar com a fatia. */
+  targetShare?: number
+  /** Sufixo do percentual exibido. */
+  baseLabel?: string
 }
 
 const toneClass = {
@@ -16,9 +21,19 @@ const toneClass = {
   slate: 'text-dark-text-secondary',
 }
 
-export function HeaderMetric({ amount, baseAmount, label, tone = 'primary' }: HeaderMetricProps) {
-  const percentage = baseAmount > 0 ? (amount / baseAmount) * 100 : 0
-  const showShare = baseAmount > 0 && Math.abs(amount - baseAmount) > 0.005
+export function HeaderMetric({
+  amount,
+  baseAmount,
+  label,
+  tone = 'primary',
+  targetShare,
+  baseLabel = 'da base',
+}: HeaderMetricProps) {
+  const share = baseAmount > 0 ? (amount / baseAmount) * 100 : 0
+  const target = targetShare ?? 0
+  const hasTarget = target > 0
+  // Meio ponto de tolerância: arredondamento não deve pintar a linha de vermelho.
+  const over = hasTarget && share - target > 0.5
 
   return (
     <div className="text-right leading-tight">
@@ -28,8 +43,15 @@ export function HeaderMetric({ amount, baseAmount, label, tone = 'primary' }: He
       <span className={`block text-sm font-semibold tabular-nums ${toneClass[tone]}`}>
         {formatCurrency(amount)}
       </span>
-      {showShare && (
-        <span className="block text-[11px] tabular-nums text-dark-text-muted">{percentage.toFixed(0)}% da base</span>
+      {baseAmount > 0 && (
+        <span
+          className={`block whitespace-nowrap text-[11px] tabular-nums ${
+            over ? 'text-rose-400' : 'text-dark-text-muted'
+          }`}
+        >
+          {share.toFixed(0)}% {baseLabel}
+          {hasTarget && ` · meta ${target.toFixed(0)}%`}
+        </span>
       )}
     </div>
   )

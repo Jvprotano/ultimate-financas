@@ -1,18 +1,25 @@
 import { AlertTriangle, ArrowRight, CheckCircle2, CreditCard, Shield } from 'lucide-react'
+import {
+  BarRow,
+  Meter,
+  MeterWithMarker,
+  Panel,
+  PanelHeader,
+  SegmentedBar,
+  StatTile,
+} from './ui'
+import { formatCurrency, formatMonths } from '../lib/format'
+import { useFinancasStore } from '../context/financasStore'
 import type { ScenarioMetrics } from '../hooks/useFinancas'
-import type { BudgetArea, CreditCardSummary, EmergencyFundState, ScenarioSummary } from '../types'
-import { BUDGET_AREA_COLORS, BUDGET_AREA_LABELS, CHART_PALETTE, COST_CATEGORY_COLORS, COST_CATEGORY_LABELS } from '../types/constants'
-import { formatCurrency, formatMonths } from '../utils'
-import { BarRow, Meter, SegmentedBar, StatTile } from './ui'
-
-interface Props {
-  metrics: ScenarioMetrics
-  creditCardSummary: CreditCardSummary
-  emergencyFund: EmergencyFundState
-  scenarioSummaries: ScenarioSummary[]
-  activeScenarioId: string
-  onGoToPlanning: () => void
-}
+import type { BudgetArea, CreditCardSummary } from '../types'
+import {
+  BUDGET_AREAS,
+  BUDGET_AREA_COLORS,
+  BUDGET_AREA_LABELS,
+  CHART_PALETTE,
+  COST_CATEGORY_COLORS,
+  COST_CATEGORY_LABELS,
+} from '../types/constants'
 
 interface Alert {
   id: string
@@ -21,11 +28,10 @@ interface Alert {
   severity: 'ok' | 'warning' | 'critical'
 }
 
-const AREAS: BudgetArea[] = ['necessidades', 'desejos', 'investimentos']
-
 function buildAlerts(metrics: ScenarioMetrics, creditCardSummary: CreditCardSummary): Alert[] {
   const alerts: Alert[] = []
-  const { budgetComparison, balanceAfterPlan, totalDiversificationPercentage, selectedModel } = metrics
+  const { budgetComparison, balanceAfterPlan, totalDiversificationPercentage, selectedModel } =
+    metrics
   const modelTotal = selectedModel.necessidades + selectedModel.desejos + selectedModel.investimentos
 
   if (balanceAfterPlan < -0.005) {
@@ -44,7 +50,14 @@ function buildAlerts(metrics: ScenarioMetrics, creditCardSummary: CreditCardSumm
       severity: 'critical',
     })
   }
-  if (budgetComparison.desejos.diff < -0.005) {
+  if (budgetComparison.desejos.realized > budgetComparison.desejos.target + 0.005) {
+    alerts.push({
+      id: 'wants-realized-over',
+      title: 'Cartão estourou os desejos',
+      detail: `Você já gastou ${formatCurrency(budgetComparison.desejos.realized)} em desejos no cartão — ${formatCurrency(budgetComparison.desejos.realized - budgetComparison.desejos.target)} acima da meta do mês.`,
+      severity: 'critical',
+    })
+  } else if (budgetComparison.desejos.diff < -0.005) {
     alerts.push({
       id: 'wants-over',
       title: 'Desejos acima da meta',
@@ -83,6 +96,14 @@ function buildAlerts(metrics: ScenarioMetrics, creditCardSummary: CreditCardSumm
       severity: 'critical',
     })
   }
+  if (creditCardSummary.unclassifiedPersonal > 0) {
+    alerts.push({
+      id: 'card-unclassified',
+      title: 'Compras sem área do orçamento',
+      detail: `${formatCurrency(creditCardSummary.unclassifiedPersonal)} da sua fatura ainda não estão marcados como necessidade, desejo ou investimento.`,
+      severity: 'warning',
+    })
+  }
 
   if (alerts.length === 0) {
     alerts.push({
@@ -104,17 +125,25 @@ const alertStyle: Record<Alert['severity'], { box: string; text: string }> = {
 }
 
 export function Dashboard({
-  metrics,
-  creditCardSummary,
-  emergencyFund,
-  scenarioSummaries,
-  activeScenarioId,
   onGoToPlanning,
-}: Props) {
+  onGoToHistory,
+}: {
+  onGoToPlanning: () => void
+  onGoToHistory: () => void
+}) {
+  const store = useFinancasStore()
+  const metrics = store.metrics
+  const creditCardSummary = store.cards.summary
+  const { emergencyFund, summary: investmentsSummary } = store.investments
+  const { scenarioSummaries } = store
+  const activeScenarioId = store.scenarios.activeScenarioId
+  const { points, stats } = store.history
+
   const {
     availableForBudget,
     paycheckInAccount,
     totalCosts,
+    totalCostsShared,
     totalWantsAmount,
     totalPlannedInvestment,
     directInvestmentTarget,
@@ -123,7 +152,6 @@ export function Dashboard({
     savingsRate,
     balanceAfterPlan,
     budgetComparison,
-    budgetAllocation,
     investmentAllocation,
     costsByCategory,
     emergencyFundTarget,
@@ -136,10 +164,12 @@ export function Dashboard({
   if (availableForBudget <= 0) {
     return (
       <div className="flex flex-col items-center rounded-xl border border-dark-border bg-dark-card px-6 py-16 text-center">
-        <h2 className="text-xl font-semibold tracking-tight text-dark-text">Comece pelo seu salário</h2>
+        <h2 className="text-xl font-semibold tracking-tight text-dark-text">
+          Comece pelo seu salário
+        </h2>
         <p className="mt-2 max-w-md text-sm leading-relaxed text-dark-text-muted">
-          Informe sua renda e seus custos fixos na aba de planejamento. A visão geral monta o resto: metas por caixa,
-          aporte do mês, reserva e cartões.
+          Informe sua renda e seus custos fixos na aba de planejamento. A visão geral monta o resto:
+          metas por caixa, aporte do mês, reserva e cartões.
         </p>
         <button
           type="button"
@@ -161,17 +191,37 @@ export function Dashboard({
 
   const investmentSegments = [
     ...(investmentDeductions > 0
-      ? [{ id: 'payroll', label: 'Via folha', value: investmentDeductions, color: CHART_PALETTE.violet }]
+      ? [
+          {
+            id: 'payroll',
+            label: 'Via folha',
+            value: investmentDeductions,
+            color: CHART_PALETTE.violet,
+          },
+        ]
       : []),
     ...(employerInvestmentContributions > 0
-      ? [{ id: 'employer', label: 'Empresa (bônus)', value: employerInvestmentContributions, color: CHART_PALETTE.muted }]
+      ? [
+          {
+            id: 'employer',
+            label: 'Empresa (bônus)',
+            value: employerInvestmentContributions,
+            color: CHART_PALETTE.muted,
+          },
+        ]
       : []),
     ...investmentAllocation
       .filter((slice) => slice.amount > 0)
-      .map((slice) => ({ id: slice.id, label: slice.name, value: slice.amount, color: slice.color })),
+      .map((slice) => ({
+        id: slice.id,
+        label: slice.name,
+        value: slice.amount,
+        color: slice.color,
+      })),
   ]
 
   const otherScenarios = scenarioSummaries.filter((s) => s.id !== activeScenarioId)
+  const lastMonth = points.length > 0 ? points[points.length - 1] : null
 
   return (
     <div className="space-y-4">
@@ -192,23 +242,38 @@ export function Dashboard({
           </div>
           <p className="mt-4 text-xs leading-relaxed text-dark-text-muted">
             {formatCurrency(paycheckInAccount)} na conta − {formatCurrency(totalCosts)} de custos −{' '}
-            {formatCurrency(totalWantsAmount)} de desejos − {formatCurrency(directInvestmentTarget)} de aporte direto.
+            {formatCurrency(totalWantsAmount)} de desejos − {formatCurrency(directInvestmentTarget)}{' '}
+            de aporte direto.
+            {totalCostsShared > 0 && (
+              <>
+                {' '}
+                Os custos já descontam {formatCurrency(totalCostsShared)} bancados por terceiros.
+              </>
+            )}
           </p>
         </div>
 
         <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
-          <StatTile label="Base do orçamento" value={formatCurrency(availableForBudget)} detail="renda usada nas metas" />
+          <StatTile
+            label="Base do orçamento"
+            value={formatCurrency(availableForBudget)}
+            detail="renda usada nas metas"
+          />
+          <StatTile
+            label="Patrimônio"
+            value={formatCurrency(investmentsSummary.netWorth)}
+            detail={
+              lastMonth && stats.months > 1
+                ? `${stats.netWorthGrowth >= 0 ? '+' : '−'} ${formatCurrency(Math.abs(stats.netWorthGrowth))} no histórico`
+                : 'investimentos + reserva + metas'
+            }
+            tone="accent"
+          />
           <StatTile
             label="Custos fixos"
             value={formatCurrency(totalCosts)}
-            detail={`${availableForBudget > 0 ? ((totalCosts / availableForBudget) * 100).toFixed(0) : 0}% da base`}
+            detail={`${((totalCosts / availableForBudget) * 100).toFixed(0)}% da base`}
             tone={budgetComparison.necessidades.diff < 0 ? 'negative' : 'neutral'}
-          />
-          <StatTile
-            label="Desejos planejados"
-            value={formatCurrency(totalWantsAmount)}
-            detail={`meta ${formatCurrency(budgetAllocation.desejos)}`}
-            tone={budgetComparison.desejos.diff < 0 ? 'negative' : 'neutral'}
           />
           <StatTile
             label="Taxa de poupança"
@@ -229,8 +294,12 @@ export function Dashboard({
               <div className="flex items-start gap-2.5">
                 <Icon size={15} className={`mt-0.5 shrink-0 ${style.text}`} />
                 <div>
-                  <strong className={`block text-sm font-semibold ${style.text}`}>{alert.title}</strong>
-                  <span className="mt-0.5 block text-xs leading-relaxed text-dark-text-secondary">{alert.detail}</span>
+                  <strong className={`block text-sm font-semibold ${style.text}`}>
+                    {alert.title}
+                  </strong>
+                  <span className="mt-0.5 block text-xs leading-relaxed text-dark-text-secondary">
+                    {alert.detail}
+                  </span>
                 </div>
               </div>
             </div>
@@ -239,17 +308,23 @@ export function Dashboard({
       </div>
 
       {/* Metas por caixa */}
-      <div className="rounded-xl border border-dark-border bg-dark-card p-5">
-        <h3 className="text-sm font-semibold tracking-tight text-dark-text">Metas do modelo</h3>
+      <Panel>
+        <PanelHeader
+          title="Metas do modelo"
+          description="A barra é o planejado; o traço marca o que já saiu no cartão neste ciclo."
+        />
         <div className="mt-4 grid gap-5 md:grid-cols-3">
-          {AREAS.map((area) => {
+          {BUDGET_AREAS.map((area: BudgetArea) => {
             const bucket = budgetComparison[area]
             const over = bucket.diff < -0.005
             return (
               <div key={area}>
                 <div className="mb-1.5 flex items-baseline justify-between text-xs">
                   <span className="flex items-center gap-1.5 text-dark-text-secondary">
-                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: BUDGET_AREA_COLORS[area] }} />
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: BUDGET_AREA_COLORS[area] }}
+                    />
                     {BUDGET_AREA_LABELS[area]}
                   </span>
                   <span className="tabular-nums text-dark-text-muted">
@@ -259,24 +334,33 @@ export function Dashboard({
                     / {formatCurrency(bucket.target)}
                   </span>
                 </div>
-                <Meter value={bucket.actual} max={bucket.target} color={BUDGET_AREA_COLORS[area]} />
+                <MeterWithMarker
+                  value={bucket.actual}
+                  marker={bucket.realized}
+                  max={bucket.target}
+                  color={BUDGET_AREA_COLORS[area]}
+                  markerLabel={`Já gasto no cartão: ${formatCurrency(bucket.realized)}`}
+                />
                 <p className={`mt-1.5 text-[11px] ${over ? 'text-rose-400' : 'text-dark-text-muted'}`}>
                   {area === 'investimentos'
                     ? 'meta coberta entre folha e aporte direto'
                     : over
                       ? `${formatCurrency(-bucket.diff)} acima da meta`
                       : `${formatCurrency(bucket.diff)} de folga`}
+                  {bucket.realized > 0 && area !== 'investimentos' && (
+                    <> · {formatCurrency(bucket.realized)} no cartão</>
+                  )}
                 </p>
               </div>
             )
           })}
         </div>
-      </div>
+      </Panel>
 
       {/* Gastos + Investimentos */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-dark-border bg-dark-card p-5">
-          <h3 className="text-sm font-semibold tracking-tight text-dark-text">Custos por categoria</h3>
+        <Panel>
+          <PanelHeader title="Custos por categoria" />
           {costRows.length > 0 ? (
             <div className="mt-4 space-y-3">
               {costRows.map(({ category, value }) => (
@@ -293,10 +377,10 @@ export function Dashboard({
           ) : (
             <p className="mt-3 text-sm text-dark-text-muted">Nenhum custo fixo cadastrado ainda.</p>
           )}
-        </div>
+        </Panel>
 
-        <div className="rounded-xl border border-dark-border bg-dark-card p-5">
-          <h3 className="text-sm font-semibold tracking-tight text-dark-text">Investimento do mês</h3>
+        <Panel>
+          <PanelHeader title="Investimento do mês" />
           {investmentSegments.length > 0 ? (
             <div className="mt-4">
               <SegmentedBar segments={investmentSegments} />
@@ -313,21 +397,30 @@ export function Dashboard({
               Defina o modelo de orçamento e a diversificação para ver o aporte do mês.
             </p>
           )}
-        </div>
+        </Panel>
       </div>
 
       {/* Reserva + Cartões */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-dark-border bg-dark-card p-5">
+        <Panel>
           <div className="flex items-center justify-between gap-3">
             <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-dark-text">
               <Shield size={15} className="text-dark-text-muted" />
               Reserva de emergência
             </h3>
-            <span className="text-xs font-semibold tabular-nums text-dark-text">{emergencyFundProgress.toFixed(0)}%</span>
+            <span className="text-xs font-semibold tabular-nums text-dark-text">
+              {emergencyFundProgress.toFixed(0)}%
+            </span>
           </div>
           <div className="mt-3">
-            <Meter value={emergencyFund.current} max={emergencyFundTarget} color={CHART_PALETTE.blue} height={8} />
+            {/* Passar da meta é bom: a barra enche e mantém a cor. */}
+            <Meter
+              value={emergencyFund.current}
+              max={emergencyFundTarget}
+              color={CHART_PALETTE.blue}
+              height={8}
+              overIsBad={false}
+            />
           </div>
           <p className="mt-2.5 text-xs leading-relaxed text-dark-text-muted">
             {emergencyFundTarget <= 0
@@ -339,11 +432,13 @@ export function Dashboard({
                   : `${formatCurrency(emergencyFundRemaining)} para a meta de ${emergencyFund.targetMonths} meses. Sem aporte em renda fixa, não há prazo estimado.`}
           </p>
           {fixedIncomeMonthlyAllocation <= 0 && emergencyFundRemaining > 0 && emergencyFundTarget > 0 && (
-            <p className="mt-1 text-[11px] text-amber-300">Dica: direcione parte do aporte para renda fixa.</p>
+            <p className="mt-1 text-[11px] text-amber-300">
+              Dica: direcione parte do aporte para renda fixa.
+            </p>
           )}
-        </div>
+        </Panel>
 
-        <div className="rounded-xl border border-dark-border bg-dark-card p-5">
+        <Panel>
           <div className="flex items-center justify-between gap-3">
             <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-dark-text">
               <CreditCard size={15} className="text-dark-text-muted" />
@@ -375,19 +470,43 @@ export function Dashboard({
           </dl>
           <p
             className={`mt-3 border-t border-dark-border-subtle pt-3 text-xs ${
-              creditCardSummary.availablePersonalLimit >= 0 ? 'text-dark-text-muted' : 'text-rose-300'
+              creditCardSummary.availablePersonalLimit >= 0
+                ? 'text-dark-text-muted'
+                : 'text-rose-300'
             }`}
           >
             {creditCardSummary.availablePersonalLimit >= 0
               ? `${formatCurrency(creditCardSummary.availablePersonalLimit)} do seu limite pessoal ainda livres.`
               : `${formatCurrency(-creditCardSummary.availablePersonalLimit)} acima do seu limite pessoal.`}
           </p>
-        </div>
+        </Panel>
       </div>
+
+      {/* Histórico */}
+      <Panel>
+        <PanelHeader
+          title="Histórico"
+          description={
+            lastMonth
+              ? `Último mês fechado: ${lastMonth.month} · custo médio de ${formatCurrency(stats.averageCosts)} em ${stats.months} ${stats.months === 1 ? 'mês' : 'meses'}.`
+              : 'Nenhum mês fechado ainda — o app só conhece o seu plano, não o que aconteceu.'
+          }
+          actions={
+            <button
+              type="button"
+              onClick={onGoToHistory}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-400 transition-colors hover:text-primary-300"
+            >
+              {lastMonth ? 'Ver histórico' : 'Fechar o primeiro mês'}
+              <ArrowRight size={15} />
+            </button>
+          }
+        />
+      </Panel>
 
       {/* Comparação de cenários */}
       {otherScenarios.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-dark-border bg-dark-card">
+        <Panel padded={false} className="overflow-hidden">
           <h3 className="border-b border-dark-border-subtle px-5 py-4 text-sm font-semibold tracking-tight text-dark-text">
             Comparação de cenários
           </h3>
@@ -410,11 +529,17 @@ export function Dashboard({
                   return (
                     <tr
                       key={summary.id}
-                      className={`border-t border-dark-border-subtle ${isActive ? 'bg-primary-500/[0.06]' : ''}`}
+                      className={`border-t border-dark-border-subtle ${
+                        isActive ? 'bg-primary-500/[0.06]' : ''
+                      }`}
                     >
                       <td className="px-5 py-2.5 font-medium text-dark-text">
                         {summary.name}
-                        {isActive && <span className="ml-2 text-[10px] font-semibold uppercase text-primary-400">ativo</span>}
+                        {isActive && (
+                          <span className="ml-2 text-[10px] font-semibold uppercase text-primary-400">
+                            ativo
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-2.5 text-right tabular-nums text-dark-text-secondary">
                         {formatCurrency(summary.availableForBudget)}
@@ -444,7 +569,7 @@ export function Dashboard({
               </tbody>
             </table>
           </div>
-        </div>
+        </Panel>
       )}
     </div>
   )

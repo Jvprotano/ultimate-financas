@@ -99,6 +99,15 @@ export const INVESTMENT_CLASS_PRESET_COLORS: string[] = [
   CHART_PALETTE.red,
 ]
 
+export const GOAL_PRESET_COLORS: string[] = [
+  CHART_PALETTE.violet,
+  CHART_PALETTE.magenta,
+  CHART_PALETTE.orange,
+  CHART_PALETTE.aqua,
+  CHART_PALETTE.blue,
+  CHART_PALETTE.yellow,
+]
+
 export const DIVERSIFICATION_PRESET_COLORS: string[] = [
   CHART_PALETTE.blue,
   CHART_PALETTE.aqua,
@@ -117,6 +126,15 @@ export const BUDGET_AREA_LABELS: Record<BudgetArea, string> = {
   necessidades: 'Necessidades',
   desejos: 'Desejos',
   investimentos: 'Investimentos',
+}
+
+export const BUDGET_AREAS: BudgetArea[] = ['necessidades', 'desejos', 'investimentos']
+
+/** Rótulos curtos para as colunas apertadas da tabela de cartões. */
+export const BUDGET_AREA_SHORT_LABELS: Record<BudgetArea, string> = {
+  necessidades: 'Necessidade',
+  desejos: 'Desejo',
+  investimentos: 'Investim.',
 }
 
 export const COST_CATEGORIES: {
