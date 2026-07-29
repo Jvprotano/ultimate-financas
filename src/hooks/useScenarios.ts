@@ -7,6 +7,7 @@ import type {
   DiversificationSlice,
   FinanceScenario,
   FinanceScenarioData,
+  PaymentMethod,
   SalaryInputMode,
 } from '../types'
 import {
@@ -149,6 +150,7 @@ export function useScenarios() {
       category: CostCategory
       sharedAmount?: number
       sharedWith?: string
+      paidWith?: PaymentMethod
     }) => {
       updateActiveScenario((scenario) => ({
         ...scenario,
@@ -161,6 +163,7 @@ export function useScenarios() {
             category: input.category,
             sharedAmount: input.sharedAmount || undefined,
             sharedWith: input.sharedWith?.trim() || undefined,
+            paidWith: input.paidWith ?? 'account',
           },
         ],
       }))
@@ -191,12 +194,12 @@ export function useScenarios() {
   // Desejos ------------------------------------------------------------------
 
   const addWant = useCallback(
-    (name: string, plannedAmount = 0) => {
+    (name: string, plannedAmount = 0, paidWith: PaymentMethod = 'card') => {
       updateActiveScenario((scenario) => ({
         ...scenario,
         wants: [
           ...scenario.wants,
-          { id: uid(), name, plannedAmount: Math.max(0, plannedAmount) },
+          { id: uid(), name, plannedAmount: Math.max(0, plannedAmount), paidWith },
         ],
       }))
     },
@@ -220,6 +223,16 @@ export function useScenarios() {
         wants: scenario.wants.map((w) =>
           w.id === id ? { ...w, plannedAmount: Math.max(0, plannedAmount) } : w,
         ),
+      }))
+    },
+    [updateActiveScenario],
+  )
+
+  const setWantPaidWith = useCallback(
+    (id: string, paidWith: PaymentMethod) => {
+      updateActiveScenario((scenario) => ({
+        ...scenario,
+        wants: scenario.wants.map((w) => (w.id === id ? { ...w, paidWith } : w)),
       }))
     },
     [updateActiveScenario],
@@ -365,6 +378,7 @@ export function useScenarios() {
     addWant,
     removeWant,
     updateWantAmount,
+    setWantPaidWith,
     deductions: activeScenario.deductions,
     addDeduction,
     removeDeduction,

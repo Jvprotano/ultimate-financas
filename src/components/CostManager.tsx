@@ -1,13 +1,13 @@
-import { useState } from 'react'
-import { Plus, Receipt, Trash2, Users } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { CreditCard, Landmark, Plus, Receipt, SlidersHorizontal, Trash2, Users } from 'lucide-react'
 import { Card } from './Card'
 import { CurrencyInput } from './CurrencyInput'
 import { HeaderMetric } from './HeaderMetric'
-import { Meter, PrimaryButton, SuggestionChip, Tag } from './ui'
+import { Meter, PrimaryButton, SegmentedControl, SuggestionChip, Tag } from './ui'
 import { formatCurrency, inputClass, selectClass } from '../lib/format'
 import { personalCostValue } from '../lib/scenario'
 import { useCardsStore, useMetrics, useScenarioStore } from '../context/financasStore'
-import type { CostCategory } from '../types'
+import type { CostCategory, PaymentMethod } from '../types'
 import {
   BUDGET_AREA_COLORS,
   COST_CATEGORIES,
@@ -26,6 +26,27 @@ const QUICK_SUGGESTIONS: { cat: CostCategory; name: string }[] = [
   { cat: 'saude', name: 'Academia' },
 ]
 
+const PAYMENT_OPTIONS: { value: PaymentMethod; label: ReactNode }[] = [
+  {
+    value: 'account',
+    label: (
+      <span className="inline-flex items-center gap-1.5">
+        <Landmark size={12} />
+        Conta
+      </span>
+    ),
+  },
+  {
+    value: 'card',
+    label: (
+      <span className="inline-flex items-center gap-1.5">
+        <CreditCard size={12} />
+        Cartão
+      </span>
+    ),
+  },
+]
+
 export function CostManager() {
   const { costs, addCost, updateCost, removeCost } = useScenarioStore()
   const metrics = useMetrics()
@@ -37,10 +58,17 @@ export function CostManager() {
   const [sharedAmount, setSharedAmount] = useState(0)
   const [sharedWith, setSharedWith] = useState('')
   const [splitting, setSplitting] = useState(false)
+  const [paidWith, setPaidWith] = useState<PaymentMethod>('account')
   const [editingId, setEditingId] = useState<string | null>(null)
 
-  const { totalCosts, totalCostsGross, totalCostsShared, availableForBudget, selectedModel } =
-    metrics
+  const {
+    totalCosts,
+    totalCostsGross,
+    totalCostsShared,
+    costsOnCard,
+    availableForBudget,
+    selectedModel,
+  } = metrics
   const necessidadesTarget = metrics.budgetAllocation.necessidades
   const remaining = necessidadesTarget - totalCosts
   const realized = summary.personalByArea.necessidades
@@ -54,6 +82,7 @@ export function CostManager() {
       category,
       sharedAmount: splitting ? Math.min(sharedAmount, value) : 0,
       sharedWith: splitting ? sharedWith : '',
+      paidWith,
     })
     setName('')
     setValue(0)
@@ -100,9 +129,22 @@ export function CostManager() {
               </span>
             </div>
             <Meter value={totalCosts} max={necessidadesTarget} color={BUDGET_AREA_COLORS.necessidades} />
-            {realized > 0 && (
-              <p className="mt-1.5 text-[11px] text-dark-text-muted">
-                {formatCurrency(realized)} já gastos no cartão nesta área neste ciclo.
+            {(realized > 0 || costsOnCard > 0) && (
+              <p className="mt-1.5 text-[11px] leading-relaxed text-dark-text-muted">
+                {costsOnCard > 0 && (
+                  <>
+                    <strong className="text-dark-text-secondary">
+                      {formatCurrency(costsOnCard)}
+                    </strong>{' '}
+                    deste plano passa no cartão.{' '}
+                  </>
+                )}
+                {realized > 0 && (
+                  <>
+                    A fatura já registrou {formatCurrency(realized)} em necessidades — é o mesmo
+                    dinheiro do plano aparecendo realizado, não um gasto a mais.
+                  </>
+                )}
               </p>
             )}
           </div>
@@ -164,16 +206,27 @@ export function CostManager() {
             </PrimaryButton>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setSplitting((prev) => !prev)}
-            className={`mt-2 inline-flex items-center gap-1.5 text-xs font-medium transition-colors ${
-              splitting ? 'text-primary-300' : 'text-dark-text-muted hover:text-dark-text'
-            }`}
-          >
-            <Users size={13} />
-            {splitting ? 'Não dividir esta conta' : 'Dividir com outra pessoa'}
-          </button>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2">
+              <span className="text-[11px] text-dark-text-muted">Pago por</span>
+              <SegmentedControl
+                options={PAYMENT_OPTIONS}
+                value={paidWith}
+                onChange={setPaidWith}
+                className="w-40"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => setSplitting((prev) => !prev)}
+              className={`inline-flex items-center gap-1.5 text-xs font-medium transition-colors ${
+                splitting ? 'text-primary-300' : 'text-dark-text-muted hover:text-dark-text'
+              }`}
+            >
+              <Users size={13} />
+              {splitting ? 'Não dividir esta conta' : 'Dividir com outra pessoa'}
+            </button>
+          </div>
 
           {splitting && (
             <div className="mt-2 grid gap-2 border-t border-dark-border-subtle pt-2 sm:grid-cols-2">
@@ -226,6 +279,12 @@ export function CostManager() {
                         </span>
                         <span className="flex flex-wrap items-center gap-1.5 text-xs text-dark-text-muted">
                           {COST_CATEGORY_LABELS[cost.category]}
+                          {cost.paidWith === 'card' && (
+                            <Tag>
+                              <CreditCard size={10} />
+                              no cartão
+                            </Tag>
+                          )}
                           {shared > 0 && (
                             <Tag>
                               <Users size={10} />
@@ -249,10 +308,10 @@ export function CostManager() {
                       <button
                         onClick={() => setEditingId(isEditing ? null : cost.id)}
                         className="rounded-md p-1.5 text-dark-text-muted opacity-0 transition-all hover:text-dark-text focus-visible:opacity-100 group-hover:opacity-100"
-                        aria-label={`Dividir ${cost.name}`}
-                        title="Dividir com outra pessoa"
+                        aria-label={`Editar ${cost.name}`}
+                        title="Forma de pagamento e rateio"
                       >
-                        <Users size={14} />
+                        <SlidersHorizontal size={14} />
                       </button>
                       <button
                         onClick={() => removeCost(cost.id)}
@@ -266,6 +325,17 @@ export function CostManager() {
 
                   {isEditing && (
                     <div className="mt-2.5 grid gap-2 border-t border-dark-border-subtle pt-2.5 sm:grid-cols-3">
+                      <label className="block sm:col-span-3">
+                        <span className="mb-1 block text-[11px] text-dark-text-muted">
+                          Pago por — o que passa no cartão só sai da conta quando a fatura vence
+                        </span>
+                        <SegmentedControl
+                          options={PAYMENT_OPTIONS}
+                          value={cost.paidWith ?? 'account'}
+                          onChange={(next) => updateCost(cost.id, { paidWith: next })}
+                          className="max-w-52"
+                        />
+                      </label>
                       <label className="block">
                         <span className="mb-1 block text-[11px] text-dark-text-muted">
                           Valor cheio

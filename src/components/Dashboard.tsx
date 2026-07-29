@@ -1,4 +1,5 @@
 import { AlertTriangle, ArrowRight, CheckCircle2, CreditCard, Shield } from 'lucide-react'
+import { CashFlowPanel } from './CashFlowPanel'
 import {
   BarRow,
   Meter,
@@ -11,7 +12,7 @@ import {
 import { formatCurrency, formatMonths } from '../lib/format'
 import { useFinancasStore } from '../context/financasStore'
 import type { ScenarioMetrics } from '../hooks/useFinancas'
-import type { BudgetArea, CreditCardSummary } from '../types'
+import type { BudgetArea, CashFlowSummary, CreditCardSummary } from '../types'
 import {
   BUDGET_AREAS,
   BUDGET_AREA_COLORS,
@@ -28,12 +29,32 @@ interface Alert {
   severity: 'ok' | 'warning' | 'critical'
 }
 
-function buildAlerts(metrics: ScenarioMetrics, creditCardSummary: CreditCardSummary): Alert[] {
+function buildAlerts(
+  metrics: ScenarioMetrics,
+  creditCardSummary: CreditCardSummary,
+  cashFlow: CashFlowSummary,
+): Alert[] {
   const alerts: Alert[] = []
   const { budgetComparison, balanceAfterPlan, totalDiversificationPercentage, selectedModel } =
     metrics
   const modelTotal = selectedModel.necessidades + selectedModel.desejos + selectedModel.investimentos
 
+  if (cashFlow.leftover < -0.005) {
+    alerts.push({
+      id: 'cash-negative',
+      title: 'O caixa do mês não fecha',
+      detail: `Faltam ${formatCurrency(-cashFlow.leftover)} para pagar a fatura que vence, o que sai da conta e o aporte. Esta é a conta do extrato, não do orçamento.`,
+      severity: 'critical',
+    })
+  }
+  if (cashFlow.plannedOnCard > 0 && cashFlow.cardPlanGap > 0.005) {
+    alerts.push({
+      id: 'card-over-plan',
+      title: 'A fatura passou do que o plano previa',
+      detail: `Você planejou ${formatCurrency(cashFlow.plannedOnCard)} no cartão e a fatura está em ${formatCurrency(cashFlow.invoiceToPay)} — ${formatCurrency(cashFlow.cardPlanGap)} sem lugar no orçamento.`,
+      severity: 'warning',
+    })
+  }
   if (balanceAfterPlan < -0.005) {
     alerts.push({
       id: 'negative-balance',
@@ -134,6 +155,7 @@ export function Dashboard({
   const store = useFinancasStore()
   const metrics = store.metrics
   const creditCardSummary = store.cards.summary
+  const cashFlow = store.cashFlow
   const { emergencyFund, summary: investmentsSummary } = store.investments
   const { scenarioSummaries } = store
   const activeScenarioId = store.scenarios.activeScenarioId
@@ -183,7 +205,7 @@ export function Dashboard({
     )
   }
 
-  const alerts = buildAlerts(metrics, creditCardSummary)
+  const alerts = buildAlerts(metrics, creditCardSummary, cashFlow)
   const costRows = Array.from(costsByCategory.entries())
     .map(([category, value]) => ({ category, value }))
     .sort((a, b) => b.value - a.value)
@@ -251,6 +273,13 @@ export function Dashboard({
               </>
             )}
           </p>
+          <p className="mt-2 border-t border-dark-border-subtle pt-2 text-xs leading-relaxed text-dark-text-muted">
+            No extrato deste mês sobram{' '}
+            <strong className={cashFlow.leftover >= 0 ? 'text-dark-text' : 'text-rose-400'}>
+              {formatCurrency(cashFlow.leftover)}
+            </strong>
+            : lá quem sai é a fatura que vence agora, que é o gasto do ciclo passado.
+          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
@@ -307,11 +336,14 @@ export function Dashboard({
         })}
       </div>
 
+      {/* Caixa do mês */}
+      <CashFlowPanel />
+
       {/* Metas por caixa */}
       <Panel>
         <PanelHeader
           title="Metas do modelo"
-          description="A barra é o planejado; o traço marca o que já saiu no cartão neste ciclo."
+          description="A barra é o planejado; o traço marca o que já saiu no cartão neste ciclo — o mesmo dinheiro, visto como realizado."
         />
         <div className="mt-4 grid gap-5 md:grid-cols-3">
           {BUDGET_AREAS.map((area: BudgetArea) => {

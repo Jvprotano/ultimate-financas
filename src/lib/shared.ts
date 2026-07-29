@@ -26,6 +26,14 @@ export function monthKey(date: Date = new Date()): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 }
 
+/** AAAA-MM deslocado em `count` meses. */
+export function addMonths(month: string, count: number): string {
+  const [year, index] = month.split('-').map(Number)
+  if (!year || !index) return month
+  const total = (year * 12 + (index - 1)) + count
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, '0')}`
+}
+
 /** Distância em meses entre dois AAAA-MM (b − a). */
 export function monthsBetween(from: string, to: string): number {
   const [fy, fm] = from.split('-').map(Number)

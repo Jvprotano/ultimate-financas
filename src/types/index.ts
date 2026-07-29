@@ -7,6 +7,13 @@ export type BudgetArea = 'necessidades' | 'desejos' | 'investimentos'
 export type SalaryInputMode = 'before_payroll_deductions' | 'take_home'
 
 /**
+ * Como um item planejado é pago. Separa o regime de competência (em que mês o
+ * gasto acontece) do regime de caixa (em que mês o dinheiro sai da conta):
+ * o que passa no cartão só deixa a conta quando a fatura vence.
+ */
+export type PaymentMethod = 'card' | 'account'
+
+/**
  * Movimentação de um livro-razão (reserva, posição de investimento, meta).
  * Positivo = entrada/aporte, negativo = saída/retirada.
  */
@@ -42,12 +49,16 @@ export interface CostItem {
   sharedAmount?: number
   /** Com quem o custo é dividido. */
   sharedWith?: string
+  /** Onde o pagamento cai. Custos antigos migram como débito em conta. */
+  paidWith?: PaymentMethod
 }
 
 export interface WantItem {
   id: string
   name: string
   plannedAmount: number
+  /** Desejos costumam ser cartão — é o padrão de quem planeja pelo limite. */
+  paidWith?: PaymentMethod
 }
 
 export type DeductionType =
@@ -103,6 +114,19 @@ export interface EmergencyFundState {
   transactions: LedgerEntry[]
 }
 
+/**
+ * Saldo já cadastrado em outro módulo que uma meta *engloba* em vez de duplicar.
+ * Uma meta de patrimônio ("9 mil até dezembro") não guarda dinheiro próprio: ela
+ * mede a reserva e os investimentos que já existem.
+ */
+export type GoalInclusionType = 'reserve' | 'investments' | 'goals' | 'class'
+
+export interface GoalInclusion {
+  type: GoalInclusionType
+  /** Id da classe de ativo, quando `type === 'class'`. */
+  id?: string
+}
+
 /** Objetivo com nome, valor-alvo e prazo — ex.: "Viagem Japão". */
 export interface FinancialGoal {
   id: string
@@ -114,10 +138,19 @@ export interface FinancialGoal {
   transactions: LedgerEntry[]
   createdAt: string
   completedAt?: string
+  /** Saldos de outros módulos que contam para esta meta, sem virar dinheiro novo. */
+  includes?: GoalInclusion[]
 }
 
 export interface GoalSummary extends FinancialGoal {
+  /** Saldo do livro-razão da própria meta — só isto entra no patrimônio. */
+  ownBalance: number
+  /** Saldo emprestado de outros módulos (reserva, investimentos, outras metas). */
+  includedBalance: number
+  /** ownBalance + includedBalance: o progresso que a meta exibe. */
   current: number
+  /** Nomes do que a meta engloba, para a interface explicar de onde vem o saldo. */
+  includedLabels: string[]
   remaining: number
   progress: number
   /** Meses restantes até o mês-alvo (negativo = atrasada). */
@@ -169,11 +202,96 @@ export interface InvestmentsSummary {
   totalInvested: number
   totalGain: number
   totalGainPct: number
-  /** Investimentos + reserva + metas. */
+  /** Investimentos + reserva + o dinheiro guardado dentro das metas. */
   netWorth: number
   reserveBalance: number
+  /** Só o livro-razão das metas: o que uma meta engloba já está contado. */
   goalsBalance: number
   classes: AssetClassSummary[]
+}
+
+// ---------------------------------------------------------------------------
+// Futuro — entradas e saídas esperadas fora do mês a mês
+// ---------------------------------------------------------------------------
+
+export type ExpectedEventKind = 'income' | 'expense'
+
+export type ExpectedEventRecurrence = 'once' | 'yearly' | 'monthly'
+
+/**
+ * Dinheiro que você já sabe que vai entrar ou sair, mas não cabe no orçamento
+ * mensal: 13º, bônus, férias, IPTU, IPVA, seguro.
+ */
+export interface ExpectedEvent {
+  id: string
+  name: string
+  kind: ExpectedEventKind
+  /** Sempre positivo; o sinal vem de `kind`. */
+  amount: number
+  /** Mês da primeira ocorrência, no formato AAAA-MM. */
+  month: string
+  recurrence: ExpectedEventRecurrence
+  /** Fatia da entrada que vira patrimônio (0–100). O resto é consumo. */
+  savedPct?: number
+  /** Meta que este dinheiro reforça — só planejamento, não movimenta saldo. */
+  goalId?: string
+  note?: string
+  createdAt: string
+}
+
+/** Uma ocorrência concreta de um evento em um mês específico. */
+export interface ExpectedOccurrence {
+  event: ExpectedEvent
+  month: string
+  /** Valor com sinal: entrada positiva, saída negativa. */
+  signedAmount: number
+  /** Quanto desta ocorrência sobra como patrimônio. */
+  savedAmount: number
+}
+
+export interface ForecastAssumptions {
+  /** Aporte mensal usado na projeção; null = usa o aporte do plano. */
+  monthlyContribution: number | null
+  /** Rendimento nominal esperado do patrimônio, ao ano. */
+  annualReturnPct: number
+  /** Somar a sobra do mês ao aporte projetado. */
+  includeLeftover: boolean
+  horizonMonths: number
+}
+
+export interface ForecastPoint {
+  month: string
+  /** Patrimônio ao fim do mês. */
+  netWorth: number
+  contribution: number
+  /** Efeito líquido dos eventos esperados sobre o patrimônio. */
+  eventsSaved: number
+  returns: number
+  occurrences: ExpectedOccurrence[]
+}
+
+// ---------------------------------------------------------------------------
+// Caixa do mês — o que de fato entra e sai da conta
+// ---------------------------------------------------------------------------
+
+export interface CashFlowSummary {
+  paycheck: number
+  extraIncome: number
+  totalIn: number
+  /** Parte pessoal da fatura que vence neste mês. */
+  invoiceToPay: number
+  costsOnAccount: number
+  wantsOnAccount: number
+  /** O que o plano prevê que vai cair na fatura. */
+  costsOnCard: number
+  wantsOnCard: number
+  plannedOnCard: number
+  directInvestment: number
+  extraExpense: number
+  totalOut: number
+  leftover: number
+  /** Fatura pessoal − plano previsto no cartão. Positivo = gastou além do plano. */
+  cardPlanGap: number
 }
 
 // ---------------------------------------------------------------------------
@@ -292,6 +410,10 @@ export interface MonthlySnapshot {
   netWorth: number
   emergencyFund: number
   cardPersonalTotal: number
+  /** Gasto pessoal do cartão por área — o realizado ao lado do planejado. */
+  cardByArea: Partial<Record<BudgetArea, number>>
+  /** Sobra em caixa depois de pagar a fatura e o que não passa no cartão. */
+  cashLeftover: number
   note?: string
 }
 
@@ -307,6 +429,8 @@ export interface HistoryStats {
   averageWants: number
   averageInvested: number
   averageSavingsRate: number
+  /** Média da sua parte da fatura nos meses fechados. */
+  averageCardPersonal: number
   netWorthGrowth: number
   netWorthGrowthPct: number
   bestSavingsMonth: MonthlySnapshot | null

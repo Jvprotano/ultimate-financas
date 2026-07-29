@@ -4,8 +4,21 @@ import type {
   DiversificationSlice,
   CostCategory,
   DeductionType,
+  ExpectedEventRecurrence,
   InvestmentAssetClass,
+  PaymentMethod,
 } from './index'
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  account: 'Conta',
+  card: 'Cartão',
+}
+
+export const RECURRENCE_LABELS: Record<ExpectedEventRecurrence, string> = {
+  once: 'Uma vez',
+  yearly: 'Todo ano',
+  monthly: 'Todo mês',
+}
 
 export const BUDGET_MODELS: BudgetModel[] = [
   {

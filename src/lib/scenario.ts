@@ -35,6 +35,8 @@ function normalizeCost(raw: Partial<CostItem> | undefined): CostItem {
     category: (raw?.category as CostCategory) || 'outros',
     sharedAmount: raw?.sharedAmount ? Math.max(0, Math.min(finiteNumber(raw.sharedAmount), value)) : undefined,
     sharedWith: raw?.sharedWith?.trim() || undefined,
+    // Contas fixas costumam ser débito/boleto; quem paga no cartão marca o item.
+    paidWith: raw?.paidWith === 'card' ? 'card' : 'account',
   }
 }
 
@@ -60,6 +62,8 @@ export function normalizeScenario(scenario: FinanceScenario): FinanceScenario {
           id: want.id || uid(),
           name: want.name || 'Desejo',
           plannedAmount: Math.max(0, finiteNumber(want.plannedAmount)),
+          // Desejo é o caixa do cartão: comer fora, viagem, assinatura.
+          paidWith: want.paidWith === 'account' ? ('account' as const) : ('card' as const),
         }))
       : [],
     deductions: Array.isArray(scenario.deductions)
@@ -277,6 +281,14 @@ export function calculateScenario(
   const totalCosts = state.costs.reduce((sum, c) => sum + personalCostValue(c), 0)
   const totalCostsShared = totalCostsGross - totalCosts
 
+  // Forma de pagamento: o mesmo gasto, visto pelo caixa. O que passa no cartão
+  // só deixa a conta quando a fatura vence — e é o que deve reaparecer, sem
+  // virar gasto novo, na aba de cartões marcado com a área do orçamento.
+  const costsOnCard = state.costs
+    .filter((c) => c.paidWith === 'card')
+    .reduce((sum, c) => sum + personalCostValue(c), 0)
+  const costsOnAccount = totalCosts - costsOnCard
+
   const totalDeductions = state.deductions.reduce((sum, d) => sum + d.value, 0)
   const investmentDeductions = state.deductions
     .filter((d) => INVESTMENT_DEDUCTION_TYPES.includes(d.type))
@@ -307,6 +319,12 @@ export function calculateScenario(
   }
 
   const totalWantsAmount = state.wants.reduce((sum, w) => sum + w.plannedAmount, 0)
+  const wantsOnCard = state.wants
+    .filter((w) => w.paidWith !== 'account')
+    .reduce((sum, w) => sum + w.plannedAmount, 0)
+  const wantsOnAccount = totalWantsAmount - wantsOnCard
+  /** O que o plano inteiro espera ver na fatura deste ciclo. */
+  const plannedOnCard = costsOnCard + wantsOnCard
 
   // Quanto ainda precisa ser aportado pela conta, além do que já sai em folha.
   const directInvestmentTarget = Math.max(0, budgetAllocation.investimentos - investmentDeductions)
@@ -364,6 +382,11 @@ export function calculateScenario(
     totalCosts,
     totalCostsGross,
     totalCostsShared,
+    costsOnCard,
+    costsOnAccount,
+    wantsOnCard,
+    wantsOnAccount,
+    plannedOnCard,
     totalDeductions,
     investmentDeductions,
     employerInvestmentContributions,

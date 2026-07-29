@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Heart, Plus, Trash2 } from 'lucide-react'
+import { CreditCard, Heart, Landmark, Plus, Trash2 } from 'lucide-react'
 import { Card } from './Card'
 import { CurrencyInput } from './CurrencyInput'
 import { HeaderMetric } from './HeaderMetric'
@@ -20,8 +20,9 @@ const SUGGESTIONS = [
 ]
 
 export function WantsManager() {
-  const { wants, addWant, removeWant, updateWantAmount } = useScenarioStore()
-  const { totalWantsAmount, budgetAllocation, availableForBudget, selectedModel } = useMetrics()
+  const { wants, addWant, removeWant, updateWantAmount, setWantPaidWith } = useScenarioStore()
+  const { totalWantsAmount, budgetAllocation, availableForBudget, selectedModel, wantsOnCard } =
+    useMetrics()
   const { summary } = useCardsStore()
 
   const [newName, setNewName] = useState('')
@@ -81,14 +82,21 @@ export function WantsManager() {
               color={BUDGET_AREA_COLORS.desejos}
               markerLabel={`Já gasto no cartão: ${formatCurrency(realized)}`}
             />
-            {realized > 0 && (
-              <p className="mt-1.5 text-[11px] text-dark-text-muted">
+            {realized > 0 ? (
+              <p className="mt-1.5 text-[11px] leading-relaxed text-dark-text-muted">
                 <span className="mr-1 inline-block h-2 w-[2px] translate-y-[1px] bg-dark-text/70" />
                 {formatCurrency(realized)} já gastos no cartão neste ciclo
                 {totalWantsAmount > 0 &&
                   ` — ${((realized / totalWantsAmount) * 100).toFixed(0)}% do planejado`}
-                .
+                . É o mesmo orçamento sendo consumido, não um gasto extra.
               </p>
+            ) : (
+              wantsOnCard > 0 && (
+                <p className="mt-1.5 text-[11px] leading-relaxed text-dark-text-muted">
+                  {formatCurrency(wantsOnCard)} deste plano é para gastar no cartão. Marque a área
+                  “Desejo” nos lançamentos da fatura para acompanhar o realizado aqui.
+                </p>
+              )
             )}
           </div>
         )}
@@ -130,6 +138,25 @@ export function WantsManager() {
                   {want.name}
                 </span>
                 <div className="flex shrink-0 items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setWantPaidWith(want.id, want.paidWith === 'account' ? 'card' : 'account')
+                    }
+                    className="rounded-md p-1.5 text-dark-text-muted transition-colors hover:text-dark-text"
+                    title={
+                      want.paidWith === 'account'
+                        ? 'Sai direto da conta — clique para marcar como cartão'
+                        : 'Passa no cartão — clique para marcar como débito em conta'
+                    }
+                    aria-label={`Forma de pagamento de ${want.name}`}
+                  >
+                    {want.paidWith === 'account' ? (
+                      <Landmark size={14} />
+                    ) : (
+                      <CreditCard size={14} className="text-dark-text-secondary" />
+                    )}
+                  </button>
                   <div className="w-32">
                     <CurrencyInput
                       value={want.plannedAmount}

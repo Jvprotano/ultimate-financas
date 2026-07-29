@@ -21,7 +21,7 @@ import { useFinancasStore } from '../context/financasStore'
 import { BUDGET_AREA_COLORS, CHART_PALETTE } from '../types/constants'
 
 export function HistoryView() {
-  const { history, metrics, investments, closeCurrentMonth } = useFinancasStore()
+  const { history, metrics, investments, cards, cashFlow, closeCurrentMonth } = useFinancasStore()
   const { points, stats, currentMonth, isCurrentMonthClosed } = history
   const [note, setNote] = useState('')
 
@@ -68,7 +68,7 @@ export function HistoryView() {
         <PanelHeader
           title={`Fechar ${formatMonthLong(currentMonth)}`}
           icon={<CalendarCheck size={16} />}
-          description="Congela os números de hoje como o resultado do mês. É o que alimenta os gráficos e as médias."
+          description="Congela os números de hoje como o resultado do mês: o plano, o realizado na fatura e a sobra em caixa. É o que alimenta os gráficos e as médias."
           actions={
             isCurrentMonthClosed ? (
               <ConfirmButton onConfirm={handleClose} confirmLabel="Substituir" tone="primary">
@@ -83,13 +83,19 @@ export function HistoryView() {
           }
         />
 
-        <div className="mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-5">
           <StatTile label="Base do mês" value={formatCurrency(metrics.availableForBudget)} />
           <StatTile label="Custos" value={formatCurrency(metrics.totalCosts)} />
           <StatTile label="Investido" value={formatCurrency(metrics.totalPlannedInvestment)} />
           <StatTile
+            label="Fatura (sua parte)"
+            value={formatCurrency(cards.summary.currentPersonalTotal)}
+            detail="o realizado do ciclo"
+          />
+          <StatTile
             label="Patrimônio hoje"
             value={formatCurrency(investments.summary.netWorth)}
+            detail={`sobra em caixa: ${formatCurrency(cashFlow.leftover)}`}
             tone="accent"
           />
         </div>
@@ -127,7 +133,11 @@ export function HistoryView() {
             <StatTile
               label="Custo médio"
               value={formatCurrency(stats.averageCosts)}
-              detail="média dos meses fechados"
+              detail={
+                stats.averageCardPersonal > 0
+                  ? `+ ${formatCurrency(stats.averageCardPersonal)}/mês de fatura`
+                  : 'média dos meses fechados'
+              }
             />
             <StatTile
               label="Poupança média"
@@ -176,6 +186,7 @@ export function HistoryView() {
                     <th className="px-4 py-2.5 text-right font-medium">Custos</th>
                     <th className="px-4 py-2.5 text-right font-medium">Desejos</th>
                     <th className="px-4 py-2.5 text-right font-medium">Investido</th>
+                    <th className="px-4 py-2.5 text-right font-medium">Cartão</th>
                     <th className="px-4 py-2.5 text-right font-medium">Poupança</th>
                     <th className="px-4 py-2.5 text-right font-medium">Patrimônio</th>
                     <th className="px-5 py-2.5 text-right font-medium sr-only">Ações</th>
@@ -212,6 +223,9 @@ export function HistoryView() {
                       </td>
                       <td className="px-4 py-2.5 text-right tabular-nums text-dark-text-secondary">
                         {formatCurrency(point.invested)}
+                      </td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-dark-text-secondary">
+                        {point.cardPersonalTotal > 0 ? formatCurrency(point.cardPersonalTotal) : '—'}
                       </td>
                       <td className="px-4 py-2.5 text-right tabular-nums text-dark-text-secondary">
                         {point.savingsRate.toFixed(0)}%

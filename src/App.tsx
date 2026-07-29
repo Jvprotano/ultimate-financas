@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import {
   Archive,
+  CalendarClock,
   CreditCard,
   Download,
   History,
@@ -25,6 +26,7 @@ import { InvestmentPlan } from './components/InvestmentPlan'
 import { EmergencyFund } from './components/EmergencyFund'
 import { CreditCardManager } from './components/CreditCardManager'
 import { InvestmentsManager } from './components/InvestmentsManager'
+import { ForecastView } from './components/ForecastView'
 import { HistoryView } from './components/HistoryView'
 import { ScenarioSwitcher } from './components/ScenarioSwitcher'
 import { formatDate } from './lib/format'
@@ -38,13 +40,14 @@ import {
   type BackupPayload,
 } from './lib/backup'
 
-type View = 'overview' | 'planning' | 'investments' | 'cards' | 'history'
+type View = 'overview' | 'planning' | 'investments' | 'cards' | 'forecast' | 'history'
 
 const VIEWS: { id: View; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'overview', label: 'Visão geral', icon: LayoutDashboard },
   { id: 'planning', label: 'Planejamento', icon: SlidersHorizontal },
   { id: 'investments', label: 'Investimentos', icon: Landmark },
   { id: 'cards', label: 'Cartões', icon: CreditCard },
+  { id: 'forecast', label: 'Futuro', icon: CalendarClock },
   { id: 'history', label: 'Histórico', icon: History },
 ]
 
@@ -66,7 +69,7 @@ function TabBar({
 }) {
   return (
     <nav
-      className={`grid grid-cols-5 gap-1 rounded-lg border border-dark-border bg-dark-surface p-1 ${className}`}
+      className={`grid grid-cols-3 gap-1 rounded-lg border border-dark-border bg-dark-surface p-1 sm:grid-cols-6 ${className}`}
     >
       {VIEWS.map(({ id, label, icon: Icon }) => (
         <button
@@ -355,6 +358,7 @@ function AppShell() {
 
         {activeView === 'investments' && <InvestmentsManager />}
         {activeView === 'cards' && <CreditCardManager />}
+        {activeView === 'forecast' && <ForecastView />}
         {activeView === 'history' && <HistoryView />}
       </main>
 

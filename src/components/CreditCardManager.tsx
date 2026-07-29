@@ -108,7 +108,7 @@ export function CreditCardManager() {
     payInvoice,
     setSettings,
   } = useCardsStore()
-  const { availableForBudget } = useMetrics()
+  const { availableForBudget, budgetComparison, plannedOnCard } = useMetrics()
 
   const [view, setView] = useState<View>('current')
 
@@ -369,6 +369,12 @@ export function CreditCardManager() {
       </div>
 
       <Panel>
+        <PanelHeader
+          title="Ciclo da fatura"
+          icon={<Calendar size={16} />}
+          description="“Fatura atual” é o ciclo que está fechando: as compras deste mês, que você paga com o salário do mês que vem. Ao pagar, use “Pagar fatura” para virar o ciclo."
+          className="mb-4"
+        />
         <div className="grid gap-4 lg:grid-cols-3">
           <label className="block">
             <span className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-dark-text-muted">
@@ -936,25 +942,37 @@ export function CreditCardManager() {
         </Panel>
 
         <Panel>
-          <PanelHeader title="Por área do orçamento" />
+          <PanelHeader
+            title="Área do orçamento"
+            description="A área não cria um gasto novo: ela diz de qual caixa do plano a compra saiu. Academia marcada como necessidade é o custo fixo que você já cadastrou, agora aparecendo realizado."
+          />
           <div className="mt-3 space-y-1.5">
-            {BUDGET_AREAS.map((area) => (
-              <div
-                key={area}
-                className="flex items-center justify-between gap-3 rounded-lg bg-dark-surface px-3 py-2 text-sm"
-              >
-                <span className="flex items-center gap-2 font-medium text-dark-text-secondary">
-                  <span
-                    className="h-2 w-2 rounded-full"
-                    style={{ backgroundColor: BUDGET_AREA_COLORS[area] }}
-                  />
-                  {BUDGET_AREA_SHORT_LABELS[area]}
-                </span>
-                <strong className="tabular-nums text-dark-text">
-                  {formatCurrency(summary.personalByArea[area])}
-                </strong>
-              </div>
-            ))}
+            {BUDGET_AREAS.map((area) => {
+              const realized = summary.personalByArea[area]
+              const planned = budgetComparison[area].actual
+              return (
+                <div key={area} className="rounded-lg bg-dark-surface px-3 py-2 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-2 font-medium text-dark-text-secondary">
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ backgroundColor: BUDGET_AREA_COLORS[area] }}
+                      />
+                      {BUDGET_AREA_SHORT_LABELS[area]}
+                    </span>
+                    <strong className="tabular-nums text-dark-text">
+                      {formatCurrency(realized)}
+                    </strong>
+                  </div>
+                  {planned > 0 && (
+                    <p className="mt-0.5 text-[11px] tabular-nums text-dark-text-muted">
+                      {((realized / planned) * 100).toFixed(0)}% do plano de{' '}
+                      {formatCurrency(planned)}
+                    </p>
+                  )}
+                </div>
+              )
+            })}
             {summary.unclassifiedPersonal > 0 && (
               <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.07] px-3 py-2 text-sm">
                 <span className="font-medium text-amber-300">Sem área definida</span>
@@ -964,6 +982,13 @@ export function CreditCardManager() {
               </div>
             )}
           </div>
+          {plannedOnCard > 0 && (
+            <p className="mt-3 border-t border-dark-border-subtle pt-3 text-[11px] leading-relaxed text-dark-text-muted">
+              Do seu planejamento, {formatCurrency(plannedOnCard)} deveriam passar por aqui (o que
+              você marcou como “no cartão” em custos e desejos). A fatura pessoal está em{' '}
+              {formatCurrency(summary.currentPersonalTotal)}.
+            </p>
+          )}
         </Panel>
 
         <Panel>

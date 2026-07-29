@@ -1,16 +1,14 @@
 import type {
   AssetClassSummary,
   EmergencyFundState,
-  FinancialGoal,
-  GoalSummary,
   HoldingSummary,
   InvestmentAssetClass,
   InvestmentHolding,
   InvestmentsSummary,
   LedgerEntry,
 } from '../types'
-import { DEFAULT_INVESTMENT_CLASSES, GOAL_PRESET_COLORS } from '../types/constants'
-import { finiteNumber, ledgerBalance, monthKey, monthsBetween, normalizeLedger, nowIso, uid } from './shared'
+import { DEFAULT_INVESTMENT_CLASSES } from '../types/constants'
+import { finiteNumber, ledgerBalance, normalizeLedger, nowIso, uid } from './shared'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 /** Abaixo disso, anualizar transforma ruído de dias em "retorno" de três dígitos. */
@@ -125,44 +123,9 @@ export function normalizeAssetClass(
   }
 }
 
-export function normalizeGoal(raw: Partial<FinancialGoal> | undefined, index = 0): FinancialGoal {
-  return {
-    id: raw?.id || uid(),
-    name: raw?.name?.trim() || 'Meta',
-    targetAmount: Math.max(0, finiteNumber(raw?.targetAmount)),
-    targetMonth: /^\d{4}-\d{2}$/.test(raw?.targetMonth ?? '') ? raw?.targetMonth : undefined,
-    color: raw?.color || GOAL_PRESET_COLORS[index % GOAL_PRESET_COLORS.length],
-    transactions: normalizeLedger(raw?.transactions),
-    createdAt: raw?.createdAt || nowIso(),
-    completedAt: raw?.completedAt || undefined,
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Agregação
 // ---------------------------------------------------------------------------
-
-export function summarizeGoals(goals: FinancialGoal[]): GoalSummary[] {
-  const currentMonth = monthKey()
-
-  return goals.map((goal) => {
-    const current = Math.max(0, ledgerBalance(goal.transactions))
-    const remaining = Math.max(0, goal.targetAmount - current)
-    const monthsLeft = goal.targetMonth ? monthsBetween(currentMonth, goal.targetMonth) : null
-    // O mês corrente ainda conta como uma chance de aportar.
-    const monthsAvailable = monthsLeft === null ? 0 : Math.max(1, monthsLeft + 1)
-
-    return {
-      ...goal,
-      current,
-      remaining,
-      progress: goal.targetAmount > 0 ? Math.min(100, (current / goal.targetAmount) * 100) : 0,
-      monthsLeft,
-      suggestedMonthly: monthsAvailable > 0 ? remaining / monthsAvailable : 0,
-      isComplete: goal.targetAmount > 0 && current >= goal.targetAmount,
-    }
-  })
-}
 
 export function calculateInvestmentsSummary(
   holdings: InvestmentHolding[],
@@ -186,7 +149,9 @@ export function calculateInvestmentsSummary(
   const totalInvested = holdingSummaries.reduce((sum, h) => sum + h.invested, 0)
   const totalGain = totalMarketValue - totalInvested
   // Reserva e metas são dinheiro seu: a alocação é medida sobre o patrimônio
-  // inteiro, para bater com o total exibido e com a barra de alocação.
+  // inteiro, para bater com o total exibido e com a barra de alocação. Em
+  // `goalsBalance` entra só o livro-razão das metas — o que uma meta de
+  // patrimônio engloba já está em `totalMarketValue`/`reserveBalance`.
   const netWorth = totalMarketValue + reserveBalance + goalsBalance
 
   // Classes com posições (na ordem cadastrada) seguidas de eventuais órfãs.

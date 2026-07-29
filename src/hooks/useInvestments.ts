@@ -3,6 +3,7 @@ import { useLocalStorage } from './useLocalStorage'
 import type {
   EmergencyFundState,
   FinancialGoal,
+  GoalInclusion,
   InvestmentAssetClass,
   InvestmentHolding,
   LedgerEntry,
@@ -12,10 +13,9 @@ import {
   calculateInvestmentsSummary,
   normalizeAssetClass,
   normalizeEmergencyFund,
-  normalizeGoal,
   normalizeHolding,
-  summarizeGoals,
 } from '../lib/investments'
+import { normalizeGoal, summarizeGoals, type GoalContext } from '../lib/goals'
 import { finiteNumber, ledgerBalance, nowIso, readJson, uid } from '../lib/shared'
 import { ACTIVE_SCENARIO_STORAGE_KEY, SCENARIOS_STORAGE_KEY } from './useScenarios'
 
@@ -144,10 +144,17 @@ export function useInvestments() {
     () => (Array.isArray(storedGoals) ? storedGoals.map((item, i) => normalizeGoal(item, i)) : []),
     [storedGoals],
   )
-  const goalSummaries = useMemo(() => summarizeGoals(goals), [goals])
+
+  // Só o livro-razão das metas soma ao patrimônio. O que uma meta *engloba* já
+  // está contado na reserva ou nas posições — somar de novo duplicaria.
+  const goalOwnBalances = useMemo(() => {
+    const balances: Record<string, number> = {}
+    for (const goal of goals) balances[goal.id] = Math.max(0, ledgerBalance(goal.transactions))
+    return balances
+  }, [goals])
   const goalsBalance = useMemo(
-    () => goalSummaries.reduce((sum, goal) => sum + goal.current, 0),
-    [goalSummaries],
+    () => Object.values(goalOwnBalances).reduce((sum, value) => sum + value, 0),
+    [goalOwnBalances],
   )
 
   // Reserva de emergência ----------------------------------------------------
@@ -328,7 +335,13 @@ export function useInvestments() {
   // Metas --------------------------------------------------------------------
 
   const addGoal = useCallback(
-    (input: { name: string; targetAmount: number; targetMonth?: string; initialAmount?: number }) => {
+    (input: {
+      name: string
+      targetAmount: number
+      targetMonth?: string
+      initialAmount?: number
+      includes?: GoalInclusion[]
+    }) => {
       const trimmed = input.name.trim()
       if (!trimmed) return
       const initial = Math.max(0, finiteNumber(input.initialAmount))
@@ -343,6 +356,7 @@ export function useInvestments() {
             color: GOAL_PRESET_COLORS[prev.length % GOAL_PRESET_COLORS.length],
             createdAt: nowIso(),
             transactions: initial > 0 ? [{ id: uid(), amount: initial, date: nowIso(), note: 'Saldo inicial' }] : [],
+            includes: input.includes,
           },
           prev.length,
         ),
@@ -351,8 +365,30 @@ export function useInvestments() {
     [setGoals],
   )
 
+  /** Liga/desliga uma fonte englobada pela meta. */
+  const toggleGoalInclusion = useCallback(
+    (id: string, inclusion: GoalInclusion) => {
+      setGoals((prev) =>
+        prev.map((goal, index) => {
+          if (goal.id !== id) return goal
+          const current = goal.includes ?? []
+          const matches = (item: GoalInclusion) =>
+            item.type === inclusion.type && (item.id ?? '') === (inclusion.id ?? '')
+          const includes = current.some(matches)
+            ? current.filter((item) => !matches(item))
+            : [...current, inclusion]
+          return normalizeGoal({ ...goal, includes }, index)
+        }),
+      )
+    },
+    [setGoals],
+  )
+
   const updateGoal = useCallback(
-    (id: string, patch: Partial<Pick<FinancialGoal, 'name' | 'targetAmount' | 'targetMonth'>>) => {
+    (
+      id: string,
+      patch: Partial<Pick<FinancialGoal, 'name' | 'targetAmount' | 'targetMonth' | 'includes'>>,
+    ) => {
       setGoals((prev) =>
         prev.map((goal, index) => (goal.id === id ? normalizeGoal({ ...goal, ...patch }, index) : goal)),
       )
@@ -406,6 +442,22 @@ export function useInvestments() {
     [holdings, investmentClasses, reserveBalance, goalsBalance],
   )
 
+  // As metas leem os saldos já consolidados — por isso vêm depois do resumo.
+  const goalContext = useMemo<GoalContext>(
+    () => ({
+      reserveBalance,
+      investmentsBalance: summary.totalMarketValue,
+      classBalances: summary.classes.map((item) => ({
+        id: item.id,
+        name: item.name,
+        marketValue: item.marketValue,
+      })),
+      goalOwnBalances,
+    }),
+    [reserveBalance, summary.totalMarketValue, summary.classes, goalOwnBalances],
+  )
+  const goalSummaries = useMemo(() => summarizeGoals(goals, goalContext), [goals, goalContext])
+
   return {
     emergencyFund,
     addEmergencyFundTransaction,
@@ -429,6 +481,7 @@ export function useInvestments() {
     goalsBalance,
     addGoal,
     updateGoal,
+    toggleGoalInclusion,
     removeGoal,
     addGoalTransaction,
     removeGoalTransaction,

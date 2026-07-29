@@ -1,4 +1,5 @@
-import type { CostCategory, HistoryPoint, HistoryStats, MonthlySnapshot } from '../types'
+import type { BudgetArea, CostCategory, HistoryPoint, HistoryStats, MonthlySnapshot } from '../types'
+import { BUDGET_AREAS } from '../types/constants'
 import { finiteNumber, monthKey, uid } from './shared'
 
 export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): MonthlySnapshot {
@@ -6,6 +7,14 @@ export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): Mo
   if (raw?.costsByCategory && typeof raw.costsByCategory === 'object') {
     for (const [key, value] of Object.entries(raw.costsByCategory)) {
       categories[key as CostCategory] = finiteNumber(value)
+    }
+  }
+
+  const cardByArea: Partial<Record<BudgetArea, number>> = {}
+  if (raw?.cardByArea && typeof raw.cardByArea === 'object') {
+    for (const area of BUDGET_AREAS) {
+      const value = finiteNumber(raw.cardByArea[area])
+      if (value !== 0) cardByArea[area] = value
     }
   }
 
@@ -26,6 +35,8 @@ export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): Mo
     netWorth: finiteNumber(raw?.netWorth),
     emergencyFund: finiteNumber(raw?.emergencyFund),
     cardPersonalTotal: finiteNumber(raw?.cardPersonalTotal),
+    cardByArea,
+    cashLeftover: finiteNumber(raw?.cashLeftover),
     note: raw?.note?.trim() || undefined,
   }
 }
@@ -52,6 +63,7 @@ export function calculateHistoryStats(points: HistoryPoint[]): HistoryStats {
       averageWants: 0,
       averageInvested: 0,
       averageSavingsRate: 0,
+      averageCardPersonal: 0,
       netWorthGrowth: 0,
       netWorthGrowthPct: 0,
       bestSavingsMonth: null,
@@ -72,6 +84,7 @@ export function calculateHistoryStats(points: HistoryPoint[]): HistoryStats {
     averageWants: mean((p) => p.wants),
     averageInvested: mean((p) => p.invested),
     averageSavingsRate: mean((p) => p.savingsRate),
+    averageCardPersonal: mean((p) => p.cardPersonalTotal),
     netWorthGrowth,
     netWorthGrowthPct: first.netWorth > 0 ? (netWorthGrowth / first.netWorth) * 100 : 0,
     bestSavingsMonth: best,
