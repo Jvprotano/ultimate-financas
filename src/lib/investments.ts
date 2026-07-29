@@ -132,6 +132,7 @@ export function calculateInvestmentsSummary(
   classes: InvestmentAssetClass[],
   reserveBalance = 0,
   goalsBalance = 0,
+  liabilities = 0,
 ): InvestmentsSummary {
   const holdingSummaries: HoldingSummary[] = holdings.map((holding) => {
     const invested = ledgerBalance(holding.transactions)
@@ -148,11 +149,13 @@ export function calculateInvestmentsSummary(
   const totalMarketValue = holdingSummaries.reduce((sum, h) => sum + h.marketValue, 0)
   const totalInvested = holdingSummaries.reduce((sum, h) => sum + h.invested, 0)
   const totalGain = totalMarketValue - totalInvested
-  // Reserva e metas são dinheiro seu: a alocação é medida sobre o patrimônio
-  // inteiro, para bater com o total exibido e com a barra de alocação. Em
-  // `goalsBalance` entra só o livro-razão das metas — o que uma meta de
-  // patrimônio engloba já está em `totalMarketValue`/`reserveBalance`.
-  const netWorth = totalMarketValue + reserveBalance + goalsBalance
+  // Reserva e metas são dinheiro seu. Em `goalsBalance` entra só o livro-razão
+  // das metas — o que uma meta de patrimônio engloba já está em
+  // `totalMarketValue`/`reserveBalance`.
+  const grossAssets = totalMarketValue + reserveBalance + goalsBalance
+  // A alocação é medida sobre os *ativos*, não sobre o patrimônio líquido:
+  // dividir por um líquido pequeno (ou negativo) daria fatias sem sentido.
+  const netWorth = grossAssets - liabilities
 
   // Classes com posições (na ordem cadastrada) seguidas de eventuais órfãs.
   const orphanClassIds = holdingSummaries
@@ -181,7 +184,7 @@ export function calculateInvestmentsSummary(
         invested,
         gain,
         gainPct: invested > 0 ? (gain / invested) * 100 : 0,
-        allocationPct: netWorth > 0 ? (marketValue / netWorth) * 100 : 0,
+        allocationPct: grossAssets > 0 ? (marketValue / grossAssets) * 100 : 0,
         holdings: classHoldings,
       }
     })
@@ -192,6 +195,8 @@ export function calculateInvestmentsSummary(
     totalInvested,
     totalGain,
     totalGainPct: totalInvested > 0 ? (totalGain / totalInvested) * 100 : 0,
+    grossAssets,
+    liabilities,
     netWorth,
     reserveBalance,
     goalsBalance,

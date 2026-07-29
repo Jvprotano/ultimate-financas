@@ -1,11 +1,14 @@
-import { useState } from 'react'
-import { CalendarCheck, History, Trash2, TrendingUp } from 'lucide-react'
+import { Fragment, useState } from 'react'
+import { CalendarCheck, History, Pencil, Trash2, TrendingUp } from 'lucide-react'
+import { ActualsPanel } from './ActualsPanel'
+import { CurrencyInput } from './CurrencyInput'
 import {
   ConfirmButton,
   EmptyState,
   Panel,
   PanelHeader,
   PrimaryButton,
+  SecondaryButton,
   StatTile,
   Tag,
   TrendChart,
@@ -18,21 +21,91 @@ import {
   inputClass,
 } from '../lib/format'
 import { useFinancasStore } from '../context/financasStore'
+import type { HistoryPoint, SnapshotPatch } from '../types'
 import { BUDGET_AREA_COLORS, CHART_PALETTE } from '../types/constants'
 
+/**
+ * Correção de um mês já fechado. Refechar substituiria tudo pelos números de
+ * hoje — inútil quando o erro está três meses atrás.
+ */
+function SnapshotEditor({ point, onClose }: { point: HistoryPoint; onClose: () => void }) {
+  const { history } = useFinancasStore()
+  const set = (patch: SnapshotPatch) => history.updateSnapshot(point.id, patch)
+
+  const fields: { label: string; value: number; key: keyof SnapshotPatch }[] = [
+    { label: 'Base do orçamento', value: point.availableForBudget, key: 'availableForBudget' },
+    { label: 'Salário na conta', value: point.paycheckInAccount, key: 'paycheckInAccount' },
+    { label: 'Custos', value: point.costs, key: 'costs' },
+    { label: 'Desejos', value: point.wants, key: 'wants' },
+    { label: 'Investido', value: point.invested, key: 'invested' },
+    { label: 'Ativos', value: point.grossAssets, key: 'grossAssets' },
+    { label: 'Dívidas', value: point.liabilities, key: 'liabilities' },
+    { label: 'Fatura (sua parte)', value: point.cardPersonalTotal, key: 'cardPersonalTotal' },
+  ]
+
+  return (
+    <tr className="border-t border-dark-border-subtle bg-dark-surface/40">
+      <td colSpan={9} className="px-5 py-4">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {fields.map((field) => (
+            <label key={field.key} className="block">
+              <span className="mb-1 block text-[11px] text-dark-text-muted">{field.label}</span>
+              <CurrencyInput
+                value={field.value}
+                onChange={(value) => set({ [field.key]: value } as SnapshotPatch)}
+                className="!py-1.5"
+              />
+            </label>
+          ))}
+          <label className="block sm:col-span-2 xl:col-span-4">
+            <span className="mb-1 block text-[11px] text-dark-text-muted">Nota do mês</span>
+            <input
+              value={point.note ?? ''}
+              onChange={(event) => set({ note: event.target.value })}
+              placeholder="ex.: 13º salário, mudança de aluguel"
+              className={`${inputClass} !py-1.5`}
+            />
+          </label>
+        </div>
+        <p className="mt-2.5 text-[11px] leading-relaxed text-dark-text-muted">
+          A taxa de poupança e o patrimônio líquido são recalculados a partir do que você editar.
+          Patrimônio líquido: {formatCurrency(point.grossAssets - point.liabilities)}.
+        </p>
+        <div className="mt-2.5 flex gap-2">
+          <SecondaryButton onClick={onClose}>Fechar</SecondaryButton>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
 export function HistoryView() {
-  const { history, metrics, investments, cards, cashFlow, closeCurrentMonth } = useFinancasStore()
+  const { history, metrics, investments, cards, cashFlow, actuals, closeCurrentMonth } =
+    useFinancasStore()
   const { points, stats, currentMonth, isCurrentMonthClosed } = history
   const [note, setNote] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   const labels = points.map((point) => formatMonthKey(point.month))
+  const hasLiabilities = points.some((point) => point.liabilities > 0)
   const netWorthSeries: TrendSeries[] = [
     {
       id: 'net-worth',
-      label: 'Patrimônio',
+      label: hasLiabilities ? 'Patrimônio líquido' : 'Patrimônio',
       color: CHART_PALETTE.aqua,
       values: points.map((point) => point.netWorth),
     },
+    // Só vale mostrar as duas curvas quando elas de fato divergem.
+    ...(hasLiabilities
+      ? [
+          {
+            id: 'assets',
+            label: 'Ativos',
+            color: CHART_PALETTE.blue,
+            values: points.map((point) => point.grossAssets),
+          },
+        ]
+      : []),
   ]
   const flowSeries: TrendSeries[] = [
     {
@@ -64,6 +137,8 @@ export function HistoryView() {
 
   return (
     <div className="space-y-4">
+      <ActualsPanel />
+
       <Panel>
         <PanelHeader
           title={`Fechar ${formatMonthLong(currentMonth)}`}
@@ -85,7 +160,15 @@ export function HistoryView() {
 
         <div className="mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-5">
           <StatTile label="Base do mês" value={formatCurrency(metrics.availableForBudget)} />
-          <StatTile label="Custos" value={formatCurrency(metrics.totalCosts)} />
+          <StatTile
+            label="Custos"
+            value={formatCurrency(actuals.summary.effectiveCosts)}
+            detail={
+              actuals.summary.informedCount > 0
+                ? `realizado · plano era ${formatCurrency(actuals.summary.plannedCosts)}`
+                : 'do plano — informe o realizado acima'
+            }
+          />
           <StatTile label="Investido" value={formatCurrency(metrics.totalPlannedInvestment)} />
           <StatTile
             label="Fatura (sua parte)"
@@ -93,9 +176,13 @@ export function HistoryView() {
             detail="o realizado do ciclo"
           />
           <StatTile
-            label="Patrimônio hoje"
+            label="Patrimônio líquido"
             value={formatCurrency(investments.summary.netWorth)}
-            detail={`sobra em caixa: ${formatCurrency(cashFlow.leftover)}`}
+            detail={
+              investments.summary.liabilities > 0
+                ? `${formatCurrency(investments.summary.grossAssets)} em ativos − ${formatCurrency(investments.summary.liabilities)}`
+                : `sobra em caixa: ${formatCurrency(cashFlow.leftover)}`
+            }
             tone="accent"
           />
         </div>
@@ -188,13 +275,16 @@ export function HistoryView() {
                     <th className="px-4 py-2.5 text-right font-medium">Investido</th>
                     <th className="px-4 py-2.5 text-right font-medium">Cartão</th>
                     <th className="px-4 py-2.5 text-right font-medium">Poupança</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Patrimônio</th>
+                    <th className="px-4 py-2.5 text-right font-medium">
+                      {hasLiabilities ? 'Líquido' : 'Patrimônio'}
+                    </th>
                     <th className="px-5 py-2.5 text-right font-medium sr-only">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {reversed.map((point) => (
-                    <tr key={point.id} className="group border-t border-dark-border-subtle">
+                    <Fragment key={point.id}>
+                    <tr className="group border-t border-dark-border-subtle">
                       <td className="px-5 py-2.5">
                         <span className="font-medium text-dark-text">
                           {formatMonthKey(point.month)}
@@ -215,6 +305,14 @@ export function HistoryView() {
                             }`}
                           >
                             {point.costsDelta > 0 ? '↑' : '↓'}
+                          </span>
+                        )}
+                        {Math.abs(point.costs - point.costsPlanned) > 0.005 && (
+                          <span
+                            className="ml-1 text-[11px] text-dark-text-muted"
+                            title={`Plano era ${formatCurrency(point.costsPlanned)}`}
+                          >
+                            *
                           </span>
                         )}
                       </td>
@@ -243,7 +341,22 @@ export function HistoryView() {
                           </span>
                         )}
                       </td>
-                      <td className="px-5 py-2.5 text-right">
+                      <td className="whitespace-nowrap px-5 py-2.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditingId((prev) => (prev === point.id ? null : point.id))
+                          }
+                          className={`rounded-md p-1.5 transition-all focus-visible:opacity-100 group-hover:opacity-100 ${
+                            editingId === point.id
+                              ? 'bg-dark-hover text-dark-text opacity-100'
+                              : 'text-dark-text-muted opacity-0 hover:text-dark-text'
+                          }`}
+                          aria-label={`Corrigir ${formatMonthKey(point.month)}`}
+                          aria-expanded={editingId === point.id}
+                        >
+                          <Pencil size={14} />
+                        </button>
                         <button
                           type="button"
                           onClick={() => history.removeSnapshot(point.id)}
@@ -254,6 +367,10 @@ export function HistoryView() {
                         </button>
                       </td>
                     </tr>
+                    {editingId === point.id && (
+                      <SnapshotEditor point={point} onClose={() => setEditingId(null)} />
+                    )}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>

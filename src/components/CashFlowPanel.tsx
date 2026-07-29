@@ -64,6 +64,16 @@ export function CashFlowPanel() {
   const incomeEvents = forecast.monthOccurrences.filter((item) => item.event.kind === 'income')
   const expenseEvents = forecast.monthOccurrences.filter((item) => item.event.kind === 'expense')
 
+  // Com fechamentos diferentes, "a fatura" são várias — cada uma com sua data.
+  const invoices = [...cards.cycles]
+    .filter((card) => card.personalAmount > 0)
+    .sort((a, b) => a.daysToDue - b.daysToDue)
+  const invoiceHint = invoices.length
+    ? invoices
+        .map((card) => `${card.name} dia ${card.dueDay}${card.isClosed ? ' (fechada)' : ''}`)
+        .join(' · ')
+    : `vence em ${cards.settings.paymentDate} — é o gasto do ciclo que fechou`
+
   const segments: Segment[] = [
     { id: 'invoice', label: 'Fatura', value: invoiceToPay, color: CHART_PALETTE.orange },
     { id: 'costs', label: 'Custos em conta', value: costsOnAccount, color: CHART_PALETTE.blue },
@@ -112,10 +122,10 @@ export function CashFlowPanel() {
           />
         )}
         <FlowRow
-          label="Fatura do cartão (sua parte)"
+          label={invoices.length > 1 ? 'Faturas do cartão (sua parte)' : 'Fatura do cartão (sua parte)'}
           value={invoiceToPay}
           direction="out"
-          hint={`vence em ${cards.settings.paymentDate} — é o gasto do ciclo que fechou`}
+          hint={invoiceHint}
         />
         {costsOnAccount > 0 && (
           <FlowRow

@@ -4,6 +4,7 @@ import { CurrencyInput } from './CurrencyInput'
 import { LedgerList, LedgerMoveForm } from './Ledger'
 import { ReserveSection } from './ReserveSection'
 import { GoalsSection } from './GoalsSection'
+import { DebtsManager } from './DebtsManager'
 import {
   EmptyState,
   GainLabel,
@@ -16,7 +17,7 @@ import {
   Tag,
 } from './ui'
 import { formatCurrency, inputClass } from '../lib/format'
-import { useInvestmentsStore } from '../context/financasStore'
+import { useFinancasStore, useInvestmentsStore } from '../context/financasStore'
 import type { HoldingSummary } from '../types'
 import { CHART_PALETTE, INVESTMENT_CLASS_PRESET_COLORS } from '../types/constants'
 
@@ -334,50 +335,82 @@ function NewHoldingForm({ onClose }: { onClose: () => void }) {
 
 export function InvestmentsManager() {
   const { summary, goals } = useInvestmentsStore()
+  const { debts } = useFinancasStore()
   const [showForm, setShowForm] = useState(false)
 
-  const { netWorth, reserveBalance, goalsBalance, totalMarketValue, totalGain, totalInvested } =
-    summary
+  const {
+    grossAssets,
+    liabilities,
+    netWorth,
+    reserveBalance,
+    goalsBalance,
+    totalMarketValue,
+    totalGain,
+    totalInvested,
+  } = summary
   const activeGoals = goals.filter((goal) => !goal.isComplete).length
+  const hasDebt = liabilities > 0
 
   return (
     <div className="space-y-4">
       <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
-          label="Patrimônio total"
+          label="Patrimônio líquido"
           value={formatCurrency(netWorth)}
-          detail="investimentos + reserva + metas"
-          tone="accent"
+          detail={hasDebt ? 'ativos − dívidas' : 'investimentos + reserva + metas'}
+          tone={netWorth >= 0 ? 'accent' : 'negative'}
         />
         <StatTile
-          label="Investimentos"
-          value={formatCurrency(totalMarketValue)}
-          detail={totalInvested > 0 ? `${formatCurrency(totalInvested)} aportados` : undefined}
+          label="Ativos"
+          value={formatCurrency(grossAssets)}
+          detail={`${formatCurrency(totalMarketValue)} investidos · ${formatCurrency(reserveBalance + goalsBalance)} em reserva e metas`}
         />
         <StatTile
-          label="Rendimento"
-          value={`${totalGain >= 0 ? '+' : '−'} ${formatCurrency(Math.abs(totalGain))}`}
-          detail={
-            totalInvested > 0
-              ? `${summary.totalGainPct >= 0 ? '+' : ''}${summary.totalGainPct.toFixed(1)}% sobre o aportado`
-              : undefined
+          label={hasDebt ? 'Dívidas' : 'Rendimento'}
+          value={
+            hasDebt
+              ? formatCurrency(liabilities)
+              : `${totalGain >= 0 ? '+' : '−'} ${formatCurrency(Math.abs(totalGain))}`
           }
-          tone={totalGain >= 0 ? 'positive' : 'negative'}
+          detail={
+            hasDebt
+              ? `${formatCurrency(debts.summary.totalMonthlyInterest)}/mês de juros`
+              : totalInvested > 0
+                ? `${summary.totalGainPct >= 0 ? '+' : ''}${summary.totalGainPct.toFixed(1)}% sobre o aportado`
+                : undefined
+          }
+          tone={hasDebt ? 'negative' : totalGain >= 0 ? 'positive' : 'negative'}
         />
         <StatTile
-          label="Reserva e metas"
-          value={formatCurrency(reserveBalance + goalsBalance)}
-          detail={
-            activeGoals > 0
-              ? `${formatCurrency(reserveBalance)} de reserva · ${activeGoals} meta${activeGoals > 1 ? 's' : ''} em aberto`
-              : `${formatCurrency(reserveBalance)} de reserva`
+          label={hasDebt ? 'Rendimento' : 'Reserva e metas'}
+          value={
+            hasDebt
+              ? `${totalGain >= 0 ? '+' : '−'} ${formatCurrency(Math.abs(totalGain))}`
+              : formatCurrency(reserveBalance + goalsBalance)
           }
+          detail={
+            hasDebt
+              ? totalInvested > 0
+                ? `${summary.totalGainPct >= 0 ? '+' : ''}${summary.totalGainPct.toFixed(1)}% sobre o aportado`
+                : undefined
+              : activeGoals > 0
+                ? `${formatCurrency(reserveBalance)} de reserva · ${activeGoals} meta${activeGoals > 1 ? 's' : ''} em aberto`
+                : `${formatCurrency(reserveBalance)} de reserva`
+          }
+          tone={hasDebt ? (totalGain >= 0 ? 'positive' : 'negative') : 'neutral'}
         />
       </div>
 
-      {netWorth > 0 && (
+      {grossAssets > 0 && (
         <Panel>
-          <PanelHeader title="Alocação do patrimônio" />
+          <PanelHeader
+            title="Alocação dos ativos"
+            description={
+              hasDebt
+                ? `As fatias são sobre os ${formatCurrency(grossAssets)} de ativos. Descontadas as dívidas, o líquido é ${formatCurrency(netWorth)}.`
+                : undefined
+            }
+          />
           <div className="mt-4">
             <SegmentedBar
               segments={[
@@ -401,10 +434,43 @@ export function InvestmentsManager() {
                   ? [{ id: 'metas', label: 'Metas', value: goalsBalance, color: GOALS_COLOR }]
                   : []),
               ]}
-              total={netWorth}
+              total={grossAssets}
               height={12}
             />
           </div>
+
+          {hasDebt && (
+            <div className="mt-5 border-t border-dark-border-subtle pt-4">
+              <span className="mb-2 block text-[11px] font-medium uppercase tracking-wider text-dark-text-muted">
+                Ativos contra dívidas
+              </span>
+              <div className="flex h-3 w-full gap-[2px] overflow-hidden rounded-full bg-white/[0.06]">
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${(grossAssets / Math.max(grossAssets, liabilities)) * 100}%`,
+                    backgroundColor: CHART_PALETTE.aqua,
+                  }}
+                  title={`Ativos: ${formatCurrency(grossAssets)}`}
+                />
+              </div>
+              <div className="mt-1 flex h-3 w-full gap-[2px] overflow-hidden rounded-full bg-white/[0.06]">
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${(liabilities / Math.max(grossAssets, liabilities)) * 100}%`,
+                    backgroundColor: CHART_PALETTE.red,
+                  }}
+                  title={`Dívidas: ${formatCurrency(liabilities)}`}
+                />
+              </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-dark-text-muted">
+                {liabilities > grossAssets
+                  ? `Você deve ${formatCurrency(liabilities - grossAssets)} mais do que tem. Amortizar e aportar movem o mesmo número.`
+                  : `Seus ativos cobrem as dívidas com ${formatCurrency(grossAssets - liabilities)} de sobra.`}
+              </p>
+            </div>
+          )}
         </Panel>
       )}
 
@@ -412,6 +478,8 @@ export function InvestmentsManager() {
         <ReserveSection />
         <GoalsSection />
       </div>
+
+      <DebtsManager />
 
       <Panel>
         <PanelHeader

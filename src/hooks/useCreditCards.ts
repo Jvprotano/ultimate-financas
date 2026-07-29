@@ -1,17 +1,48 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useLocalStorage } from './useLocalStorage'
-import type { CreditCardCycle, CreditCardEntry, CreditCardSettings } from '../types'
+import type {
+  CreditCardAccount,
+  CreditCardCycle,
+  CreditCardEntry,
+  CreditCardSettings,
+} from '../types'
 import {
   buildRemainingInstallmentsAmount,
   calculateCreditCardSummary,
+  describeCardCycles,
+  normalizeCardAccount,
   normalizeCreditCardEntry,
+  parsePaymentDay,
   syncGeneratedNextEntries,
+  unregisteredCardNames,
 } from '../lib/creditCards'
-import { uid } from '../lib/shared'
+import { readJson, uid } from '../lib/shared'
 
 const ENTRIES_STORAGE_KEY = 'uf_credit_card_entries_v1'
 const SETTINGS_STORAGE_KEY = 'uf_credit_card_settings_v1'
+const ACCOUNTS_STORAGE_KEY = 'uf_credit_card_accounts_v1'
 const DEFAULT_SETTINGS: CreditCardSettings = { paymentDate: '05/07', personalSpendingLimit: 1500 }
+
+/**
+ * Cada cartão passou a ter fechamento e vencimento próprios. Na primeira carga,
+ * os cartões que já apareciam nos lançamentos são cadastrados herdando o
+ * vencimento global antigo — nada se perde e nada precisa ser redigitado.
+ */
+function loadInitialAccounts(): CreditCardAccount[] {
+  const stored = readJson<CreditCardAccount[] | null>(ACCOUNTS_STORAGE_KEY, null)
+  if (Array.isArray(stored) && stored.length) return stored.map(normalizeCardAccount)
+
+  const entries = readJson<CreditCardEntry[] | null>(ENTRIES_STORAGE_KEY, null)
+  if (!Array.isArray(entries) || entries.length === 0) return []
+
+  const settings = readJson<Partial<CreditCardSettings> | null>(SETTINGS_STORAGE_KEY, null)
+  const dueDay = parsePaymentDay(settings?.paymentDate, 5)
+  const names = Array.from(
+    new Set(entries.map((entry) => entry?.cardName?.trim()).filter((name): name is string => !!name)),
+  )
+
+  return names.map((name) => normalizeCardAccount({ name, closingDay: 30, dueDay }))
+}
 
 export function useCreditCards() {
   const [storedEntries, setEntries] = useLocalStorage<CreditCardEntry[]>(ENTRIES_STORAGE_KEY, [])
@@ -23,6 +54,22 @@ export function useCreditCards() {
     SETTINGS_STORAGE_KEY,
     DEFAULT_SETTINGS,
   )
+  const [storedAccounts, setStoredAccounts] = useLocalStorage<CreditCardAccount[]>(
+    ACCOUNTS_STORAGE_KEY,
+    loadInitialAccounts,
+  )
+  const accounts = useMemo(
+    () => (Array.isArray(storedAccounts) ? storedAccounts.map(normalizeCardAccount) : []),
+    [storedAccounts],
+  )
+
+  // Os cartões herdados dos lançamentos só existem em memória até a primeira
+  // gravação; persiste-os no mount para a migração não se perder.
+  useEffect(() => {
+    if (window.localStorage.getItem(ACCOUNTS_STORAGE_KEY) === null && accounts.length > 0) {
+      setStoredAccounts(accounts)
+    }
+  }, [accounts, setStoredAccounts])
 
   // A geração da próxima fatura roda a cada mutação, mas dados que chegam
   // prontos (backup importado, outro dispositivo) nunca passaram por uma:
@@ -176,12 +223,48 @@ export function useCreditCards() {
     [setSettingsRaw],
   )
 
+  const addAccount = useCallback(
+    (input: { name: string; closingDay: number; dueDay: number; limit?: number }) => {
+      const trimmed = input.name.trim()
+      if (!trimmed) return
+      setStoredAccounts((prev) => [
+        ...(Array.isArray(prev) ? prev : []),
+        normalizeCardAccount({ ...input, name: trimmed, id: uid() }),
+      ])
+    },
+    [setStoredAccounts],
+  )
+
+  const updateAccount = useCallback(
+    (id: string, patch: Partial<Omit<CreditCardAccount, 'id'>>) => {
+      setStoredAccounts((prev) =>
+        prev.map((account) =>
+          account.id === id ? normalizeCardAccount({ ...account, ...patch }) : account,
+        ),
+      )
+    },
+    [setStoredAccounts],
+  )
+
+  const removeAccount = useCallback(
+    (id: string) => setStoredAccounts((prev) => prev.filter((account) => account.id !== id)),
+    [setStoredAccounts],
+  )
+
   const summary = useMemo(() => calculateCreditCardSummary(entries, settings), [entries, settings])
+  const cycles = useMemo(() => describeCardCycles(accounts, summary), [accounts, summary])
+  const unregistered = useMemo(() => unregisteredCardNames(entries, accounts), [entries, accounts])
 
   return {
     entries,
     settings,
+    accounts,
+    cycles,
+    unregistered,
     summary,
+    addAccount,
+    updateAccount,
+    removeAccount,
     addEntry,
     updateEntry,
     removeEntry,

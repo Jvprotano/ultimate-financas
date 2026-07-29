@@ -27,11 +27,16 @@ export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): Mo
     availableForBudget: finiteNumber(raw?.availableForBudget),
     paycheckInAccount: finiteNumber(raw?.paycheckInAccount),
     costs: finiteNumber(raw?.costs),
+    // Snapshots antigos não separavam plano de realizado: eram a mesma coisa.
+    costsPlanned: finiteNumber(raw?.costsPlanned, finiteNumber(raw?.costs)),
     wants: finiteNumber(raw?.wants),
     invested: finiteNumber(raw?.invested),
     balance: finiteNumber(raw?.balance),
     savingsRate: finiteNumber(raw?.savingsRate),
     costsByCategory: categories,
+    // Antes das dívidas existirem, o patrimônio gravado *era* o total de ativos.
+    grossAssets: finiteNumber(raw?.grossAssets, finiteNumber(raw?.netWorth)),
+    liabilities: finiteNumber(raw?.liabilities),
     netWorth: finiteNumber(raw?.netWorth),
     emergencyFund: finiteNumber(raw?.emergencyFund),
     cardPersonalTotal: finiteNumber(raw?.cardPersonalTotal),

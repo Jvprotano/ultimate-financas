@@ -45,7 +45,7 @@ type View = 'overview' | 'planning' | 'investments' | 'cards' | 'forecast' | 'hi
 const VIEWS: { id: View; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'overview', label: 'Visão geral', icon: LayoutDashboard },
   { id: 'planning', label: 'Planejamento', icon: SlidersHorizontal },
-  { id: 'investments', label: 'Investimentos', icon: Landmark },
+  { id: 'investments', label: 'Patrimônio', icon: Landmark },
   { id: 'cards', label: 'Cartões', icon: CreditCard },
   { id: 'forecast', label: 'Futuro', icon: CalendarClock },
   { id: 'history', label: 'Histórico', icon: History },

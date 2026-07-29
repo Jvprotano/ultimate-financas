@@ -1,7 +1,12 @@
 import { useCallback, useMemo } from 'react'
 import { useLocalStorage } from './useLocalStorage'
-import type { MonthlySnapshot } from '../types'
-import { buildHistoryPoints, calculateHistoryStats, normalizeSnapshot } from '../lib/history'
+import type { MonthlySnapshot, SnapshotPatch } from '../types'
+import {
+  averageMonthlyCosts,
+  buildHistoryPoints,
+  calculateHistoryStats,
+  normalizeSnapshot,
+} from '../lib/history'
 import { monthKey, nowIso, uid } from '../lib/shared'
 
 const HISTORY_STORAGE_KEY = 'uf_history_v1'
@@ -44,8 +49,36 @@ export function useHistory() {
     [setStored],
   )
 
+  /**
+   * Corrige um mês já fechado. Refechar substituiria pelos números de *hoje*,
+   * que é justamente o que não serve quando o erro está num mês passado.
+   * `savingsRate` e o patrimônio líquido são recalculados a partir do que foi
+   * editado, para o registro nunca ficar internamente contraditório.
+   */
+  const updateSnapshot = useCallback(
+    (id: string, patch: SnapshotPatch) => {
+      setStored((prev) =>
+        prev.map((item) => {
+          if (item.id !== id) return item
+          const merged = normalizeSnapshot({ ...item, ...patch })
+          return {
+            ...merged,
+            netWorth: merged.grossAssets - merged.liabilities,
+            savingsRate:
+              merged.availableForBudget > 0
+                ? (merged.invested / merged.availableForBudget) * 100
+                : 0,
+          }
+        }),
+      )
+    },
+    [setStored],
+  )
+
   const currentMonth = monthKey()
   const isCurrentMonthClosed = snapshots.some((item) => item.month === currentMonth)
+  /** Custo médio real dos últimos meses fechados — base da reserva. */
+  const averageCosts = useMemo(() => averageMonthlyCosts(points), [points])
 
   return {
     snapshots,
@@ -53,8 +86,10 @@ export function useHistory() {
     stats,
     currentMonth,
     isCurrentMonthClosed,
+    averageCosts,
     closeMonth,
     removeSnapshot,
+    updateSnapshot,
     updateSnapshotNote,
   }
 }

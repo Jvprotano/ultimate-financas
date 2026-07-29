@@ -6,6 +6,7 @@ import type {
   ForecastAssumptions,
   ForecastPoint,
 } from '../types'
+import { advanceDebtMonth } from './debts'
 import { addMonths, finiteNumber, monthKey, monthsBetween, nowIso, uid } from './shared'
 
 // ---------------------------------------------------------------------------
@@ -22,7 +23,10 @@ const RECURRENCES: ExpectedEventRecurrence[] = ['once', 'yearly', 'monthly']
 export const DEFAULT_ASSUMPTIONS: ForecastAssumptions = {
   monthlyContribution: null,
   annualReturnPct: 10,
+  inflationPct: 4.5,
+  showInRealTerms: false,
   includeLeftover: false,
+  reinvestFreedInstallments: false,
   horizonMonths: 18,
 }
 
@@ -56,7 +60,10 @@ export function normalizeAssumptions(
         ? contribution
         : null,
     annualReturnPct: Math.max(-50, Math.min(60, finiteNumber(raw?.annualReturnPct, 10))),
+    inflationPct: Math.max(0, Math.min(30, finiteNumber(raw?.inflationPct, 4.5))),
+    showInRealTerms: raw?.showInRealTerms === true,
     includeLeftover: raw?.includeLeftover === true,
+    reinvestFreedInstallments: raw?.reinvestFreedInstallments === true,
     horizonMonths: Math.max(3, Math.min(120, Math.round(finiteNumber(raw?.horizonMonths, 18)))),
   }
 }
@@ -132,53 +139,117 @@ export function summarizeUpcoming(
 // Projeção
 // ---------------------------------------------------------------------------
 
+/** Dívida simplificada para a projeção — só o que muda o saldo mês a mês. */
+export interface ProjectedDebt {
+  id: string
+  balance: number
+  monthlyRatePct: number
+  installment: number
+}
+
 export interface ProjectionInput {
   startMonth: string
-  startNetWorth: number
+  /** Ativos de hoje (a dívida entra separada, para as duas curvas serem visíveis). */
+  startAssets: number
   monthlyContribution: number
   annualReturnPct: number
+  inflationPct: number
   horizonMonths: number
   events: ExpectedEvent[]
+  debts?: ProjectedDebt[]
+  /** Somar ao aporte a parcela de cada dívida já quitada. */
+  reinvestFreedInstallments?: boolean
 }
 
 /**
  * Patrimônio mês a mês a partir de hoje. O primeiro ponto é o presente (sem
  * aporte nem rendimento), para o gráfico começar no número que o app já mostra.
+ *
+ * Ativos e dívidas evoluem separados: os ativos recebem aporte, eventos e
+ * rendimento; cada dívida corre juros e é abatida pela parcela. A parcela *não*
+ * sai dos ativos porque ela já é um custo fixo do mês — o que sobra depois dela
+ * é justamente o aporte.
  */
 export function projectNetWorth(input: ProjectionInput): ForecastPoint[] {
   const monthlyRate = Math.pow(1 + input.annualReturnPct / 100, 1 / 12) - 1
+  const monthlyInflation = Math.pow(1 + input.inflationPct / 100, 1 / 12) - 1
+
+  // Cópia local: a projeção consome os saldos, e o estado do app é imutável.
+  const debts = (input.debts ?? []).map((debt) => ({ ...debt }))
+  const startDebt = debts.reduce((sum, debt) => sum + debt.balance, 0)
+
   const points: ForecastPoint[] = [
     {
       month: input.startMonth,
-      netWorth: input.startNetWorth,
+      assets: input.startAssets,
+      debt: startDebt,
+      netWorth: input.startAssets - startDebt,
+      assetsReal: input.startAssets,
+      netWorthReal: input.startAssets - startDebt,
       contribution: 0,
       eventsSaved: 0,
       returns: 0,
+      debtPaid: 0,
       occurrences: [],
     },
   ]
 
-  let value = input.startNetWorth
+  let assets = input.startAssets
   for (let index = 1; index <= input.horizonMonths; index += 1) {
     const month = addMonths(input.startMonth, index)
     const occurrences = occurrencesInMonth(input.events, month)
     const eventsSaved = occurrences.reduce((sum, item) => sum + item.savedAmount, 0)
-    const returns = value * monthlyRate
+    const returns = assets * monthlyRate
 
-    value = Math.max(0, value + input.monthlyContribution + eventsSaved + returns)
-    points.push({ month, netWorth: value, contribution: input.monthlyContribution, eventsSaved, returns, occurrences })
+    let debtPaid = 0
+    let freedInstallments = 0
+    for (const debt of debts) {
+      if (debt.balance <= 0) {
+        if (input.reinvestFreedInstallments) freedInstallments += debt.installment
+        continue
+      }
+      const next = advanceDebtMonth(debt.balance, debt.monthlyRatePct, debt.installment)
+      debtPaid += debt.balance - next.balance
+      debt.balance = next.balance
+    }
+
+    const contribution = input.monthlyContribution + freedInstallments
+    assets = Math.max(0, assets + contribution + eventsSaved + returns)
+    const debt = debts.reduce((sum, item) => sum + item.balance, 0)
+    const netWorth = assets - debt
+    // Deflator acumulado até este mês: os valores em reais de hoje.
+    const deflator = Math.pow(1 + monthlyInflation, index)
+
+    points.push({
+      month,
+      assets,
+      debt,
+      netWorth,
+      assetsReal: assets / deflator,
+      netWorthReal: netWorth / deflator,
+      contribution,
+      eventsSaved,
+      returns,
+      debtPaid,
+      occurrences,
+    })
   }
 
   return points
 }
 
 /** Patrimônio projetado para um mês — null se estiver fora do horizonte. */
-export function projectedAt(points: ForecastPoint[], month: string): number | null {
+export function projectedAt(
+  points: ForecastPoint[],
+  month: string,
+  real = false,
+): number | null {
+  const pick = (point: ForecastPoint) => (real ? point.netWorthReal : point.netWorth)
   const point = points.find((item) => item.month === month)
-  if (point) return point.netWorth
+  if (point) return pick(point)
   // Mês anterior ao início: o presente é a melhor resposta possível.
   const first = points[0]
-  if (first && monthsBetween(first.month, month) <= 0) return first.netWorth
+  if (first && monthsBetween(first.month, month) <= 0) return pick(first)
   return null
 }
 

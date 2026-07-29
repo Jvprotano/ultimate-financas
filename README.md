@@ -13,10 +13,10 @@ Planejamento financeiro pessoal: orçamento do mês, patrimônio, cartões e o h
 | --- | --- |
 | **Visão geral** | Saldo livre do mês, caixa do mês (extrato), metas por caixa (planejado × realizado no cartão), custos por categoria, alertas e comparação de cenários |
 | **Planejamento** | Renda e descontos em folha, custos fixos (com rateio e forma de pagamento), modelo de orçamento, desejos, plano de aportes e reserva |
-| **Investimentos** | Patrimônio: posições por classe de ativo, rentabilidade anualizada, reserva de emergência e metas com prazo |
-| **Cartões** | Fatura atual e próxima, parcelas e assinaturas geradas automaticamente, importação por colagem do Sheets, limite pessoal |
-| **Futuro** | 13º, bônus, IPVA e afins como ocorrências datadas; projeção do patrimônio e veredito das metas com prazo |
-| **Histórico** | Fechamento de mês: evolução do patrimônio, custo médio real, fatura média e comparação entre meses |
+| **Patrimônio** | Ativos e passivos: posições por classe, rentabilidade anualizada, reserva, metas com prazo e dívidas (saldo, juros, prazo, amortizar × investir) |
+| **Cartões** | Fatura atual e próxima, cartões com fechamento e vencimento próprios, parcelas e assinaturas automáticas, importação por colagem do Sheets |
+| **Futuro** | 13º, bônus, IPVA e afins como ocorrências datadas; projeção de ativos, dívidas e patrimônio líquido, em valores nominais ou de hoje |
+| **Histórico** | Realizado do mês, fechamento, evolução do patrimônio, custo médio real e correção de meses passados |
 
 ## Conceitos
 
@@ -25,21 +25,31 @@ Planejamento financeiro pessoal: orçamento do mês, patrimônio, cartões e o h
 - **Base do orçamento** — a renda que vira meta. Benefícios (VA, plano de saúde) saem porque não são dinheiro livre; previdência descontada em folha continua contando, porque é investimento seu.
 - **Custo pessoal** — contas divididas com outra pessoa entram no orçamento só pela sua parte; o valor cheio fica visível para você saber o tamanho real da conta.
 - **Área do orçamento no cartão** — cada compra pode ser marcada como necessidade, desejo ou investimento. Não cria gasto novo: diz de qual caixa do plano a compra saiu. O traço nas barras de meta mostra o realizado.
-- **Patrimônio** — investimentos + reserva de emergência + o dinheiro guardado dentro das metas.
-- **Meta de poupança × meta de patrimônio** — a primeira junta dinheiro próprio num livro-razão e soma ao patrimônio; a segunda apenas *engloba* saldos que já existem (reserva, investimentos, outras metas) e por isso não duplica nada.
+- **Ativos × patrimônio líquido** — ativos são investimentos + reserva + o guardado nas metas. O líquido desconta as dívidas, e é ele que mede se você está ficando mais rico. As fatias de alocação são sempre sobre os *ativos*: dividir por um líquido pequeno (ou negativo) daria porcentagens sem sentido.
+- **Dívidas** — saldo devedor mantido por você (juros e seguros nunca saem de uma soma de pagamentos), com taxa, parcela e prazo. Amortizar R$ 1.000 e aportar R$ 1.000 movem o mesmo número; o app compara as duas taxas lado a lado. A parcela continua sendo o custo fixo do orçamento — a dívida não a cobra de novo.
+- **Meta de poupança × meta de patrimônio** — a primeira junta dinheiro próprio num livro-razão e soma ao patrimônio; a segunda apenas *engloba* saldos que já existem (reserva, investimentos, outras metas, e dívidas com sinal negativo) e por isso não duplica nada.
 - **Eventos esperados** — entradas e saídas que caem fora do mês a mês, com mês, recorrência e a fatia que você guarda. Alimentam o caixa do mês e a projeção.
+- **Realizado do mês** — o que de fato foi pago em débito e boleto, item por item. Sem ele o "custo médio real" do histórico é só a média dos planos, e a meta da reserva de emergência herda o mesmo otimismo. Valor informado manda; onde não houver, vale o planejado.
+- **Valores de hoje** — a projeção pode ser lida descontada da inflação. Em três ou cinco anos a diferença entre nominal e real é grande o bastante para mudar a decisão.
 - **Rentabilidade anualizada** — TIR sobre as datas dos aportes, para que quem aportou ontem e quem aportou há três anos não apareçam iguais. Histórico curto demais mostra `—`.
-- **Fechamento de mês** — congela os números de hoje como resultado do mês: plano, realizado na fatura por área e sobra em caixa. Sem isso o app só conhece o plano, nunca o realizado.
+- **Fechamento de mês** — congela o mês: custos realizados, fatura por área, ativos, dívidas e sobra em caixa. Fechou errado num mês passado? Corrija o registro em vez de refechar — refechar substituiria tudo pelos números de hoje.
 
 ## Como rodar
 
 ```bash
 npm install
-npm run dev       # http://localhost:5173
-npm run build     # tsc -b && vite build
+npm run dev        # http://localhost:5173
+npm run build      # tsc -b && vite build
 npm run lint
+npm test           # vitest run — cobre src/lib (cálculo puro)
+npm run test:watch
 npm run preview
 ```
+
+Os testes vivem ao lado do código, em `src/lib/*.test.ts`. Cobrem o que quebra em silêncio:
+TIR anualizada, prazo e juros de dívida, projeção com amortização e inflação, rateio de custos,
+inclusões de meta (o caso de contar duas vezes), geração de parcelas e assinaturas, e o
+calendário de fechamento dos cartões.
 
 ## Atalhos de teclado
 
@@ -51,20 +61,22 @@ npm run preview
 src/
   lib/               # cálculo puro, sem React
     scenario.ts      # orçamento do mês, normalização e migração v2→v3
-    investments.ts   # patrimônio, alocação, TIR anualizada
+    investments.ts   # ativos, alocação, TIR anualizada
+    debts.ts         # saldo, juros, prazo, amortizar × investir
     goals.ts         # metas: livro-razão próprio × saldos englobados
-    forecast.ts      # eventos esperados e projeção de patrimônio
+    forecast.ts      # eventos esperados, projeção e inflação
     cashflow.ts      # o mês no extrato: entra, vence, sobra
-    creditCards.ts   # faturas, parcelas, assinaturas
+    actuals.ts       # realizado do mês, item por item
+    creditCards.ts   # faturas, parcelas, assinaturas, ciclo de cada cartão
     cardImport.ts    # leitura de planilha colada
     history.ts       # snapshots mensais e estatísticas
     backup.ts        # exportação, importação e cópias automáticas
     format.ts        # moeda, meses, datas
     shared.ts        # ids, datas, livro-razão
   hooks/             # estado por domínio
-    useScenarios.ts  useCreditCards.ts  useInvestments.ts
-    useHistory.ts    useForecast.ts
-    useFinancas.ts   # compõe os cinco e calcula o que cruza domínios
+    useScenarios.ts  useCreditCards.ts  useInvestments.ts  useDebts.ts
+    useHistory.ts    useForecast.ts     useActuals.ts
+    useFinancas.ts   # compõe os sete e calcula o que cruza domínios
     useLocalStorage.ts  useKeyboardShortcuts.ts
   context/           # FinancasProvider + hooks de leitura
   components/        # ui.tsx é o design system; um arquivo por módulo

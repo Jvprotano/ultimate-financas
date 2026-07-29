@@ -1,6 +1,7 @@
 import type {
   BudgetArea,
   BudgetModel,
+  DebtKind,
   DiversificationSlice,
   CostCategory,
   DeductionType,
@@ -8,6 +9,18 @@ import type {
   InvestmentAssetClass,
   PaymentMethod,
 } from './index'
+
+export const DEBT_KINDS: { key: DebtKind; label: string; hint: string }[] = [
+  { key: 'financiamento', label: 'Financiamento', hint: 'Imóvel, carro, moto' },
+  { key: 'emprestimo', label: 'Empréstimo', hint: 'Pessoal, com garantia' },
+  { key: 'consignado', label: 'Consignado', hint: 'Descontado em folha' },
+  { key: 'cartao', label: 'Cartão / rotativo', hint: 'Fatura parcelada, rotativo' },
+  { key: 'outros', label: 'Outros', hint: 'Cheque especial, family & friends' },
+]
+
+export const DEBT_KIND_LABELS: Record<DebtKind, string> = Object.fromEntries(
+  DEBT_KINDS.map(({ key, label }) => [key, label]),
+) as Record<DebtKind, string>
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   account: 'Conta',
@@ -177,6 +190,14 @@ export const DEDUCTION_TYPE_LABELS: Record<DeductionType, string> = {
   vale_transporte: 'Vale Transporte',
   seguro_vida: 'Seguro de Vida',
   outros: 'Outros',
+}
+
+export const DEBT_KIND_COLORS: Record<DebtKind, string> = {
+  financiamento: CHART_PALETTE.orange,
+  emprestimo: CHART_PALETTE.red,
+  consignado: CHART_PALETTE.magenta,
+  cartao: CHART_PALETTE.yellow,
+  outros: CHART_PALETTE.muted,
 }
 
 export const COST_CATEGORY_COLORS: Record<CostCategory, string> = {

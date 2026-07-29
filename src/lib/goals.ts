@@ -18,12 +18,13 @@ import { finiteNumber, ledgerBalance, monthKey, monthsBetween, normalizeLedger, 
 // ela apenas observa) andam separados: só o primeiro entra no patrimônio.
 // ---------------------------------------------------------------------------
 
-const INCLUSION_TYPES: GoalInclusionType[] = ['reserve', 'investments', 'goals', 'class']
+const INCLUSION_TYPES: GoalInclusionType[] = ['reserve', 'investments', 'goals', 'class', 'debts']
 
 export const INCLUSION_LABELS: Record<Exclude<GoalInclusionType, 'class'>, string> = {
   reserve: 'Reserva de emergência',
   investments: 'Investimentos',
   goals: 'Outras metas',
+  debts: '− Dívidas',
 }
 
 /** Tudo que já está cadastrado e pode ser englobado por uma meta. */
@@ -33,6 +34,8 @@ export interface GoalContext {
   classBalances: { id: string; name: string; marketValue: number }[]
   /** Saldo do livro-razão de cada meta, indexado por id. */
   goalOwnBalances: Record<string, number>
+  /** Saldo devedor total — entra na meta com sinal negativo. */
+  debtBalance: number
 }
 
 export const EMPTY_GOAL_CONTEXT: GoalContext = {
@@ -40,6 +43,7 @@ export const EMPTY_GOAL_CONTEXT: GoalContext = {
   investmentsBalance: 0,
   classBalances: [],
   goalOwnBalances: {},
+  debtBalance: 0,
 }
 
 function normalizeInclusions(raw: unknown): GoalInclusion[] {
@@ -99,6 +103,10 @@ function resolveInclusions(goal: FinancialGoal, context: GoalContext) {
         if (id !== goal.id) balance += own
       }
       labels.push(INCLUSION_LABELS.goals)
+    } else if (inclusion.type === 'debts') {
+      // Uma meta de patrimônio *líquido* desconta o que você deve.
+      balance -= context.debtBalance
+      labels.push(INCLUSION_LABELS.debts)
     } else if (inclusion.type === 'class') {
       const assetClass = context.classBalances.find((item) => item.id === inclusion.id)
       if (!assetClass) continue
@@ -119,6 +127,7 @@ export function summarizeGoals(
   return goals.map((goal) => {
     const ownBalance = Math.max(0, ledgerBalance(goal.transactions))
     const included = resolveInclusions(goal, context)
+    // Pode ficar negativo: uma meta de patrimônio líquido com mais dívida que ativo.
     const current = ownBalance + included.balance
     const remaining = Math.max(0, goal.targetAmount - current)
     const monthsLeft = goal.targetMonth ? monthsBetween(currentMonth, goal.targetMonth) : null
@@ -132,7 +141,10 @@ export function summarizeGoals(
       includedLabels: included.labels,
       current,
       remaining,
-      progress: goal.targetAmount > 0 ? Math.min(100, (current / goal.targetAmount) * 100) : 0,
+      progress:
+        goal.targetAmount > 0
+          ? Math.max(0, Math.min(100, (current / goal.targetAmount) * 100))
+          : 0,
       monthsLeft,
       suggestedMonthly: monthsAvailable > 0 ? remaining / monthsAvailable : 0,
       isComplete: goal.targetAmount > 0 && current >= goal.targetAmount,

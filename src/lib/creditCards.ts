@@ -1,11 +1,97 @@
 import type {
   BudgetArea,
+  CardCycleStatus,
+  CreditCardAccount,
   CreditCardEntry,
   CreditCardSettings,
   CreditCardSummary,
 } from '../types'
 import { BUDGET_AREAS } from '../types/constants'
 import { finiteNumber, normalizeText, uid } from './shared'
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+export function normalizeCardAccount(raw: Partial<CreditCardAccount> | undefined): CreditCardAccount {
+  const clampDay = (value: unknown, fallback: number) =>
+    Math.max(1, Math.min(31, Math.round(finiteNumber(value, fallback))))
+
+  return {
+    id: raw?.id || uid(),
+    name: raw?.name?.trim() || 'Cartão',
+    closingDay: clampDay(raw?.closingDay, 30),
+    dueDay: clampDay(raw?.dueDay, 5),
+    limit: Math.max(0, finiteNumber(raw?.limit)),
+  }
+}
+
+/** Extrai o dia de um texto livre de vencimento antigo ("05/07" → 5). */
+export function parsePaymentDay(raw: string | undefined, fallback = 5): number {
+  const match = raw?.match(/(\d{1,2})/)
+  const day = match ? Number(match[1]) : NaN
+  return Number.isFinite(day) && day >= 1 && day <= 31 ? day : fallback
+}
+
+/** Próxima ocorrência de um dia do mês, a partir de `from`. */
+function nextDateForDay(day: number, from: Date): Date {
+  const daysInMonth = new Date(from.getFullYear(), from.getMonth() + 1, 0).getDate()
+  const thisMonth = new Date(from.getFullYear(), from.getMonth(), Math.min(day, daysInMonth))
+  if (thisMonth.getTime() >= startOfDay(from).getTime()) return thisMonth
+  const nextDaysInMonth = new Date(from.getFullYear(), from.getMonth() + 2, 0).getDate()
+  return new Date(from.getFullYear(), from.getMonth() + 1, Math.min(day, nextDaysInMonth))
+}
+
+function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+}
+
+/**
+ * Onde cada cartão está no seu ciclo. Com fechamentos diferentes, "a fatura" não
+ * é uma coisa só: um cartão pode ter fechado ontem e o outro fechar só semana
+ * que vem — e o que já fechou não aceita mais compras deste ciclo.
+ */
+export function describeCardCycles(
+  accounts: CreditCardAccount[],
+  summary: CreditCardSummary,
+  now = new Date(),
+): CardCycleStatus[] {
+  const today = startOfDay(now)
+  const days = (target: Date) => Math.round((target.getTime() - today.getTime()) / DAY_MS)
+
+  return accounts.map((account) => {
+    const totals = summary.totalsByCard.find(
+      (card) => normalizeText(card.cardName) === normalizeText(account.name),
+    )
+    const personalAmount = totals?.personalAmount ?? 0
+    const totalAmount = totals?.totalAmount ?? 0
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+    const closingThisMonth = Math.min(account.closingDay, daysInMonth)
+
+    return {
+      ...account,
+      isClosed: now.getDate() > closingThisMonth,
+      daysToClosing: days(nextDateForDay(account.closingDay, now)),
+      daysToDue: days(nextDateForDay(account.dueDay, now)),
+      personalAmount,
+      totalAmount,
+      usagePct: account.limit > 0 ? (totalAmount / account.limit) * 100 : null,
+    }
+  })
+}
+
+/** Nomes de cartão que aparecem nos lançamentos mas não estão cadastrados. */
+export function unregisteredCardNames(
+  entries: CreditCardEntry[],
+  accounts: CreditCardAccount[],
+): string[] {
+  const known = new Set(accounts.map((account) => normalizeText(account.name)))
+  const names = new Map<string, string>()
+  for (const entry of entries) {
+    const key = normalizeText(entry.cardName)
+    if (!key || known.has(key) || names.has(key)) continue
+    names.set(key, entry.cardName)
+  }
+  return Array.from(names.values())
+}
 
 const isBudgetArea = (value: unknown): value is BudgetArea =>
   typeof value === 'string' && (BUDGET_AREAS as string[]).includes(value)

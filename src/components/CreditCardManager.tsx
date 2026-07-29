@@ -19,6 +19,7 @@ import {
   X,
   Zap,
 } from 'lucide-react'
+import { CardAccountsPanel } from './CardAccountsPanel'
 import { CurrencyInput } from './CurrencyInput'
 import {
   ConfirmButton,
@@ -368,29 +369,19 @@ export function CreditCardManager() {
         />
       </div>
 
+      <CardAccountsPanel />
+
       <Panel>
         <PanelHeader
-          title="Ciclo da fatura"
+          title="Seu teto de gasto"
           icon={<Calendar size={16} />}
           description="“Fatura atual” é o ciclo que está fechando: as compras deste mês, que você paga com o salário do mês que vem. Ao pagar, use “Pagar fatura” para virar o ciclo."
           className="mb-4"
         />
-        <div className="grid gap-4 lg:grid-cols-3">
-          <label className="block">
-            <span className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-dark-text-muted">
-              <Calendar size={13} />
-              Data de pagamento
-            </span>
-            <input
-              value={settings.paymentDate}
-              onChange={(event) => setSettings({ ...settings, paymentDate: event.target.value })}
-              className={inputClass}
-              placeholder="05/07"
-            />
-          </label>
+        <div className="grid gap-4 lg:grid-cols-2">
           <label className="block">
             <span className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-dark-text-muted">
-              Limite pessoal
+              Limite pessoal (somando todos os cartões)
             </span>
             <CurrencyInput
               value={settings.personalSpendingLimit}

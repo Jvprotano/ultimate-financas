@@ -272,6 +272,8 @@ export function calculateScenario(
   emergencyFund: EmergencyFundState,
   /** Gasto pessoal já realizado no cartão, por área do orçamento. */
   realizedByArea: Record<BudgetArea, number> = EMPTY_REALIZED,
+  /** Custo médio dos meses fechados; quando existe, é a base da reserva. */
+  averageMonthlyCosts: number | null = null,
 ) {
   const selectedModel = getSelectedModel(state)
 
@@ -368,7 +370,11 @@ export function calculateScenario(
     costsByCategory.set(cost.category, (costsByCategory.get(cost.category) || 0) + personalCostValue(cost))
   }
 
-  const emergencyFundTarget = totalCosts * emergencyFund.targetMonths
+  // A reserva cobre o custo de viver, não o custo que você *planejou*. Havendo
+  // meses fechados, a média real é a base; sem eles, cai no plano.
+  const emergencyFundUsesHistory = averageMonthlyCosts !== null && averageMonthlyCosts > 0
+  const emergencyFundBaseCosts = emergencyFundUsesHistory ? averageMonthlyCosts : totalCosts
+  const emergencyFundTarget = emergencyFundBaseCosts * emergencyFund.targetMonths
   const emergencyFundRemaining = Math.max(0, emergencyFundTarget - emergencyFund.current)
   const emergencyFundProgress =
     emergencyFundTarget > 0 ? Math.min(100, (emergencyFund.current / emergencyFundTarget) * 100) : 0
@@ -405,6 +411,8 @@ export function calculateScenario(
     fixedIncomeMonthlyAllocation,
     costsByCategory,
     emergencyFundTarget,
+    emergencyFundBaseCosts,
+    emergencyFundUsesHistory,
     emergencyFundRemaining,
     emergencyFundProgress,
     emergencyFundMonthsToGoal,

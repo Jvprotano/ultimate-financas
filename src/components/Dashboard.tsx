@@ -12,7 +12,7 @@ import {
 import { formatCurrency, formatMonths } from '../lib/format'
 import { useFinancasStore } from '../context/financasStore'
 import type { ScenarioMetrics } from '../hooks/useFinancas'
-import type { BudgetArea, CashFlowSummary, CreditCardSummary } from '../types'
+import type { BudgetArea, CashFlowSummary, CreditCardSummary, DebtsSummary } from '../types'
 import {
   BUDGET_AREAS,
   BUDGET_AREA_COLORS,
@@ -33,6 +33,7 @@ function buildAlerts(
   metrics: ScenarioMetrics,
   creditCardSummary: CreditCardSummary,
   cashFlow: CashFlowSummary,
+  debtsSummary: DebtsSummary,
 ): Alert[] {
   const alerts: Alert[] = []
   const { budgetComparison, balanceAfterPlan, totalDiversificationPercentage, selectedModel } =
@@ -115,6 +116,18 @@ function buildAlerts(
       title: 'Cartão acima do limite pessoal',
       detail: `A fatura pessoal passou seu teto em ${formatCurrency(-creditCardSummary.availablePersonalLimit)}.`,
       severity: 'critical',
+    })
+  }
+  if (debtsSummary.costliest && debtsSummary.totalMonthlyInterest > 0) {
+    const share =
+      metrics.availableForBudget > 0
+        ? (debtsSummary.totalMonthlyInterest / metrics.availableForBudget) * 100
+        : 0
+    alerts.push({
+      id: 'debt-interest',
+      title: 'Juros correndo todo mês',
+      detail: `${formatCurrency(debtsSummary.totalMonthlyInterest)} do que você paga é só juro — ${share.toFixed(0)}% da base do orçamento. A mais cara é ${debtsSummary.costliest.name}, a ${debtsSummary.costliest.annualRatePct.toFixed(1)}% a.a.`,
+      severity: share > 5 ? 'critical' : 'warning',
     })
   }
   if (creditCardSummary.unclassifiedPersonal > 0) {
@@ -205,7 +218,7 @@ export function Dashboard({
     )
   }
 
-  const alerts = buildAlerts(metrics, creditCardSummary, cashFlow)
+  const alerts = buildAlerts(metrics, creditCardSummary, cashFlow, store.debts.summary)
   const costRows = Array.from(costsByCategory.entries())
     .map(([category, value]) => ({ category, value }))
     .sort((a, b) => b.value - a.value)
@@ -289,14 +302,16 @@ export function Dashboard({
             detail="renda usada nas metas"
           />
           <StatTile
-            label="Patrimônio"
+            label="Patrimônio líquido"
             value={formatCurrency(investmentsSummary.netWorth)}
             detail={
-              lastMonth && stats.months > 1
-                ? `${stats.netWorthGrowth >= 0 ? '+' : '−'} ${formatCurrency(Math.abs(stats.netWorthGrowth))} no histórico`
-                : 'investimentos + reserva + metas'
+              investmentsSummary.liabilities > 0
+                ? `${formatCurrency(investmentsSummary.grossAssets)} em ativos − ${formatCurrency(investmentsSummary.liabilities)} de dívida`
+                : lastMonth && stats.months > 1
+                  ? `${stats.netWorthGrowth >= 0 ? '+' : '−'} ${formatCurrency(Math.abs(stats.netWorthGrowth))} no histórico`
+                  : 'investimentos + reserva + metas'
             }
-            tone="accent"
+            tone={investmentsSummary.netWorth >= 0 ? 'accent' : 'negative'}
           />
           <StatTile
             label="Custos fixos"
@@ -462,6 +477,13 @@ export function Dashboard({
                 : emergencyFundMonthsToGoal > 0
                   ? `${formatCurrency(emergencyFundRemaining)} para a meta de ${emergencyFund.targetMonths} meses — cerca de ${formatMonths(emergencyFundMonthsToGoal)} no ritmo atual de renda fixa.`
                   : `${formatCurrency(emergencyFundRemaining)} para a meta de ${emergencyFund.targetMonths} meses. Sem aporte em renda fixa, não há prazo estimado.`}
+            {metrics.emergencyFundUsesHistory && emergencyFundTarget > 0 && (
+              <>
+                {' '}
+                A meta usa o custo médio real de {formatCurrency(metrics.emergencyFundBaseCosts)}
+                /mês dos meses que você fechou, não o planejado.
+              </>
+            )}
           </p>
           {fixedIncomeMonthlyAllocation <= 0 && emergencyFundRemaining > 0 && emergencyFundTarget > 0 && (
             <p className="mt-1 text-[11px] text-amber-300">

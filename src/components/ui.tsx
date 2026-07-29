@@ -640,8 +640,8 @@ export function Tag({
   )
 }
 
-/** Grupo de botões mutuamente exclusivos. */
-export function SegmentedControl<T extends string | number>({
+/** Grupo de botões mutuamente exclusivos. `boolean` cobre os pares tipo nominal/real. */
+export function SegmentedControl<T extends string | number | boolean>({
   options,
   value,
   onChange,

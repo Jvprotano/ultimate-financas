@@ -119,7 +119,7 @@ export interface EmergencyFundState {
  * Uma meta de patrimônio ("9 mil até dezembro") não guarda dinheiro próprio: ela
  * mede a reserva e os investimentos que já existem.
  */
-export type GoalInclusionType = 'reserve' | 'investments' | 'goals' | 'class'
+export type GoalInclusionType = 'reserve' | 'investments' | 'goals' | 'class' | 'debts'
 
 export interface GoalInclusion {
   type: GoalInclusionType
@@ -202,12 +202,71 @@ export interface InvestmentsSummary {
   totalInvested: number
   totalGain: number
   totalGainPct: number
-  /** Investimentos + reserva + o dinheiro guardado dentro das metas. */
+  /** Tudo que você tem: investimentos + reserva + guardado nas metas. */
+  grossAssets: number
+  /** Soma dos saldos devedores. */
+  liabilities: number
+  /** Ativos − dívidas. É o número que mede se você está ficando mais rico. */
   netWorth: number
   reserveBalance: number
   /** Só o livro-razão das metas: o que uma meta engloba já está contado. */
   goalsBalance: number
   classes: AssetClassSummary[]
+}
+
+// ---------------------------------------------------------------------------
+// Dívidas — o outro lado do patrimônio
+// ---------------------------------------------------------------------------
+
+export type DebtKind = 'financiamento' | 'emprestimo' | 'consignado' | 'cartao' | 'outros'
+
+export interface Debt {
+  id: string
+  name: string
+  kind: DebtKind
+  /** Saldo devedor de hoje. Você mantém atualizado, como o valor de mercado de uma posição. */
+  balance: number
+  /** Juros nominais ao mês, em %, como aparece no contrato. */
+  monthlyRatePct: number
+  /** Parcela mensal. */
+  installment: number
+  /** Parcelas que ainda faltam; 0 = não informado (o prazo é estimado pela taxa). */
+  remainingInstallments: number
+  /** Custo fixo do cenário que já representa esta parcela — evita contar duas vezes. */
+  linkedCostId?: string
+  /** Movimentações: negativo = amortização, positivo = saldo que aumentou. */
+  transactions: LedgerEntry[]
+  createdAt: string
+  settledAt?: string
+}
+
+export interface DebtSummary extends Debt {
+  annualRatePct: number
+  /** Juros que correm sobre o saldo neste mês. */
+  monthlyInterest: number
+  /** Fatia da parcela que abate o saldo (o resto é só juros). */
+  amortizationShare: number
+  /** Meses até quitar no ritmo da parcela; null quando a parcela não cobre os juros. */
+  monthsToPayoff: number | null
+  /** Total que ainda vai sair do seu bolso até quitar. */
+  totalRemaining: number
+  /** Juros que ainda vão correr até o fim. */
+  interestRemaining: number
+  isSettled: boolean
+  /** A parcela informada bate com o custo fixo ligado a ela? */
+  linkedCostMismatch: number | null
+}
+
+export interface DebtsSummary {
+  totalBalance: number
+  totalInstallment: number
+  totalMonthlyInterest: number
+  totalInterestRemaining: number
+  /** Taxa média ponderada pelo saldo. */
+  weightedAnnualRatePct: number
+  /** Dívida de maior taxa — a que mais custa carregar. */
+  costliest: DebtSummary | null
+  debts: DebtSummary[]
 }
 
 // ---------------------------------------------------------------------------
@@ -254,19 +313,34 @@ export interface ForecastAssumptions {
   monthlyContribution: number | null
   /** Rendimento nominal esperado do patrimônio, ao ano. */
   annualReturnPct: number
+  /** Inflação esperada ao ano — usada para ler a projeção em reais de hoje. */
+  inflationPct: number
+  /** Exibir os valores descontados da inflação. */
+  showInRealTerms: boolean
   /** Somar a sobra do mês ao aporte projetado. */
   includeLeftover: boolean
+  /** Quando uma dívida quita, a parcela liberada passa a ser aportada. */
+  reinvestFreedInstallments: boolean
   horizonMonths: number
 }
 
 export interface ForecastPoint {
   month: string
-  /** Patrimônio ao fim do mês. */
+  /** Ativos ao fim do mês. */
+  assets: number
+  /** Saldo devedor total ao fim do mês. */
+  debt: number
+  /** Ativos − dívidas. */
   netWorth: number
+  /** Os mesmos valores em reais de hoje. */
+  assetsReal: number
+  netWorthReal: number
   contribution: number
   /** Efeito líquido dos eventos esperados sobre o patrimônio. */
   eventsSaved: number
   returns: number
+  /** Quanto do saldo devedor foi abatido no mês. */
+  debtPaid: number
   occurrences: ExpectedOccurrence[]
 }
 
@@ -323,8 +397,38 @@ export interface CreditCardEntry {
 }
 
 export interface CreditCardSettings {
+  /** Legado: texto livre do vencimento, antes de cada cartão ter o seu. */
   paymentDate: string
   personalSpendingLimit: number
+}
+
+/**
+ * Cartão cadastrado. Os lançamentos continuam ligados pelo nome (é o que a
+ * importação por colagem produz); isto acrescenta o calendário de cada um.
+ */
+export interface CreditCardAccount {
+  id: string
+  name: string
+  /** Dia do mês em que a fatura fecha. */
+  closingDay: number
+  /** Dia do mês em que a fatura vence. */
+  dueDay: number
+  /** Limite do cartão no banco (0 = não informado). */
+  limit: number
+}
+
+export interface CardCycleStatus extends CreditCardAccount {
+  /** A fatura deste ciclo já fechou? */
+  isClosed: boolean
+  /** Dias até fechar (negativo = fechou há tantos dias). */
+  daysToClosing: number
+  /** Dias até vencer. */
+  daysToDue: number
+  /** Sua parte da fatura atual neste cartão. */
+  personalAmount: number
+  totalAmount: number
+  /** Uso do limite do banco, em % (null quando não há limite informado). */
+  usagePct: number | null
 }
 
 export interface CardTotal {
@@ -391,6 +495,39 @@ export interface ScenarioSummary {
 // Histórico — o que de fato aconteceu em cada mês
 // ---------------------------------------------------------------------------
 
+/**
+ * O que de fato foi pago num mês, item por item. O cartão já traz o realizado
+ * pela fatura; isto é o equivalente para o que sai em débito ou boleto.
+ */
+export interface MonthlyActuals {
+  /** Mês de competência, AAAA-MM. */
+  month: string
+  /** id do custo → valor pago (a sua parte). Ausente = usar o planejado. */
+  costs: Record<string, number>
+}
+
+export interface ActualsSummary {
+  month: string
+  /** Soma dos custos usando o realizado onde houver, o plano no resto. */
+  effectiveCosts: number
+  /** Soma do que o plano previa. */
+  plannedCosts: number
+  /** effectiveCosts − plannedCosts. */
+  variance: number
+  /** Quantos itens têm valor realizado informado. */
+  informedCount: number
+  /** Custos por categoria já com o realizado aplicado. */
+  byCategory: Map<CostCategory, number>
+  /** Linha por custo, para a interface montar o formulário. */
+  rows: {
+    cost: CostItem
+    planned: number
+    actual: number | null
+    effective: number
+    variance: number
+  }[]
+}
+
 export interface MonthlySnapshot {
   id: string
   /** Mês de competência no formato AAAA-MM. */
@@ -400,13 +537,20 @@ export interface MonthlySnapshot {
   scenarioName: string
   availableForBudget: number
   paycheckInAccount: number
+  /** Custos do mês — o realizado quando informado, o plano no resto. */
   costs: number
+  /** O que o plano previa de custos, para comparar com o realizado. */
+  costsPlanned: number
   wants: number
   invested: number
   balance: number
   savingsRate: number
   costsByCategory: Partial<Record<CostCategory, number>>
-  /** Patrimônio no fechamento (investimentos + reserva + metas). */
+  /** Ativos no fechamento (investimentos + reserva + metas). */
+  grossAssets: number
+  /** Saldo devedor no fechamento. */
+  liabilities: number
+  /** Ativos − dívidas. Snapshots antigos (sem dívidas) trazem o valor bruto. */
   netWorth: number
   emergencyFund: number
   cardPersonalTotal: number
@@ -422,6 +566,24 @@ export interface HistoryPoint extends MonthlySnapshot {
   netWorthDelta: number | null
   costsDelta: number | null
 }
+
+/** Campos que o fechamento permite corrigir depois. */
+export type SnapshotPatch = Partial<
+  Pick<
+    MonthlySnapshot,
+    | 'availableForBudget'
+    | 'paycheckInAccount'
+    | 'costs'
+    | 'wants'
+    | 'invested'
+    | 'grossAssets'
+    | 'liabilities'
+    | 'emergencyFund'
+    | 'cardPersonalTotal'
+    | 'cashLeftover'
+    | 'note'
+  >
+>
 
 export interface HistoryStats {
   months: number

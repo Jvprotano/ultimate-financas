@@ -17,5 +17,7 @@ export const useCardsStore = () => useFinancasStore().cards
 export const useInvestmentsStore = () => useFinancasStore().investments
 export const useHistoryStore = () => useFinancasStore().history
 export const useForecastStore = () => useFinancasStore().forecast
+export const useDebtsStore = () => useFinancasStore().debts
+export const useActualsStore = () => useFinancasStore().actuals
 export const useMetrics = () => useFinancasStore().metrics
 export const useCashFlow = () => useFinancasStore().cashFlow

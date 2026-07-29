@@ -13,19 +13,26 @@ export function LedgerMoveForm({
   inLabel = 'Aportar',
   disableOut = false,
   notePlaceholder = 'Nota (opcional)',
+  invert = false,
 }: {
   onMove: (amount: number, note?: string) => void
   outLabel?: string
   inLabel?: string
   disableOut?: boolean
   notePlaceholder?: string
+  /**
+   * Troca o sinal dos botões. Numa dívida a ação boa é *reduzir* o saldo, então
+   * o botão principal precisa emitir valor negativo — o contrário de um aporte.
+   */
+  invert?: boolean
 }) {
   const [amount, setAmount] = useState(0)
   const [note, setNote] = useState('')
 
-  const commit = (sign: 1 | -1) => {
+  const commit = (button: 'primary' | 'secondary') => {
     if (amount <= 0) return
-    onMove(sign * amount, note)
+    const positive = invert ? button === 'secondary' : button === 'primary'
+    onMove((positive ? 1 : -1) * amount, note)
     setAmount(0)
     setNote('')
   }
@@ -34,7 +41,7 @@ export function LedgerMoveForm({
     <form
       onSubmit={(event) => {
         event.preventDefault()
-        commit(1)
+        commit('primary')
       }}
       className="space-y-2"
     >
@@ -56,7 +63,7 @@ export function LedgerMoveForm({
           </button>
           <button
             type="button"
-            onClick={() => commit(-1)}
+            onClick={() => commit('secondary')}
             disabled={amount <= 0 || disableOut}
             className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-rose-500/10 px-3 py-2 text-sm font-semibold text-rose-300 transition-colors hover:bg-rose-500/20 disabled:opacity-40 sm:flex-none"
           >
@@ -80,11 +87,14 @@ export function LedgerList({
   onRemove,
   inLabel = 'Aporte',
   outLabel = 'Retirada',
+  invert = false,
 }: {
   transactions: LedgerEntry[]
   onRemove: (id: string) => void
   inLabel?: string
   outLabel?: string
+  /** Numa dívida, quem merece a cor de bom é a saída (a amortização). */
+  invert?: boolean
 }) {
   if (transactions.length === 0) return null
   const history = [...transactions].reverse()
@@ -97,12 +107,13 @@ export function LedgerList({
       <ul className="max-h-44 space-y-1 overflow-y-auto pr-1">
         {history.map((tx) => {
           const isDeposit = tx.amount >= 0
+          const isGood = invert ? !isDeposit : isDeposit
           return (
             <li
               key={tx.id}
               className="group flex items-center gap-2.5 rounded-md bg-dark-input/50 px-2.5 py-1.5"
             >
-              <span className={isDeposit ? 'text-primary-400' : 'text-rose-400'}>
+              <span className={isGood ? 'text-primary-400' : 'text-rose-400'}>
                 {isDeposit ? <Plus size={13} /> : <Minus size={13} />}
               </span>
               <div className="min-w-0 flex-1">
@@ -113,7 +124,7 @@ export function LedgerList({
               </div>
               <span
                 className={`shrink-0 text-xs font-semibold tabular-nums ${
-                  isDeposit ? 'text-primary-400' : 'text-rose-400'
+                  isGood ? 'text-primary-400' : 'text-rose-400'
                 }`}
               >
                 {isDeposit ? '+' : '−'} {formatCurrency(Math.abs(tx.amount))}

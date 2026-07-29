@@ -30,6 +30,7 @@ import {
   inputClass,
 } from '../lib/format'
 import { EVENT_SUGGESTIONS, nextMonthKeyFor, occursIn, projectedAt } from '../lib/forecast'
+// `formatMonthLong` nomeia o mês em que a dívida zera; os demais formatos são de eixo.
 import { addMonths, monthKey, monthsBetween } from '../lib/shared'
 import { useFinancasStore } from '../context/financasStore'
 import type { ExpectedEvent, ExpectedEventKind, ExpectedEventRecurrence, GoalSummary } from '../types'
@@ -254,18 +255,40 @@ export function ForecastView() {
   const { assumptions, upcomingYear, currentMonth, events } = forecast
   const [showForm, setShowForm] = useState(false)
 
-  const netWorth = investments.summary.netWorth
+  const real = assumptions.showInRealTerms
+  const netWorth = real ? projection[0].netWorthReal : investments.summary.netWorth
   const last = projection[projection.length - 1]
+  const lastValue = last ? (real ? last.netWorthReal : last.netWorth) : netWorth
   const labels = useMemo(() => projection.map((point) => formatMonthKey(point.month)), [projection])
+  const hasDebt = projection[0].debt > 0
+
   const series: TrendSeries[] = [
     {
-      id: 'projected',
-      label: 'Patrimônio projetado',
+      id: 'net-worth',
+      label: real ? 'Patrimônio líquido (reais de hoje)' : 'Patrimônio líquido',
       color: CHART_PALETTE.aqua,
-      values: projection.map((point) => point.netWorth),
+      values: projection.map((point) => (real ? point.netWorthReal : point.netWorth)),
     },
+    // A curva de ativos só acrescenta informação quando há dívida separando as duas.
+    ...(hasDebt
+      ? [
+          {
+            id: 'assets',
+            label: 'Ativos',
+            color: CHART_PALETTE.blue,
+            values: projection.map((point) => (real ? point.assetsReal : point.assets)),
+          },
+          {
+            id: 'debt',
+            label: 'Dívidas',
+            color: CHART_PALETTE.red,
+            values: projection.map((point) => point.debt),
+          },
+        ]
+      : []),
   ]
 
+  const payoffMonth = hasDebt ? projection.find((point) => point.debt <= 0) : undefined
   const datedGoals = investments.goals.filter((goal) => goal.targetMonth && goal.targetAmount > 0)
 
   return (
@@ -295,9 +318,13 @@ export function ForecastView() {
           }
         />
         <StatTile
-          label={`Patrimônio em ${formatMonthKey(last?.month ?? currentMonth)}`}
-          value={formatCurrency(last?.netWorth ?? netWorth)}
-          detail={`${formatCurrency((last?.netWorth ?? netWorth) - netWorth)} a mais que hoje`}
+          label={`Líquido em ${formatMonthKey(last?.month ?? currentMonth)}`}
+          value={formatCurrency(lastValue)}
+          detail={
+            real
+              ? `${formatCurrency(lastValue - netWorth)} a mais, em reais de hoje`
+              : `${formatCurrency(lastValue - netWorth)} a mais que hoje`
+          }
           tone="accent"
         />
       </div>
@@ -306,7 +333,22 @@ export function ForecastView() {
         <PanelHeader
           title="Projeção do patrimônio"
           icon={<TrendingUp size={16} />}
-          description="Hoje, mais o aporte de cada mês, mais o que você já sabe que vai entrar e sair, rendendo à taxa abaixo."
+          description={
+            hasDebt
+              ? 'Ativos recebem aporte e rendimento; dívidas correm juros e são abatidas pela parcela. O líquido é a diferença.'
+              : 'Hoje, mais o aporte de cada mês, mais o que você já sabe que vai entrar e sair, rendendo à taxa abaixo.'
+          }
+          actions={
+            <SegmentedControl
+              options={[
+                { value: false, label: 'Nominal' },
+                { value: true, label: 'Reais de hoje' },
+              ]}
+              value={assumptions.showInRealTerms}
+              onChange={(value) => forecast.updateAssumptions({ showInRealTerms: value })}
+              className="min-w-52"
+            />
+          }
         />
 
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -349,6 +391,25 @@ export function ForecastView() {
             />
           </label>
           <label className="block">
+            <span className="mb-1.5 flex items-baseline justify-between text-[11px] text-dark-text-muted">
+              <span>Inflação esperada</span>
+              <strong className="tabular-nums text-dark-text">
+                {assumptions.inflationPct.toFixed(1)}% a.a.
+              </strong>
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={15}
+              step={0.25}
+              value={assumptions.inflationPct}
+              onChange={(event) =>
+                forecast.updateAssumptions({ inflationPct: Number(event.target.value) })
+              }
+              className="mt-3 w-full accent-primary-500"
+            />
+          </label>
+          <label className="block">
             <span className="mb-1.5 block text-[11px] text-dark-text-muted">Horizonte</span>
             <SegmentedControl
               options={HORIZONS.map((value) => ({ value, label: `${value}m` }))}
@@ -358,23 +419,56 @@ export function ForecastView() {
           </label>
         </div>
 
-        <label className="mt-3 flex items-center gap-2 text-xs text-dark-text-secondary">
-          <input
-            type="checkbox"
-            checked={assumptions.includeLeftover}
-            onChange={(event) =>
-              forecast.updateAssumptions({ includeLeftover: event.target.checked })
-            }
-            className="h-4 w-4 accent-primary-500"
-            disabled={assumptions.monthlyContribution !== null}
-          />
-          Contar também a sobra do plano ({formatCurrency(Math.max(0, metrics.balanceAfterPlan))}
-          /mês) como aporte
-        </label>
+        <div className="mt-3 space-y-2">
+          <label className="flex items-center gap-2 text-xs text-dark-text-secondary">
+            <input
+              type="checkbox"
+              checked={assumptions.includeLeftover}
+              onChange={(event) =>
+                forecast.updateAssumptions({ includeLeftover: event.target.checked })
+              }
+              className="h-4 w-4 accent-primary-500"
+              disabled={assumptions.monthlyContribution !== null}
+            />
+            Contar também a sobra do plano ({formatCurrency(Math.max(0, metrics.balanceAfterPlan))}
+            /mês) como aporte
+          </label>
+          {hasDebt && (
+            <label className="flex items-center gap-2 text-xs text-dark-text-secondary">
+              <input
+                type="checkbox"
+                checked={assumptions.reinvestFreedInstallments}
+                onChange={(event) =>
+                  forecast.updateAssumptions({ reinvestFreedInstallments: event.target.checked })
+                }
+                className="h-4 w-4 accent-primary-500"
+              />
+              Quando uma dívida quitar, aportar a parcela liberada
+            </label>
+          )}
+        </div>
 
         <div className="mt-4">
           <TrendChart labels={labels} series={series} height={240} />
         </div>
+
+        {real && (
+          <p className="mt-2 text-[11px] leading-relaxed text-dark-text-muted">
+            Os valores estão descontados de {assumptions.inflationPct.toFixed(1)}% ao ano — é o que o
+            dinheiro vai <em>comprar</em>, não o número que vai aparecer no extrato. A dívida aparece
+            sempre em valor nominal, porque é assim que ela é cobrada.
+          </p>
+        )}
+
+        {payoffMonth && (
+          <p className="mt-2 text-[11px] leading-relaxed text-primary-300">
+            No ritmo das parcelas atuais, suas dívidas zeram em{' '}
+            <strong>{formatMonthLong(payoffMonth.month)}</strong>
+            {!assumptions.reinvestFreedInstallments &&
+              ` — e liberam ${formatCurrency(store.debts.summary.totalInstallment)} por mês`}
+            .
+          </p>
+        )}
       </Panel>
 
       {datedGoals.length > 0 && (
@@ -387,6 +481,7 @@ export function ForecastView() {
             <p className="mt-0.5 text-xs text-dark-text-muted">
               Metas que englobam seus investimentos são julgadas pela projeção; as outras, pelo
               quanto você precisa aportar por mês.
+              {real && ' Os valores previstos estão em reais de hoje.'}
             </p>
           </div>
           <div className="overflow-x-auto">
@@ -402,7 +497,7 @@ export function ForecastView() {
               </thead>
               <tbody>
                 {datedGoals.map((goal) => {
-                  const projected = projectedAt(projection, goal.targetMonth!)
+                  const projected = projectedAt(projection, goal.targetMonth!, real)
                   const outlook = goalOutlook(goal, projected, netWorth)
                   const late = goal.monthsLeft !== null && goal.monthsLeft < 0
 
