@@ -1,5 +1,14 @@
 import { useState } from 'react'
-import { AlertTriangle, ChevronDown, Landmark, Plus, Scale, Trash2, TrendingDown } from 'lucide-react'
+import {
+  AlertTriangle,
+  ChevronDown,
+  Home,
+  Landmark,
+  Plus,
+  Scale,
+  Trash2,
+  TrendingDown,
+} from 'lucide-react'
 import { CurrencyInput } from './CurrencyInput'
 import { LedgerList, LedgerMoveForm } from './Ledger'
 import {
@@ -23,6 +32,11 @@ import { DEBT_KINDS, DEBT_KIND_COLORS, DEBT_KIND_LABELS } from '../types/constan
 // O número que faz a diferença aqui não é o saldo — é quanto da parcela é juro.
 // Uma parcela de R$ 2.000 que abate R$ 1.400 e paga R$ 600 de juros conta uma
 // história bem diferente da mesma parcela abatendo R$ 1.950.
+//
+// E a dívida com bem do outro lado é outro animal. O financiamento da casa em
+// que você mora não pede "quito ou invisto?": ele substitui um aluguel. Por
+// isso ele fica fora da taxa média, do ranking da mais cara e do total de juros
+// até quitar — números que existem para decidir o que atacar primeiro.
 // ---------------------------------------------------------------------------
 
 /** Quanto da parcela abate o saldo e quanto é só juro. */
@@ -132,7 +146,7 @@ function PayoffComparison({ debt }: { debt: DebtSummary }) {
 }
 
 function DebtRow({ debt }: { debt: DebtSummary }) {
-  const { debts, scenarios } = useFinancasStore()
+  const { debts, scenarios, assets } = useFinancasStore()
   const [expanded, setExpanded] = useState(false)
 
   return (
@@ -152,6 +166,12 @@ function DebtRow({ debt }: { debt: DebtSummary }) {
           <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-dark-text-muted">
             {DEBT_KIND_LABELS[debt.kind]}
             <Tag>{debt.annualRatePct.toFixed(1)}% a.a.</Tag>
+            {debt.isSecured && (
+              <Tag>
+                <Home size={10} />
+                com bem
+              </Tag>
+            )}
             {debt.monthsToPayoff !== null && debt.monthsToPayoff > 0 && (
               <span>{formatMonths(debt.monthsToPayoff)} restantes</span>
             )}
@@ -199,22 +219,51 @@ function DebtRow({ debt }: { debt: DebtSummary }) {
                 {debt.monthsToPayoff === null ? '—' : formatMonths(debt.monthsToPayoff)}
               </strong>
             </div>
-            <div className="rounded-md bg-dark-input/60 px-2.5 py-1.5">
-              <span className="block text-dark-text-muted">Ainda vai pagar</span>
-              <strong className="tabular-nums text-dark-text">
-                {debt.totalRemaining > 0 ? formatCurrency(debt.totalRemaining) : '—'}
-              </strong>
-            </div>
-            <div className="rounded-md bg-dark-input/60 px-2.5 py-1.5">
-              <span className="block text-dark-text-muted">Só de juros</span>
-              <strong className="tabular-nums text-dark-text">
-                {debt.interestRemaining > 0 ? formatCurrency(debt.interestRemaining) : '—'}
-              </strong>
-            </div>
+            {/* Com bem do outro lado, o que importa é quanto dele já é seu —
+                não o total de juros de 20 anos, que assusta e não decide nada. */}
+            {debt.isSecured ? (
+              <>
+                <div className="rounded-md bg-dark-input/60 px-2.5 py-1.5">
+                  <span className="block text-dark-text-muted">Já é seu</span>
+                  <strong className="tabular-nums text-primary-400">
+                    {formatCurrency(debt.equity ?? 0)}
+                  </strong>
+                </div>
+                <div className="rounded-md bg-dark-input/60 px-2.5 py-1.5">
+                  <span className="block text-dark-text-muted">Saldo sobre o bem</span>
+                  <strong className="tabular-nums text-dark-text">
+                    {debt.ltvPct === null ? '—' : `${debt.ltvPct.toFixed(0)}%`}
+                  </strong>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="rounded-md bg-dark-input/60 px-2.5 py-1.5">
+                  <span className="block text-dark-text-muted">Ainda vai pagar</span>
+                  <strong className="tabular-nums text-dark-text">
+                    {debt.totalRemaining > 0 ? formatCurrency(debt.totalRemaining) : '—'}
+                  </strong>
+                </div>
+                <div className="rounded-md bg-dark-input/60 px-2.5 py-1.5">
+                  <span className="block text-dark-text-muted">Só de juros</span>
+                  <strong className="tabular-nums text-dark-text">
+                    {debt.interestRemaining > 0 ? formatCurrency(debt.interestRemaining) : '—'}
+                  </strong>
+                </div>
+              </>
+            )}
           </div>
 
           <InstallmentSplit debt={debt} />
-          <PayoffComparison debt={debt} />
+          {debt.isSecured ? (
+            <p className="rounded-lg border border-dark-border bg-dark-input/40 px-3 py-2 text-[11px] leading-relaxed text-dark-text-secondary">
+              Esta dívida tem um bem do outro lado, então ela não entra na conta de "amortizar ou
+              investir" — a decisão aqui não é essa, é se vale a pena continuar morando neste
+              imóvel. Essa comparação, com aluguel equivalente, está no painel de bens.
+            </p>
+          ) : (
+            <PayoffComparison debt={debt} />
+          )}
 
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="block">
@@ -307,6 +356,28 @@ function DebtRow({ debt }: { debt: DebtSummary }) {
                 ))}
               </select>
             </label>
+            <label className="block sm:col-span-2">
+              <span className="mb-1 block text-[11px] text-dark-text-muted">
+                Bem que esta dívida financia
+              </span>
+              <select
+                value={debt.linkedAssetId ?? ''}
+                onChange={(event) =>
+                  debts.updateDebt(debt.id, { linkedAssetId: event.target.value || undefined })
+                }
+                className={`${selectClass} !py-1.5`}
+              >
+                <option value="">— nenhum</option>
+                {assets.assets.map((asset) => (
+                  <option key={asset.id} value={asset.id}>
+                    {asset.name} — {formatCurrency(asset.value)}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-[11px] text-dark-text-muted">
+                Sem o bem, o app conta o saldo devedor sem contar o que ele comprou.
+              </span>
+            </label>
           </div>
 
           {debt.linkedCostMismatch !== null && (
@@ -353,7 +424,7 @@ function DebtRow({ debt }: { debt: DebtSummary }) {
 }
 
 function NewDebtForm({ onClose }: { onClose: () => void }) {
-  const { debts, scenarios } = useFinancasStore()
+  const { debts, scenarios, assets } = useFinancasStore()
   const [name, setName] = useState('')
   const [kind, setKind] = useState<DebtKind>('financiamento')
   const [balance, setBalance] = useState(0)
@@ -361,6 +432,7 @@ function NewDebtForm({ onClose }: { onClose: () => void }) {
   const [installment, setInstallment] = useState(0)
   const [remainingInstallments, setRemainingInstallments] = useState(0)
   const [linkedCostId, setLinkedCostId] = useState('')
+  const [linkedAssetId, setLinkedAssetId] = useState('')
 
   const handleAdd = () => {
     if (!name.trim() || balance <= 0) return
@@ -372,6 +444,7 @@ function NewDebtForm({ onClose }: { onClose: () => void }) {
       installment,
       remainingInstallments,
       linkedCostId: linkedCostId || undefined,
+      linkedAssetId: linkedAssetId || undefined,
     })
     onClose()
   }
@@ -467,6 +540,25 @@ function NewDebtForm({ onClose }: { onClose: () => void }) {
             </select>
           </label>
         )}
+        {assets.assets.length > 0 && (
+          <label className="block sm:col-span-2">
+            <span className="mb-1 block text-[11px] text-dark-text-muted">
+              Bem que esta dívida financia (opcional)
+            </span>
+            <select
+              value={linkedAssetId}
+              onChange={(event) => setLinkedAssetId(event.target.value)}
+              className={selectClass}
+            >
+              <option value="">— nenhum</option>
+              {assets.assets.map((asset) => (
+                <option key={asset.id} value={asset.id}>
+                  {asset.name} — {formatCurrency(asset.value)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       <div className="flex gap-2">
@@ -486,13 +578,18 @@ export function DebtsManager() {
   const { summary } = debts
   const active = summary.debts.filter((debt) => !debt.isSettled)
   const settled = summary.debts.filter((debt) => debt.isSettled)
+  const secured = active.filter((debt) => debt.isSecured)
+  const unsecured = active.filter((debt) => !debt.isSecured)
+  // Média ponderada e "mais cara" só dizem algo quando há mais de uma dívida
+  // sem contrapartida para comparar entre si.
+  const showsRanking = summary.unsecured.count > 1
 
   return (
     <Panel>
       <PanelHeader
         title="Dívidas"
         icon={<TrendingDown size={16} />}
-        description="A parcela continua sendo o custo fixo do orçamento; aqui você acompanha o saldo, os juros e o prazo. Amortizar abate patrimônio devido — o mesmo efeito de aportar."
+        description="A parcela continua sendo o custo fixo do orçamento; aqui você acompanha o saldo, os juros e o prazo. Uma dívida com bem do outro lado é lida separado: ela comprou alguma coisa."
         actions={
           <>
             {summary.totalBalance > 0 && (
@@ -517,7 +614,11 @@ export function DebtsManager() {
           <StatTile
             label="Saldo devedor"
             value={formatCurrency(summary.totalBalance)}
-            detail={`${active.length} ${active.length === 1 ? 'dívida' : 'dívidas'} em aberto`}
+            detail={
+              summary.securedBalance > 0
+                ? `${formatCurrency(summary.securedBalance)} com bem do outro lado`
+                : `${active.length} ${active.length === 1 ? 'dívida' : 'dívidas'} em aberto`
+            }
             tone="negative"
           />
           <StatTile
@@ -528,14 +629,32 @@ export function DebtsManager() {
           <StatTile
             label="Juros por mês"
             value={formatCurrency(summary.totalMonthlyInterest)}
-            detail={`taxa média de ${summary.weightedAnnualRatePct.toFixed(1)}% a.a.`}
+            detail={
+              showsRanking
+                ? `média de ${summary.unsecured.weightedAnnualRatePct.toFixed(1)}% a.a. nas sem garantia`
+                : 'o que sai do bolso sem abater nada'
+            }
             tone="negative"
           />
-          <StatTile
-            label="Juros até quitar"
-            value={formatCurrency(summary.totalInterestRemaining)}
-            detail="o preço de carregar estas dívidas"
-          />
+          {/* Sem dívida cara, o quarto tile mostra o que a parcela constrói —
+              não o total de juros de um financiamento de 20 anos. */}
+          {summary.unsecured.balance > 0 ? (
+            <StatTile
+              label="Dívida sem contrapartida"
+              value={formatCurrency(summary.unsecured.balance)}
+              detail={`${formatCurrency(summary.unsecured.interestRemaining)} de juros até quitar`}
+              tone="negative"
+            />
+          ) : (
+            <StatTile
+              label="Amortizado por mês"
+              value={formatCurrency(
+                Math.max(0, summary.totalInstallment - summary.totalMonthlyInterest),
+              )}
+              detail="da parcela, o que vira patrimônio seu"
+              tone="positive"
+            />
+          )}
         </div>
       )}
 
@@ -559,9 +678,30 @@ export function DebtsManager() {
           </EmptyState>
         ) : (
           <div className="space-y-2">
-            {active.map((debt) => (
+            {/* Com os dois tipos na tela, o cabeçalho evita ler o financiamento
+                com os olhos de quem está decidindo o que quitar primeiro. */}
+            {unsecured.length > 0 && secured.length > 0 && (
+              <p className="text-[11px] font-medium uppercase tracking-wider text-dark-text-muted">
+                Sem contrapartida
+              </p>
+            )}
+            {unsecured.map((debt) => (
               <DebtRow key={debt.id} debt={debt} />
             ))}
+
+            {secured.length > 0 && (
+              <>
+                {unsecured.length > 0 && (
+                  <p className="pt-2 text-[11px] font-medium uppercase tracking-wider text-dark-text-muted">
+                    Com bem do outro lado
+                  </p>
+                )}
+                {secured.map((debt) => (
+                  <DebtRow key={debt.id} debt={debt} />
+                ))}
+              </>
+            )}
+
             {settled.length > 0 && (
               <>
                 <p className="pt-2 text-[11px] font-medium uppercase tracking-wider text-dark-text-muted">
@@ -576,12 +716,12 @@ export function DebtsManager() {
         )}
       </div>
 
-      {summary.costliest && summary.debts.length > 1 && (
+      {showsRanking && summary.unsecured.costliest && (
         <p className="mt-3 border-t border-dark-border-subtle pt-3 text-[11px] leading-relaxed text-dark-text-muted">
           A dívida mais cara de carregar é{' '}
-          <strong className="text-dark-text">{summary.costliest.name}</strong>, a{' '}
-          {summary.costliest.annualRatePct.toFixed(1)}% a.a. — cada real amortizado ali economiza
-          mais juros do que em qualquer outra.
+          <strong className="text-dark-text">{summary.unsecured.costliest.name}</strong>, a{' '}
+          {summary.unsecured.costliest.annualRatePct.toFixed(1)}% a.a. — cada real amortizado ali
+          economiza mais juros do que em qualquer outra.
         </p>
       )}
     </Panel>

@@ -119,7 +119,13 @@ export interface EmergencyFundState {
  * Uma meta de patrimônio ("9 mil até dezembro") não guarda dinheiro próprio: ela
  * mede a reserva e os investimentos que já existem.
  */
-export type GoalInclusionType = 'reserve' | 'investments' | 'goals' | 'class' | 'debts'
+export type GoalInclusionType =
+  | 'reserve'
+  | 'investments'
+  | 'goals'
+  | 'class'
+  | 'debts'
+  | 'assets'
 
 export interface GoalInclusion {
   type: GoalInclusionType
@@ -202,16 +208,97 @@ export interface InvestmentsSummary {
   totalInvested: number
   totalGain: number
   totalGainPct: number
-  /** Tudo que você tem: investimentos + reserva + guardado nas metas. */
+  /** Dinheiro: investimentos + reserva + guardado nas metas. */
+  financialAssets: number
+  /** Bens: imóvel, veículo — valor de mercado, não rebalanceável. */
+  physicalAssets: number
+  /** financialAssets + physicalAssets. */
   grossAssets: number
   /** Soma dos saldos devedores. */
   liabilities: number
-  /** Ativos − dívidas. É o número que mede se você está ficando mais rico. */
+  /** Parte da dívida garantida por um bem cadastrado (o financiamento dele). */
+  securedLiabilities: number
+  /** Dívida sem contrapartida em bem: cartão, consignado, empréstimo. */
+  unsecuredLiabilities: number
+  /**
+   * financialAssets − dívida sem contrapartida. Responde "quanto dinheiro eu
+   * tenho" — a pergunta que decide aporte, resgate e meta.
+   */
+  financialNetWorth: number
+  /** grossAssets − liabilities. O balanço completo, com casa e financiamento. */
   netWorth: number
   reserveBalance: number
   /** Só o livro-razão das metas: o que uma meta engloba já está contado. */
   goalsBalance: number
   classes: AssetClassSummary[]
+}
+
+// ---------------------------------------------------------------------------
+// Bens — o outro lado de uma dívida garantida
+// ---------------------------------------------------------------------------
+
+export type AssetKind = 'imovel' | 'veiculo' | 'outros'
+
+/**
+ * Um bem: a casa, o carro. Não é posição de investimento — não se rebalanceia,
+ * não se resgata para pagar uma conta — mas é patrimônio, e sem ele o
+ * financiamento que o comprou vira um buraco no balanço.
+ */
+export interface Asset {
+  id: string
+  name: string
+  kind: AssetKind
+  /** Valor de mercado de hoje, mantido por você. */
+  value: number
+  /** Valorização nominal esperada ao ano, em % (pode ser negativa — carro). */
+  annualAppreciationPct: number
+  /**
+   * Quanto custaria alugar um equivalente. É o que transforma "estou devendo"
+   * em "estou pagando moradia": a comparação real do financiamento.
+   */
+  rentEquivalent?: number
+  createdAt: string
+  note?: string
+}
+
+export interface AssetSummary extends Asset {
+  /** Saldo devedor das dívidas que apontam para este bem. */
+  linkedDebt: number
+  /** value − linkedDebt: a parte do bem que já é sua. */
+  equity: number
+  /** Fatia do bem que já é sua, em %. */
+  equityPct: number
+  /** Soma das parcelas das dívidas ligadas a ele. */
+  installment: number
+  /** Juros do mês das dívidas ligadas — o custo de verdade de carregá-lo. */
+  monthlyInterest: number
+  hasDebt: boolean
+}
+
+export interface AssetsSummary {
+  totalValue: number
+  totalLinkedDebt: number
+  totalEquity: number
+  assets: AssetSummary[]
+}
+
+/**
+ * Comprar contra alugar, no mês. A amortização não entra: ela não é despesa,
+ * é dinheiro trocando de bolso (da conta para dentro do imóvel).
+ */
+export interface HousingComparison {
+  installment: number
+  /** Fatia da parcela que é só juro — a despesa de fato. */
+  monthlyInterest: number
+  /** Fatia da parcela que vira patrimônio. */
+  amortization: number
+  rentEquivalent: number
+  /** Valorização esperada do bem no mês, em R$. */
+  monthlyAppreciation: number
+  /** juros − valorização: o custo líquido de ser dono neste mês. */
+  ownershipCost: number
+  /** ownershipCost − aluguel. Negativo = ser dono sai mais barato. */
+  difference: number
 }
 
 // ---------------------------------------------------------------------------
@@ -234,6 +321,8 @@ export interface Debt {
   remainingInstallments: number
   /** Custo fixo do cenário que já representa esta parcela — evita contar duas vezes. */
   linkedCostId?: string
+  /** Bem que esta dívida financia. Com ele, a dívida deixa de ser um buraco. */
+  linkedAssetId?: string
   /** Movimentações: negativo = amortização, positivo = saldo que aumentou. */
   transactions: LedgerEntry[]
   createdAt: string
@@ -255,6 +344,27 @@ export interface DebtSummary extends Debt {
   isSettled: boolean
   /** A parcela informada bate com o custo fixo ligado a ela? */
   linkedCostMismatch: number | null
+  /** Tem um bem cadastrado do outro lado? Muda tudo na leitura do saldo. */
+  isSecured: boolean
+  /** Valor do bem que garante a dívida — null quando não há. */
+  assetValue: number | null
+  /** assetValue − balance: o que do bem já é seu. */
+  equity: number | null
+  /** Saldo devedor sobre o valor do bem, em % (loan to value). */
+  ltvPct: number | null
+}
+
+/** Os números que só fazem sentido para dívida sem contrapartida em bem. */
+export interface UnsecuredDebtsSummary {
+  balance: number
+  installment: number
+  monthlyInterest: number
+  interestRemaining: number
+  /** Taxa média ponderada pelo saldo. */
+  weightedAnnualRatePct: number
+  /** Dívida de maior taxa — a que mais custa carregar. */
+  costliest: DebtSummary | null
+  count: number
 }
 
 export interface DebtsSummary {
@@ -262,10 +372,13 @@ export interface DebtsSummary {
   totalInstallment: number
   totalMonthlyInterest: number
   totalInterestRemaining: number
-  /** Taxa média ponderada pelo saldo. */
-  weightedAnnualRatePct: number
-  /** Dívida de maior taxa — a que mais custa carregar. */
-  costliest: DebtSummary | null
+  /** Saldo devedor com bem do outro lado (financiamento). */
+  securedBalance: number
+  /**
+   * Dívida cara e sem contrapartida — o bloco que de fato pede decisão de
+   * amortizar. O financiamento fica de fora: ele é custo de moradia.
+   */
+  unsecured: UnsecuredDebtsSummary
   debts: DebtSummary[]
 }
 
@@ -326,21 +439,31 @@ export interface ForecastAssumptions {
 
 export interface ForecastPoint {
   month: string
-  /** Ativos ao fim do mês. */
+  /** Ativos financeiros ao fim do mês. */
   assets: number
+  /** Bens ao fim do mês, já valorizados. */
+  properties: number
   /** Saldo devedor total ao fim do mês. */
   debt: number
-  /** Ativos − dívidas. */
+  /** Parte do saldo devedor que tem bem do outro lado. */
+  securedDebt: number
+  /** assets + properties − debt: o balanço completo. */
   netWorth: number
+  /** assets − dívida sem contrapartida: o dinheiro que você terá. */
+  financialNetWorth: number
   /** Os mesmos valores em reais de hoje. */
   assetsReal: number
+  propertiesReal: number
   netWorthReal: number
+  financialNetWorthReal: number
   contribution: number
   /** Efeito líquido dos eventos esperados sobre o patrimônio. */
   eventsSaved: number
   returns: number
   /** Quanto do saldo devedor foi abatido no mês. */
   debtPaid: number
+  /** Amortização de dívida garantida: parcela virando patrimônio, não despesa. */
+  equityBuilt: number
   occurrences: ExpectedOccurrence[]
 }
 
@@ -546,10 +669,14 @@ export interface MonthlySnapshot {
   balance: number
   savingsRate: number
   costsByCategory: Partial<Record<CostCategory, number>>
-  /** Ativos no fechamento (investimentos + reserva + metas). */
+  /** Ativos financeiros no fechamento (investimentos + reserva + metas). */
   grossAssets: number
+  /** Bens no fechamento. Snapshots anteriores aos bens trazem 0. */
+  physicalAssets: number
   /** Saldo devedor no fechamento. */
   liabilities: number
+  /** Parte do saldo devedor garantida por um bem. */
+  securedLiabilities: number
   /** Ativos − dívidas. Snapshots antigos (sem dívidas) trazem o valor bruto. */
   netWorth: number
   emergencyFund: number
@@ -562,6 +689,8 @@ export interface MonthlySnapshot {
 }
 
 export interface HistoryPoint extends MonthlySnapshot {
+  /** Ativos financeiros − dívida sem contrapartida. */
+  financialNetWorth: number
   /** Variação do patrimônio em relação ao mês fechado anterior. */
   netWorthDelta: number | null
   costsDelta: number | null
@@ -577,7 +706,9 @@ export type SnapshotPatch = Partial<
     | 'wants'
     | 'invested'
     | 'grossAssets'
+    | 'physicalAssets'
     | 'liabilities'
+    | 'securedLiabilities'
     | 'emergencyFund'
     | 'cardPersonalTotal'
     | 'cashLeftover'

@@ -127,12 +127,21 @@ export function normalizeAssetClass(
 // Agregação
 // ---------------------------------------------------------------------------
 
+/** O que vem de fora do módulo de investimentos e muda a leitura do patrimônio. */
+export interface BalanceSheetInput {
+  /** Saldo devedor com bem cadastrado do outro lado (financiamento). */
+  securedLiabilities?: number
+  /** Valor de mercado dos bens. */
+  physicalAssets?: number
+}
+
 export function calculateInvestmentsSummary(
   holdings: InvestmentHolding[],
   classes: InvestmentAssetClass[],
   reserveBalance = 0,
   goalsBalance = 0,
   liabilities = 0,
+  balanceSheet: BalanceSheetInput = {},
 ): InvestmentsSummary {
   const holdingSummaries: HoldingSummary[] = holdings.map((holding) => {
     const invested = ledgerBalance(holding.transactions)
@@ -152,10 +161,18 @@ export function calculateInvestmentsSummary(
   // Reserva e metas são dinheiro seu. Em `goalsBalance` entra só o livro-razão
   // das metas — o que uma meta de patrimônio engloba já está em
   // `totalMarketValue`/`reserveBalance`.
-  const grossAssets = totalMarketValue + reserveBalance + goalsBalance
-  // A alocação é medida sobre os *ativos*, não sobre o patrimônio líquido:
-  // dividir por um líquido pequeno (ou negativo) daria fatias sem sentido.
+  const financialAssets = totalMarketValue + reserveBalance + goalsBalance
+
+  const physicalAssets = Math.max(0, balanceSheet.physicalAssets ?? 0)
+  // Garantida nunca passa do total: o saldo do financiamento é o mesmo saldo.
+  const securedLiabilities = Math.min(liabilities, Math.max(0, balanceSheet.securedLiabilities ?? 0))
+  const unsecuredLiabilities = liabilities - securedLiabilities
+
+  const grossAssets = financialAssets + physicalAssets
   const netWorth = grossAssets - liabilities
+  // O número que responde "quanto dinheiro eu terei": a casa não paga a conta
+  // do mês e o financiamento dela já é custo fixo — os dois saem daqui.
+  const financialNetWorth = financialAssets - unsecuredLiabilities
 
   // Classes com posições (na ordem cadastrada) seguidas de eventuais órfãs.
   const orphanClassIds = holdingSummaries
@@ -184,7 +201,10 @@ export function calculateInvestmentsSummary(
         invested,
         gain,
         gainPct: invested > 0 ? (gain / invested) * 100 : 0,
-        allocationPct: grossAssets > 0 ? (marketValue / grossAssets) * 100 : 0,
+        // A alocação é medida sobre o patrimônio *financeiro*: um imóvel não se
+        // rebalanceia, e dividir pelo líquido (que pode ser pequeno ou
+        // negativo) daria fatias sem sentido.
+        allocationPct: financialAssets > 0 ? (marketValue / financialAssets) * 100 : 0,
         holdings: classHoldings,
       }
     })
@@ -195,8 +215,13 @@ export function calculateInvestmentsSummary(
     totalInvested,
     totalGain,
     totalGainPct: totalInvested > 0 ? (totalGain / totalInvested) * 100 : 0,
+    financialAssets,
+    physicalAssets,
     grossAssets,
     liabilities,
+    securedLiabilities,
+    unsecuredLiabilities,
+    financialNetWorth,
     netWorth,
     reserveBalance,
     goalsBalance,

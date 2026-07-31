@@ -1,4 +1,4 @@
-import type { CostItem, Debt, DebtKind, DebtsSummary, DebtSummary } from '../types'
+import type { Asset, CostItem, Debt, DebtKind, DebtsSummary, DebtSummary } from '../types'
 import { finiteNumber, normalizeLedger, nowIso, uid } from './shared'
 
 // ---------------------------------------------------------------------------
@@ -7,6 +7,12 @@ import { finiteNumber, normalizeLedger, nowIso, uid } from './shared'
 // Um app que só soma ativos mede a metade otimista da vida. Amortizar R$ 1.000
 // de um financiamento e aportar R$ 1.000 num CDB fazem exatamente a mesma coisa
 // com o seu patrimônio líquido — e o app precisa enxergar as duas.
+//
+// Mas nem toda dívida é do mesmo tipo. Uma dívida *garantida* — o financiamento
+// da casa em que você mora — tem um bem do outro lado e substitui um aluguel:
+// ela não pede a decisão "quito ou invisto?", pede "vale a pena morar aqui?".
+// Só a dívida sem contrapartida entra na média ponderada, no ranking da mais
+// cara e no total de juros até quitar. Misturar as duas enterra o sinal.
 //
 // O saldo devedor é mantido por você, como o valor de mercado de uma posição:
 // juros correm, seguros entram, e ninguém acerta isso derivando de pagamentos.
@@ -28,6 +34,7 @@ export function normalizeDebt(raw: Partial<Debt> | undefined): Debt {
     installment: Math.max(0, finiteNumber(raw?.installment)),
     remainingInstallments: Math.max(0, Math.round(finiteNumber(raw?.remainingInstallments))),
     linkedCostId: raw?.linkedCostId || undefined,
+    linkedAssetId: raw?.linkedAssetId || undefined,
     transactions: normalizeLedger(raw?.transactions),
     createdAt: raw?.createdAt || nowIso(),
     settledAt: raw?.settledAt || undefined,
@@ -51,7 +58,11 @@ export function monthsToPayoff(balance: number, monthlyRate: number, installment
   return Math.min(MAX_PAYOFF_MONTHS, Math.ceil(months))
 }
 
-export function summarizeDebt(debt: Debt, costs: CostItem[] = []): DebtSummary {
+export function summarizeDebt(
+  debt: Debt,
+  costs: CostItem[] = [],
+  assets: Asset[] = [],
+): DebtSummary {
   const monthlyRate = debt.monthlyRatePct / 100
   const monthlyInterest = debt.balance * monthlyRate
   const payoff = monthsToPayoff(debt.balance, monthlyRate, debt.installment)
@@ -64,6 +75,11 @@ export function summarizeDebt(debt: Debt, costs: CostItem[] = []): DebtSummary {
     : undefined
   const linkedCostMismatch =
     linkedCost && debt.installment > 0 ? linkedCost.value - debt.installment : null
+
+  // O bem apagado não deixa a dívida "garantida" por um fantasma.
+  const linkedAsset = debt.linkedAssetId
+    ? assets.find((asset) => asset.id === debt.linkedAssetId)
+    : undefined
 
   return {
     ...debt,
@@ -79,33 +95,52 @@ export function summarizeDebt(debt: Debt, costs: CostItem[] = []): DebtSummary {
     isSettled: debt.balance <= 0,
     linkedCostMismatch:
       linkedCostMismatch !== null && Math.abs(linkedCostMismatch) > 0.005 ? linkedCostMismatch : null,
+    isSecured: linkedAsset !== undefined,
+    assetValue: linkedAsset ? linkedAsset.value : null,
+    equity: linkedAsset ? linkedAsset.value - debt.balance : null,
+    ltvPct: linkedAsset && linkedAsset.value > 0 ? (debt.balance / linkedAsset.value) * 100 : null,
   }
 }
 
-export function calculateDebtsSummary(debts: Debt[], costs: CostItem[] = []): DebtsSummary {
-  const summaries = debts.map((debt) => summarizeDebt(debt, costs))
+export function calculateDebtsSummary(
+  debts: Debt[],
+  costs: CostItem[] = [],
+  assets: Asset[] = [],
+): DebtsSummary {
+  const summaries = debts.map((debt) => summarizeDebt(debt, costs, assets))
   const active = summaries.filter((debt) => !debt.isSettled)
-  const totalBalance = active.reduce((sum, debt) => sum + debt.balance, 0)
+  const unsecured = active.filter((debt) => !debt.isSecured)
+  const unsecuredBalance = unsecured.reduce((sum, debt) => sum + debt.balance, 0)
 
   // Ponderar pelo saldo: uma dívida de R$ 200 a 14% ao mês não deve puxar a
-  // média tanto quanto um financiamento de R$ 80 mil a 0,8%.
+  // média tanto quanto um empréstimo de R$ 20 mil a 1,8%.
   const weightedAnnualRatePct =
-    totalBalance > 0
-      ? active.reduce((sum, debt) => sum + debt.annualRatePct * debt.balance, 0) / totalBalance
+    unsecuredBalance > 0
+      ? unsecured.reduce((sum, debt) => sum + debt.annualRatePct * debt.balance, 0) / unsecuredBalance
       : 0
 
-  const costliest = active.reduce<DebtSummary | null>(
+  const costliest = unsecured.reduce<DebtSummary | null>(
     (top, debt) => (!top || debt.annualRatePct > top.annualRatePct ? debt : top),
     null,
   )
 
   return {
-    totalBalance,
+    totalBalance: active.reduce((sum, debt) => sum + debt.balance, 0),
     totalInstallment: active.reduce((sum, debt) => sum + debt.installment, 0),
     totalMonthlyInterest: active.reduce((sum, debt) => sum + debt.monthlyInterest, 0),
     totalInterestRemaining: active.reduce((sum, debt) => sum + debt.interestRemaining, 0),
-    weightedAnnualRatePct,
-    costliest,
+    securedBalance: active
+      .filter((debt) => debt.isSecured)
+      .reduce((sum, debt) => sum + debt.balance, 0),
+    unsecured: {
+      balance: unsecuredBalance,
+      installment: unsecured.reduce((sum, debt) => sum + debt.installment, 0),
+      monthlyInterest: unsecured.reduce((sum, debt) => sum + debt.monthlyInterest, 0),
+      interestRemaining: unsecured.reduce((sum, debt) => sum + debt.interestRemaining, 0),
+      weightedAnnualRatePct,
+      costliest,
+      count: unsecured.length,
+    },
     debts: summaries,
   }
 }

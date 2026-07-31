@@ -226,6 +226,101 @@ describe('projectNetWorth', () => {
   })
 })
 
+describe('projectNetWorth — bens e dívida garantida', () => {
+  const base = {
+    startMonth: '2026-07',
+    startAssets: 38_400,
+    monthlyContribution: 1_000,
+    annualReturnPct: 0,
+    inflationPct: 0,
+    horizonMonths: 3,
+    events: [],
+  }
+  const financing = {
+    id: 'fin',
+    balance: 262_000,
+    monthlyRatePct: 0,
+    installment: 2_000,
+    secured: true,
+  }
+  const house = { id: 'casa', value: 480_000, annualAppreciationPct: 0 }
+
+  it('o financiamento sem o bem cadastrado afunda o líquido — o erro que existia', () => {
+    const points = projectNetWorth({ ...base, debts: [financing] })
+    expect(points[0].netWorth).toBe(38_400 - 262_000)
+    // Mas o dinheiro em si não é afetado: é o número que responde a decisão.
+    expect(points[0].financialNetWorth).toBe(38_400)
+  })
+
+  it('com o bem, o líquido reflete o balanço de verdade', () => {
+    const points = projectNetWorth({ ...base, debts: [financing], properties: [house] })
+    expect(points[0].properties).toBe(480_000)
+    expect(points[0].netWorth).toBe(38_400 + 480_000 - 262_000)
+  })
+
+  it('a amortização vira patrimônio em vez de evaporar', () => {
+    const points = projectNetWorth({ ...base, debts: [financing], properties: [house] })
+    expect(points[1].equityBuilt).toBe(2_000)
+    // Três meses de parcela: dinheiro cresce pelo aporte, líquido cresce por
+    // aporte *e* amortização.
+    expect(points[3].financialNetWorth - points[0].financialNetWorth).toBe(3_000)
+    expect(points[3].netWorth - points[0].netWorth).toBe(3_000 + 6_000)
+  })
+
+  it('dívida sem garantia sai do patrimônio financeiro; a garantida, não', () => {
+    const points = projectNetWorth({
+      ...base,
+      monthlyContribution: 0,
+      debts: [financing, { id: 'cartao', balance: 5_000, monthlyRatePct: 0, installment: 500 }],
+      properties: [house],
+    })
+    expect(points[0].financialNetWorth).toBe(38_400 - 5_000)
+    expect(points[0].securedDebt).toBe(262_000)
+  })
+
+  it('o bem se valoriza pela premissa dele, sem receber aporte', () => {
+    const points = projectNetWorth({
+      ...base,
+      monthlyContribution: 0,
+      horizonMonths: 12,
+      properties: [{ id: 'casa', value: 100_000, annualAppreciationPct: 4 }],
+    })
+    expect(points[12].properties).toBeCloseTo(104_000, 6)
+    expect(points[12].assets).toBe(38_400)
+  })
+
+  it('um veículo desvaloriza e puxa o líquido para baixo', () => {
+    const points = projectNetWorth({
+      ...base,
+      monthlyContribution: 0,
+      horizonMonths: 12,
+      properties: [{ id: 'carro', value: 60_000, annualAppreciationPct: -10 }],
+    })
+    expect(points[12].properties).toBeCloseTo(54_000, 6)
+    expect(points[12].netWorth).toBeLessThan(points[0].netWorth)
+  })
+
+  it('não muta os bens recebidos', () => {
+    const properties = [{ id: 'casa', value: 480_000, annualAppreciationPct: 4 }]
+    projectNetWorth({ ...base, properties })
+    expect(properties[0].value).toBe(480_000)
+  })
+
+  it('bens também são deflacionados na leitura em reais de hoje', () => {
+    const points = projectNetWorth({
+      ...base,
+      inflationPct: 6,
+      horizonMonths: 12,
+      properties: [house],
+    })
+    expect(points[12].propertiesReal).toBeCloseTo(points[12].properties / 1.06, 6)
+    expect(points[12].financialNetWorthReal).toBeCloseTo(
+      points[12].financialNetWorth / 1.06,
+      6,
+    )
+  })
+})
+
 describe('projectedAt', () => {
   const points = projectNetWorth({
     startMonth: '2026-07',

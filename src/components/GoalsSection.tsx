@@ -31,10 +31,14 @@ function InclusionPicker({
   selected,
   onToggle,
   classes,
+  hasAssets,
+  hasDebts,
 }: {
   selected: GoalInclusion[]
   onToggle: (inclusion: GoalInclusion) => void
   classes: { id: string; name: string; color: string }[]
+  hasAssets: boolean
+  hasDebts: boolean
 }) {
   const isOn = (inclusion: GoalInclusion) =>
     selected.some(
@@ -53,6 +57,14 @@ function InclusionPicker({
       // "Investimentos" já cobre todas as classes.
       muted: allInvestments,
     })),
+    // Bens e dívidas fecham o balanço — só aparecem quando existem, para uma
+    // meta de poupança comum não carregar chips que não dizem nada.
+    ...(hasAssets
+      ? [{ inclusion: { type: 'assets' as const }, label: INCLUSION_LABELS.assets }]
+      : []),
+    ...(hasDebts
+      ? [{ inclusion: { type: 'debts' as const }, label: INCLUSION_LABELS.debts }]
+      : []),
   ]
 
   return (
@@ -193,6 +205,8 @@ function GoalRow({ goal }: { goal: GoalSummary }) {
               selected={goal.includes ?? []}
               onToggle={(inclusion) => toggleGoalInclusion(goal.id, inclusion)}
               classes={summary.classes}
+              hasAssets={summary.physicalAssets > 0}
+              hasDebts={summary.liabilities > 0}
             />
           </div>
 
@@ -394,6 +408,8 @@ export function GoalsSection() {
               selected={includes}
               onToggle={toggleInclusion}
               classes={summary.classes}
+              hasAssets={summary.physicalAssets > 0}
+              hasDebts={summary.liabilities > 0}
             />
           </div>
 

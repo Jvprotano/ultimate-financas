@@ -19,6 +19,7 @@ const context: GoalContext = {
   investmentsBalance: 1_800,
   classBalances: [{ id: 'renda-fixa', name: 'Renda Fixa', marketValue: 1_800 }],
   goalOwnBalances: { g1: 0, outra: 900 },
+  assetsBalance: 480_000,
   debtBalance: 30_000,
 }
 
@@ -92,6 +93,24 @@ describe('summarizeGoals — meta de patrimônio', () => {
     const [summary] = summarizeGoals([goal({ includes: [{ type: 'debts' }] })], context)
     expect(summary.current).toBeLessThan(0)
     expect(summary.progress).toBe(0)
+  })
+
+  it('bens somam — com dívidas, formam o balanço completo', () => {
+    const [summary] = summarizeGoals(
+      [goal({ includes: [{ type: 'assets' }, { type: 'debts' }] })],
+      context,
+    )
+    expect(summary.includedBalance).toBe(480_000 - 30_000)
+  })
+
+  it('dívida sem os bens é justamente a leitura que enterrava a meta', () => {
+    const [comBens] = summarizeGoals(
+      [goal({ includes: [{ type: 'assets' }, { type: 'debts' }] })],
+      context,
+    )
+    const [semBens] = summarizeGoals([goal({ includes: [{ type: 'debts' }] })], context)
+    expect(semBens.current).toBeLessThan(0)
+    expect(comBens.current).toBeGreaterThan(0)
   })
 
   it('progresso satura em 100%', () => {

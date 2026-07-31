@@ -63,7 +63,7 @@ export function useHistory() {
           const merged = normalizeSnapshot({ ...item, ...patch })
           return {
             ...merged,
-            netWorth: merged.grossAssets - merged.liabilities,
+            netWorth: merged.grossAssets + merged.physicalAssets - merged.liabilities,
             savingsRate:
               merged.availableForBudget > 0
                 ? (merged.invested / merged.availableForBudget) * 100

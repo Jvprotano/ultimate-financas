@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import { useLocalStorage } from './useLocalStorage'
-import type { CostItem, Debt, DebtKind } from '../types'
+import type { Asset, CostItem, Debt, DebtKind } from '../types'
 import { calculateDebtsSummary, normalizeDebt } from '../lib/debts'
 import { finiteNumber, ledgerBalance, nowIso, uid } from '../lib/shared'
 
@@ -9,9 +9,11 @@ const DEBTS_STORAGE_KEY = 'uf_debts_v1'
 /**
  * Dívidas. Recebe os custos do cenário ativo só para conferir se a parcela
  * cadastrada aqui bate com o custo fixo que a representa no orçamento — a
- * parcela continua saindo do orçamento, não daqui.
+ * parcela continua saindo do orçamento, não daqui. E recebe os bens para saber
+ * quais dívidas têm contrapartida: um financiamento com a casa do outro lado
+ * não é a mesma coisa que um rotativo.
  */
-export function useDebts(costs: CostItem[] = []) {
+export function useDebts(costs: CostItem[] = [], assets: Asset[] = []) {
   const [stored, setStored] = useLocalStorage<Debt[]>(DEBTS_STORAGE_KEY, [])
   const debts = useMemo(
     () => (Array.isArray(stored) ? stored.map(normalizeDebt) : []),
@@ -27,6 +29,7 @@ export function useDebts(costs: CostItem[] = []) {
       installment: number
       remainingInstallments?: number
       linkedCostId?: string
+      linkedAssetId?: string
     }) => {
       const trimmed = input.name.trim()
       if (!trimmed) return
@@ -51,6 +54,7 @@ export function useDebts(costs: CostItem[] = []) {
           | 'installment'
           | 'remainingInstallments'
           | 'linkedCostId'
+          | 'linkedAssetId'
         >
       >,
     ) => {
@@ -125,7 +129,10 @@ export function useDebts(costs: CostItem[] = []) {
     [setStored],
   )
 
-  const summary = useMemo(() => calculateDebtsSummary(debts, costs), [debts, costs])
+  const summary = useMemo(
+    () => calculateDebtsSummary(debts, costs, assets),
+    [debts, costs, assets],
+  )
 
   /** Total já amortizado, somando as saídas de todos os livros-razão. */
   const totalAmortized = useMemo(

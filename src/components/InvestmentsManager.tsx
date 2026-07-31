@@ -4,6 +4,7 @@ import { CurrencyInput } from './CurrencyInput'
 import { LedgerList, LedgerMoveForm } from './Ledger'
 import { ReserveSection } from './ReserveSection'
 import { GoalsSection } from './GoalsSection'
+import { AssetsManager } from './AssetsManager'
 import { DebtsManager } from './DebtsManager'
 import {
   EmptyState,
@@ -333,14 +334,100 @@ function NewHoldingForm({ onClose }: { onClose: () => void }) {
   )
 }
 
+/**
+ * O balanço em duas barras na mesma escala: o que você tem em cima, o que você
+ * deve embaixo. Com um financiamento sem o bem cadastrado, a barra de baixo
+ * aparecia sozinha e enorme — que era exatamente o erro de leitura.
+ */
+function BalanceSheetBars({
+  financialAssets,
+  physicalAssets,
+  liabilities,
+  netWorth,
+}: {
+  financialAssets: number
+  physicalAssets: number
+  liabilities: number
+  netWorth: number
+}) {
+  const grossAssets = financialAssets + physicalAssets
+  const scale = Math.max(grossAssets, liabilities, 1)
+  const width = (value: number) => `${(value / scale) * 100}%`
+
+  return (
+    <div className="mt-5 border-t border-dark-border-subtle pt-4">
+      <span className="mb-2 block text-[11px] font-medium uppercase tracking-wider text-dark-text-muted">
+        O balanço inteiro
+      </span>
+
+      <div className="flex h-3 w-full gap-[2px] overflow-hidden rounded-full bg-white/[0.06]">
+        <div
+          className="h-full rounded-full"
+          style={{ width: width(financialAssets), backgroundColor: CHART_PALETTE.aqua }}
+          title={`Financeiro: ${formatCurrency(financialAssets)}`}
+        />
+        {physicalAssets > 0 && (
+          <div
+            className="h-full rounded-full"
+            style={{ width: width(physicalAssets), backgroundColor: CHART_PALETTE.yellow }}
+            title={`Bens: ${formatCurrency(physicalAssets)}`}
+          />
+        )}
+      </div>
+      <div className="mt-1 flex h-3 w-full gap-[2px] overflow-hidden rounded-full bg-white/[0.06]">
+        <div
+          className="h-full rounded-full"
+          style={{ width: width(liabilities), backgroundColor: CHART_PALETTE.red }}
+          title={`Dívidas: ${formatCurrency(liabilities)}`}
+        />
+      </div>
+
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-dark-text-secondary">
+        <span className="flex items-center gap-1.5">
+          <span
+            className="h-1.5 w-1.5 rounded-full"
+            style={{ backgroundColor: CHART_PALETTE.aqua }}
+          />
+          Financeiro {formatCurrency(financialAssets)}
+        </span>
+        {physicalAssets > 0 && (
+          <span className="flex items-center gap-1.5">
+            <span
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ backgroundColor: CHART_PALETTE.yellow }}
+            />
+            Bens {formatCurrency(physicalAssets)}
+          </span>
+        )}
+        <span className="flex items-center gap-1.5">
+          <span
+            className="h-1.5 w-1.5 rounded-full"
+            style={{ backgroundColor: CHART_PALETTE.red }}
+          />
+          Dívidas {formatCurrency(liabilities)}
+        </span>
+      </div>
+
+      <p className="mt-2 text-[11px] leading-relaxed text-dark-text-muted">
+        {netWorth < 0
+          ? `Você deve ${formatCurrency(-netWorth)} mais do que tem. Se algum financiamento ainda não tem o bem cadastrado, é aqui que a conta fica errada.`
+          : `Tirando tudo que você deve, sobram ${formatCurrency(netWorth)}.`}
+      </p>
+    </div>
+  )
+}
+
 export function InvestmentsManager() {
   const { summary, goals } = useInvestmentsStore()
   const { debts } = useFinancasStore()
   const [showForm, setShowForm] = useState(false)
 
   const {
-    grossAssets,
+    financialAssets,
+    physicalAssets,
     liabilities,
+    unsecuredLiabilities,
+    financialNetWorth,
     netWorth,
     reserveBalance,
     goalsBalance,
@@ -350,21 +437,42 @@ export function InvestmentsManager() {
   } = summary
   const activeGoals = goals.filter((goal) => !goal.isComplete).length
   const hasDebt = liabilities > 0
+  const hasAssets = physicalAssets > 0
+  // Sem bem e sem dívida, os dois patrimônios são o mesmo número: mostrar as
+  // duas linhas só confundiria.
+  const showsBalanceSheet = hasAssets || hasDebt
 
   return (
     <div className="space-y-4">
       <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
-          label="Patrimônio líquido"
-          value={formatCurrency(netWorth)}
-          detail={hasDebt ? 'ativos − dívidas' : 'investimentos + reserva + metas'}
-          tone={netWorth >= 0 ? 'accent' : 'negative'}
+          label="Patrimônio financeiro"
+          value={formatCurrency(financialNetWorth)}
+          detail={
+            unsecuredLiabilities > 0
+              ? `${formatCurrency(financialAssets)} − ${formatCurrency(unsecuredLiabilities)} de dívida sem garantia`
+              : 'investimentos + reserva + metas'
+          }
+          tone={financialNetWorth >= 0 ? 'accent' : 'negative'}
         />
-        <StatTile
-          label="Ativos"
-          value={formatCurrency(grossAssets)}
-          detail={`${formatCurrency(totalMarketValue)} investidos · ${formatCurrency(reserveBalance + goalsBalance)} em reserva e metas`}
-        />
+        {showsBalanceSheet ? (
+          <StatTile
+            label="Patrimônio líquido total"
+            value={formatCurrency(netWorth)}
+            detail={
+              hasAssets
+                ? `com ${formatCurrency(physicalAssets)} em bens − ${formatCurrency(liabilities)} de dívida`
+                : `${formatCurrency(financialAssets)} em ativos − ${formatCurrency(liabilities)} de dívida`
+            }
+            tone={netWorth >= 0 ? 'accent' : 'negative'}
+          />
+        ) : (
+          <StatTile
+            label="Investido"
+            value={formatCurrency(totalMarketValue)}
+            detail={`${formatCurrency(reserveBalance + goalsBalance)} em reserva e metas`}
+          />
+        )}
         <StatTile
           label={hasDebt ? 'Dívidas' : 'Rendimento'}
           value={
@@ -401,13 +509,13 @@ export function InvestmentsManager() {
         />
       </div>
 
-      {grossAssets > 0 && (
+      {financialAssets > 0 && (
         <Panel>
           <PanelHeader
-            title="Alocação dos ativos"
+            title="Alocação dos ativos financeiros"
             description={
-              hasDebt
-                ? `As fatias são sobre os ${formatCurrency(grossAssets)} de ativos. Descontadas as dívidas, o líquido é ${formatCurrency(netWorth)}.`
+              showsBalanceSheet
+                ? `As fatias são sobre os ${formatCurrency(financialAssets)} que respondem a aporte e resgate. Bens não se rebalanceiam e ficam fora daqui.`
                 : undefined
             }
           />
@@ -434,42 +542,18 @@ export function InvestmentsManager() {
                   ? [{ id: 'metas', label: 'Metas', value: goalsBalance, color: GOALS_COLOR }]
                   : []),
               ]}
-              total={grossAssets}
+              total={financialAssets}
               height={12}
             />
           </div>
 
-          {hasDebt && (
-            <div className="mt-5 border-t border-dark-border-subtle pt-4">
-              <span className="mb-2 block text-[11px] font-medium uppercase tracking-wider text-dark-text-muted">
-                Ativos contra dívidas
-              </span>
-              <div className="flex h-3 w-full gap-[2px] overflow-hidden rounded-full bg-white/[0.06]">
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    width: `${(grossAssets / Math.max(grossAssets, liabilities)) * 100}%`,
-                    backgroundColor: CHART_PALETTE.aqua,
-                  }}
-                  title={`Ativos: ${formatCurrency(grossAssets)}`}
-                />
-              </div>
-              <div className="mt-1 flex h-3 w-full gap-[2px] overflow-hidden rounded-full bg-white/[0.06]">
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    width: `${(liabilities / Math.max(grossAssets, liabilities)) * 100}%`,
-                    backgroundColor: CHART_PALETTE.red,
-                  }}
-                  title={`Dívidas: ${formatCurrency(liabilities)}`}
-                />
-              </div>
-              <p className="mt-2 text-[11px] leading-relaxed text-dark-text-muted">
-                {liabilities > grossAssets
-                  ? `Você deve ${formatCurrency(liabilities - grossAssets)} mais do que tem. Amortizar e aportar movem o mesmo número.`
-                  : `Seus ativos cobrem as dívidas com ${formatCurrency(grossAssets - liabilities)} de sobra.`}
-              </p>
-            </div>
+          {showsBalanceSheet && (
+            <BalanceSheetBars
+              financialAssets={financialAssets}
+              physicalAssets={physicalAssets}
+              liabilities={liabilities}
+              netWorth={netWorth}
+            />
           )}
         </Panel>
       )}
@@ -479,6 +563,7 @@ export function InvestmentsManager() {
         <GoalsSection />
       </div>
 
+      <AssetsManager />
       <DebtsManager />
 
       <Panel>

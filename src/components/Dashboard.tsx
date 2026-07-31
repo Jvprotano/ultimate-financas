@@ -118,16 +118,30 @@ function buildAlerts(
       severity: 'critical',
     })
   }
-  if (debtsSummary.costliest && debtsSummary.totalMonthlyInterest > 0) {
+  // Só dívida sem contrapartida vira alerta. Os juros de um financiamento
+  // imobiliário são o preço da moradia — não um problema a resolver.
+  if (debtsSummary.unsecured.costliest && debtsSummary.unsecured.monthlyInterest > 0) {
     const share =
       metrics.availableForBudget > 0
-        ? (debtsSummary.totalMonthlyInterest / metrics.availableForBudget) * 100
+        ? (debtsSummary.unsecured.monthlyInterest / metrics.availableForBudget) * 100
         : 0
     alerts.push({
       id: 'debt-interest',
       title: 'Juros correndo todo mês',
-      detail: `${formatCurrency(debtsSummary.totalMonthlyInterest)} do que você paga é só juro — ${share.toFixed(0)}% da base do orçamento. A mais cara é ${debtsSummary.costliest.name}, a ${debtsSummary.costliest.annualRatePct.toFixed(1)}% a.a.`,
+      detail: `${formatCurrency(debtsSummary.unsecured.monthlyInterest)} do que você paga é só juro — ${share.toFixed(0)}% da base do orçamento. A mais cara é ${debtsSummary.unsecured.costliest.name}, a ${debtsSummary.unsecured.costliest.annualRatePct.toFixed(1)}% a.a.`,
       severity: share > 5 ? 'critical' : 'warning',
+    })
+  }
+  // Um financiamento sem bem cadastrado destrói a leitura do patrimônio.
+  const orphanFinancing = debtsSummary.debts.filter(
+    (debt) => !debt.isSettled && debt.kind === 'financiamento' && !debt.isSecured,
+  )
+  if (orphanFinancing.length > 0) {
+    alerts.push({
+      id: 'debt-without-asset',
+      title: 'Financiamento sem o bem cadastrado',
+      detail: `${orphanFinancing.map((debt) => debt.name).join(', ')} entra no balanço como dívida pura. Cadastre o imóvel ou veículo em Patrimônio › Bens e ligue os dois — sem isso, seu patrimônio líquido aparece muito abaixo do real.`,
+      severity: 'warning',
     })
   }
   if (creditCardSummary.unclassifiedPersonal > 0) {
@@ -301,17 +315,21 @@ export function Dashboard({
             value={formatCurrency(availableForBudget)}
             detail="renda usada nas metas"
           />
+          {/* O destaque é o dinheiro. O líquido total, que carrega bens e o
+              financiamento deles, é a leitura secundária no detalhe. */}
           <StatTile
-            label="Patrimônio líquido"
-            value={formatCurrency(investmentsSummary.netWorth)}
+            label="Patrimônio financeiro"
+            value={formatCurrency(investmentsSummary.financialNetWorth)}
             detail={
-              investmentsSummary.liabilities > 0
-                ? `${formatCurrency(investmentsSummary.grossAssets)} em ativos − ${formatCurrency(investmentsSummary.liabilities)} de dívida`
-                : lastMonth && stats.months > 1
-                  ? `${stats.netWorthGrowth >= 0 ? '+' : '−'} ${formatCurrency(Math.abs(stats.netWorthGrowth))} no histórico`
-                  : 'investimentos + reserva + metas'
+              investmentsSummary.physicalAssets > 0
+                ? `${formatCurrency(investmentsSummary.netWorth)} de líquido total, com bens e financiamento`
+                : investmentsSummary.liabilities > 0
+                  ? `${formatCurrency(investmentsSummary.financialAssets)} em ativos − ${formatCurrency(investmentsSummary.liabilities)} de dívida`
+                  : lastMonth && stats.months > 1
+                    ? `${stats.netWorthGrowth >= 0 ? '+' : '−'} ${formatCurrency(Math.abs(stats.netWorthGrowth))} no histórico`
+                    : 'investimentos + reserva + metas'
             }
-            tone={investmentsSummary.netWorth >= 0 ? 'accent' : 'negative'}
+            tone={investmentsSummary.financialNetWorth >= 0 ? 'accent' : 'negative'}
           />
           <StatTile
             label="Custos fixos"

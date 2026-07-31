@@ -38,8 +38,14 @@ function SnapshotEditor({ point, onClose }: { point: HistoryPoint; onClose: () =
     { label: 'Custos', value: point.costs, key: 'costs' },
     { label: 'Desejos', value: point.wants, key: 'wants' },
     { label: 'Investido', value: point.invested, key: 'invested' },
-    { label: 'Ativos', value: point.grossAssets, key: 'grossAssets' },
+    { label: 'Ativos financeiros', value: point.grossAssets, key: 'grossAssets' },
+    { label: 'Bens', value: point.physicalAssets, key: 'physicalAssets' },
     { label: 'Dívidas', value: point.liabilities, key: 'liabilities' },
+    {
+      label: 'Dívida com bem',
+      value: point.securedLiabilities,
+      key: 'securedLiabilities',
+    },
     { label: 'Fatura (sua parte)', value: point.cardPersonalTotal, key: 'cardPersonalTotal' },
   ]
 
@@ -69,7 +75,8 @@ function SnapshotEditor({ point, onClose }: { point: HistoryPoint; onClose: () =
         </div>
         <p className="mt-2.5 text-[11px] leading-relaxed text-dark-text-muted">
           A taxa de poupança e o patrimônio líquido são recalculados a partir do que você editar.
-          Patrimônio líquido: {formatCurrency(point.grossAssets - point.liabilities)}.
+          Financeiro: {formatCurrency(point.financialNetWorth)} · líquido total:{' '}
+          {formatCurrency(point.grossAssets + point.physicalAssets - point.liabilities)}.
         </p>
         <div className="mt-2.5 flex gap-2">
           <SecondaryButton onClick={onClose}>Fechar</SecondaryButton>
@@ -88,21 +95,22 @@ export function HistoryView() {
 
   const labels = points.map((point) => formatMonthKey(point.month))
   const hasLiabilities = points.some((point) => point.liabilities > 0)
+  const hasPhysicalAssets = points.some((point) => point.physicalAssets > 0)
   const netWorthSeries: TrendSeries[] = [
     {
-      id: 'net-worth',
-      label: hasLiabilities ? 'Patrimônio líquido' : 'Patrimônio',
+      id: 'financial',
+      label: hasLiabilities || hasPhysicalAssets ? 'Patrimônio financeiro' : 'Patrimônio',
       color: CHART_PALETTE.aqua,
-      values: points.map((point) => point.netWorth),
+      values: points.map((point) => point.financialNetWorth),
     },
     // Só vale mostrar as duas curvas quando elas de fato divergem.
-    ...(hasLiabilities
+    ...(hasLiabilities || hasPhysicalAssets
       ? [
           {
-            id: 'assets',
-            label: 'Ativos',
+            id: 'net-worth',
+            label: 'Patrimônio líquido total',
             color: CHART_PALETTE.blue,
-            values: points.map((point) => point.grossAssets),
+            values: points.map((point) => point.netWorth),
           },
         ]
       : []),
@@ -176,11 +184,11 @@ export function HistoryView() {
             detail="o realizado do ciclo"
           />
           <StatTile
-            label="Patrimônio líquido"
-            value={formatCurrency(investments.summary.netWorth)}
+            label="Patrimônio financeiro"
+            value={formatCurrency(investments.summary.financialNetWorth)}
             detail={
-              investments.summary.liabilities > 0
-                ? `${formatCurrency(investments.summary.grossAssets)} em ativos − ${formatCurrency(investments.summary.liabilities)}`
+              investments.summary.physicalAssets > 0 || investments.summary.liabilities > 0
+                ? `líquido total: ${formatCurrency(investments.summary.netWorth)}`
                 : `sobra em caixa: ${formatCurrency(cashFlow.leftover)}`
             }
             tone="accent"
@@ -276,7 +284,7 @@ export function HistoryView() {
                     <th className="px-4 py-2.5 text-right font-medium">Cartão</th>
                     <th className="px-4 py-2.5 text-right font-medium">Poupança</th>
                     <th className="px-4 py-2.5 text-right font-medium">
-                      {hasLiabilities ? 'Líquido' : 'Patrimônio'}
+                      {hasLiabilities || hasPhysicalAssets ? 'Líquido' : 'Patrimônio'}
                     </th>
                     <th className="px-5 py-2.5 text-right font-medium sr-only">Ações</th>
                   </tr>

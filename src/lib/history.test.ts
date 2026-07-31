@@ -38,6 +38,12 @@ describe('normalizeSnapshot — compatibilidade', () => {
     expect(normalized.netWorth).toBe(5_000)
   })
 
+  it('snapshot anterior aos bens não inventa imóvel nenhum', () => {
+    const normalized = normalizeSnapshot({ month: '2026-06', netWorth: 5_000 })
+    expect(normalized.physicalAssets).toBe(0)
+    expect(normalized.securedLiabilities).toBe(0)
+  })
+
   it('mês inválido cai no mês corrente', () => {
     expect(normalizeSnapshot({ month: '07/2026' }).month).toMatch(/^\d{4}-\d{2}$/)
   })
@@ -74,6 +80,20 @@ describe('buildHistoryPoints', () => {
     ])
     expect(points[1].netWorthDelta).toBe(1_900)
     expect(points[1].costsDelta).toBe(400)
+  })
+
+  it('o financeiro do mês exclui bens e a dívida que os garante', () => {
+    const [point] = buildHistoryPoints([
+      snapshot({
+        grossAssets: 38_400,
+        physicalAssets: 480_000,
+        liabilities: 267_000,
+        securedLiabilities: 262_000,
+        netWorth: 251_400,
+      }),
+    ])
+    // Só o cartão de 5 mil pesa no dinheiro; o financiamento não.
+    expect(point.financialNetWorth).toBe(33_400)
   })
 })
 

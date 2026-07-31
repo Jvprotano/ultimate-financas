@@ -85,6 +85,78 @@ describe('calculateInvestmentsSummary — ativos e patrimônio líquido', () => 
   })
 })
 
+describe('calculateInvestmentsSummary — bens e dívida garantida', () => {
+  // O caso real: casa financiada, pouco dinheiro em conta.
+  const balanceSheet = { securedLiabilities: 262_000, physicalAssets: 480_000 }
+
+  it('o financeiro ignora bens e a dívida que os garante', () => {
+    const summary = calculateInvestmentsSummary(
+      [holding({ marketValue: 34_200 })],
+      classes,
+      4_200,
+      0,
+      262_000,
+      balanceSheet,
+    )
+    expect(summary.financialAssets).toBe(38_400)
+    expect(summary.unsecuredLiabilities).toBe(0)
+    expect(summary.financialNetWorth).toBe(38_400)
+  })
+
+  it('o líquido total soma o bem — sem ele, ficava negativo à toa', () => {
+    const comBem = calculateInvestmentsSummary(
+      [holding({ marketValue: 34_200 })],
+      classes,
+      4_200,
+      0,
+      262_000,
+      balanceSheet,
+    )
+    const semBem = calculateInvestmentsSummary(
+      [holding({ marketValue: 34_200 })],
+      classes,
+      4_200,
+      0,
+      262_000,
+    )
+    expect(semBem.netWorth).toBe(-223_600)
+    expect(comBem.netWorth).toBe(256_400)
+  })
+
+  it('dívida sem garantia continua saindo do financeiro', () => {
+    const summary = calculateInvestmentsSummary(
+      [holding({ marketValue: 34_200 })],
+      classes,
+      4_200,
+      0,
+      267_000,
+      balanceSheet,
+    )
+    expect(summary.unsecuredLiabilities).toBe(5_000)
+    expect(summary.financialNetWorth).toBe(33_400)
+  })
+
+  it('a garantida nunca passa do total devido', () => {
+    const summary = calculateInvestmentsSummary([], classes, 0, 0, 1_000, {
+      securedLiabilities: 9_999,
+    })
+    expect(summary.securedLiabilities).toBe(1_000)
+    expect(summary.unsecuredLiabilities).toBe(0)
+  })
+
+  it('a alocação é medida só sobre o financeiro: imóvel não se rebalanceia', () => {
+    const summary = calculateInvestmentsSummary(
+      [holding({ marketValue: 1_000 })],
+      classes,
+      0,
+      0,
+      0,
+      { physicalAssets: 480_000 },
+    )
+    expect(summary.classes[0].allocationPct).toBe(100)
+  })
+})
+
 describe('annualizedReturn', () => {
   it('devolve null com histórico curto demais para anualizar', () => {
     const recent: LedgerEntry[] = [{ id: 't', amount: 1_000, date: daysAgo(10) }]

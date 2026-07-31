@@ -235,15 +235,16 @@ function EventRow({ event, currentMonth }: { event: ExpectedEvent; currentMonth:
 
 /**
  * Como julgar uma meta com prazo. Metas que englobam os investimentos crescem
- * com a projeção inteira; as demais dependem só do que você aportar nelas.
+ * com a projeção do patrimônio *financeiro* — é ali que o aporte cai. Um imóvel
+ * valorizando não ajuda a bater a meta da viagem.
  */
-function goalOutlook(goal: GoalSummary, projected: number | null, currentNetWorth: number) {
+function goalOutlook(goal: GoalSummary, projected: number | null, currentFinancial: number) {
   const tracksInvestments = (goal.includes ?? []).some((item) => item.type === 'investments')
   if (!goal.targetMonth || goal.targetAmount <= 0) return null
 
   if (tracksInvestments && projected !== null) {
     // O crescimento projetado do patrimônio cai justamente onde a meta mede.
-    const value = goal.current + (projected - currentNetWorth)
+    const value = goal.current + (projected - currentFinancial)
     return { mode: 'projection' as const, value, gap: value - goal.targetAmount }
   }
   return { mode: 'contribution' as const, value: goal.current, gap: -goal.remaining }
@@ -254,41 +255,98 @@ export function ForecastView() {
   const { forecast, projection, monthlyContribution, metrics, investments } = store
   const { assumptions, upcomingYear, currentMonth, events } = forecast
   const [showForm, setShowForm] = useState(false)
+  const [chartView, setChartView] = useState<'money' | 'balance'>('money')
 
   const real = assumptions.showInRealTerms
-  const netWorth = real ? projection[0].netWorthReal : investments.summary.netWorth
+  const first = projection[0]
   const last = projection[projection.length - 1]
-  const lastValue = last ? (real ? last.netWorthReal : last.netWorth) : netWorth
   const labels = useMemo(() => projection.map((point) => formatMonthKey(point.month)), [projection])
-  const hasDebt = projection[0].debt > 0
+  const hasDebt = first.debt > 0
+  const hasProperties = first.properties > 0
+  // Só a dívida sem contrapartida separa uma curva da outra.
+  const hasUnsecuredDebt = first.debt - first.securedDebt > 0
 
-  const series: TrendSeries[] = [
-    {
-      id: 'net-worth',
-      label: real ? 'Patrimônio líquido (reais de hoje)' : 'Patrimônio líquido',
-      color: CHART_PALETTE.aqua,
-      values: projection.map((point) => (real ? point.netWorthReal : point.netWorth)),
-    },
-    // A curva de ativos só acrescenta informação quando há dívida separando as duas.
-    ...(hasDebt
-      ? [
-          {
-            id: 'assets',
-            label: 'Ativos',
-            color: CHART_PALETTE.blue,
-            values: projection.map((point) => (real ? point.assetsReal : point.assets)),
-          },
-          {
-            id: 'debt',
-            label: 'Dívidas',
-            color: CHART_PALETTE.red,
-            values: projection.map((point) => point.debt),
-          },
-        ]
-      : []),
-  ]
+  // O número em destaque é o dinheiro. O patrimônio líquido total, que carrega
+  // casa e financiamento, vira leitura secundária: ele responde "quanto eu
+  // valho", não "quanto eu vou ter" — e era o que estava assustando à toa.
+  const financialNow = real ? first.financialNetWorthReal : first.financialNetWorth
+  const financialLast = last
+    ? real
+      ? last.financialNetWorthReal
+      : last.financialNetWorth
+    : financialNow
+  const netWorthNow = real ? first.netWorthReal : first.netWorth
+  const netWorthLast = last ? (real ? last.netWorthReal : last.netWorth) : netWorthNow
 
-  const payoffMonth = hasDebt ? projection.find((point) => point.debt <= 0) : undefined
+  // Um imóvel de meia dezena de centenas de milhares esmaga a escala: plotado
+  // junto, o dinheiro — que é a resposta útil — vira uma linha rente ao eixo.
+  // Por isso as duas visões são separadas, e a do dinheiro é a padrão.
+  const canShowBalanceSheet = hasProperties || hasDebt
+  const showsBalanceSheet = canShowBalanceSheet && chartView === 'balance'
+
+  const series: TrendSeries[] = showsBalanceSheet
+    ? [
+        {
+          id: 'net-worth',
+          label: real ? 'Patrimônio líquido (reais de hoje)' : 'Patrimônio líquido',
+          color: CHART_PALETTE.blue,
+          values: projection.map((point) => (real ? point.netWorthReal : point.netWorth)),
+        },
+        ...(hasProperties
+          ? [
+              {
+                id: 'properties',
+                label: 'Bens',
+                color: CHART_PALETTE.yellow,
+                values: projection.map((point) =>
+                  real ? point.propertiesReal : point.properties,
+                ),
+              },
+            ]
+          : []),
+        ...(hasDebt
+          ? [
+              {
+                id: 'debt',
+                label: 'Dívidas',
+                color: CHART_PALETTE.red,
+                values: projection.map((point) => point.debt),
+              },
+            ]
+          : []),
+      ]
+    : [
+        {
+          id: 'financial',
+          label: real
+            ? canShowBalanceSheet
+              ? 'Patrimônio financeiro (reais de hoje)'
+              : 'Patrimônio (reais de hoje)'
+            : canShowBalanceSheet
+              ? 'Patrimônio financeiro'
+              : 'Patrimônio',
+          color: CHART_PALETTE.aqua,
+          values: projection.map((point) =>
+            real ? point.financialNetWorthReal : point.financialNetWorth,
+          ),
+        },
+        // Dívida sem contrapartida separa as duas curvas e vale mostrar junto.
+        ...(hasUnsecuredDebt
+          ? [
+              {
+                id: 'assets',
+                label: 'Ativos financeiros',
+                color: CHART_PALETTE.blue,
+                values: projection.map((point) => (real ? point.assetsReal : point.assets)),
+              },
+            ]
+          : []),
+      ]
+
+  const payoffMonth = hasUnsecuredDebt
+    ? projection.find((point) => point.debt - point.securedDebt <= 0)
+    : undefined
+  const equityBuiltInHorizon = projection.reduce((sum, point) => sum + point.equityBuilt, 0)
   const datedGoals = investments.goals.filter((goal) => goal.targetMonth && goal.targetAmount > 0)
 
   return (
@@ -318,12 +376,12 @@ export function ForecastView() {
           }
         />
         <StatTile
-          label={`Líquido em ${formatMonthKey(last?.month ?? currentMonth)}`}
-          value={formatCurrency(lastValue)}
+          label={`Dinheiro em ${formatMonthKey(last?.month ?? currentMonth)}`}
+          value={formatCurrency(financialLast)}
           detail={
             real
-              ? `${formatCurrency(lastValue - netWorth)} a mais, em reais de hoje`
-              : `${formatCurrency(lastValue - netWorth)} a mais que hoje`
+              ? `${formatCurrency(financialLast - financialNow)} a mais, em reais de hoje`
+              : `${formatCurrency(financialLast - financialNow)} a mais que hoje`
           }
           tone="accent"
         />
@@ -334,20 +392,35 @@ export function ForecastView() {
           title="Projeção do patrimônio"
           icon={<TrendingUp size={16} />}
           description={
-            hasDebt
-              ? 'Ativos recebem aporte e rendimento; dívidas correm juros e são abatidas pela parcela. O líquido é a diferença.'
-              : 'Hoje, mais o aporte de cada mês, mais o que você já sabe que vai entrar e sair, rendendo à taxa abaixo.'
+            showsBalanceSheet
+              ? 'O balanço inteiro: bens se valorizam pela premissa deles, dívidas caem pela parcela, e o líquido é a diferença.'
+              : canShowBalanceSheet
+                ? 'Quanto dinheiro você terá — aporte, eventos e rendimento. Bens e o financiamento deles ficam na visão do balanço.'
+                : 'Hoje, mais o aporte de cada mês, mais o que você já sabe que vai entrar e sair, rendendo à taxa abaixo.'
           }
           actions={
-            <SegmentedControl
-              options={[
-                { value: false, label: 'Nominal' },
-                { value: true, label: 'Reais de hoje' },
-              ]}
-              value={assumptions.showInRealTerms}
-              onChange={(value) => forecast.updateAssumptions({ showInRealTerms: value })}
-              className="min-w-52"
-            />
+            <>
+              {canShowBalanceSheet && (
+                <SegmentedControl
+                  options={[
+                    { value: 'money' as const, label: 'Dinheiro' },
+                    { value: 'balance' as const, label: 'Balanço' },
+                  ]}
+                  value={chartView}
+                  onChange={setChartView}
+                  className="min-w-40"
+                />
+              )}
+              <SegmentedControl
+                options={[
+                  { value: false, label: 'Nominal' },
+                  { value: true, label: 'Reais de hoje' },
+                ]}
+                value={assumptions.showInRealTerms}
+                onChange={(value) => forecast.updateAssumptions({ showInRealTerms: value })}
+                className="min-w-52"
+              />
+            </>
           }
         />
 
@@ -462,11 +535,24 @@ export function ForecastView() {
 
         {payoffMonth && (
           <p className="mt-2 text-[11px] leading-relaxed text-primary-300">
-            No ritmo das parcelas atuais, suas dívidas zeram em{' '}
+            No ritmo das parcelas atuais, suas dívidas sem contrapartida zeram em{' '}
             <strong>{formatMonthLong(payoffMonth.month)}</strong>
             {!assumptions.reinvestFreedInstallments &&
-              ` — e liberam ${formatCurrency(store.debts.summary.totalInstallment)} por mês`}
+              ` — e liberam ${formatCurrency(store.debts.summary.unsecured.installment)} por mês`}
             .
+          </p>
+        )}
+
+        {/* O ponto que faltava: a amortização não some, vira patrimônio. */}
+        {equityBuiltInHorizon > 0 && last && (
+          <p className="mt-2 border-t border-dark-border-subtle pt-2 text-[11px] leading-relaxed text-dark-text-muted">
+            Até {formatMonthLong(last.month)} você terá{' '}
+            <strong className="text-dark-text">{formatCurrency(financialLast)}</strong> em dinheiro e{' '}
+            <strong className="text-dark-text">{formatCurrency(netWorthLast)}</strong> de patrimônio
+            líquido total. Das parcelas do período,{' '}
+            <strong className="text-primary-300">{formatCurrency(equityBuiltInHorizon)}</strong> não
+            são despesa: são a fatia que abate o saldo devedor e vira patrimônio seu — o resto é
+            juro, o preço de morar onde você mora.
           </p>
         )}
       </Panel>
@@ -498,7 +584,7 @@ export function ForecastView() {
               <tbody>
                 {datedGoals.map((goal) => {
                   const projected = projectedAt(projection, goal.targetMonth!, real)
-                  const outlook = goalOutlook(goal, projected, netWorth)
+                  const outlook = goalOutlook(goal, projected, financialNow)
                   const late = goal.monthsLeft !== null && goal.monthsLeft < 0
 
                   return (

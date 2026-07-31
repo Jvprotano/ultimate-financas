@@ -1,4 +1,5 @@
 import type {
+  AssetKind,
   BudgetArea,
   BudgetModel,
   DebtKind,
@@ -21,6 +22,25 @@ export const DEBT_KINDS: { key: DebtKind; label: string; hint: string }[] = [
 export const DEBT_KIND_LABELS: Record<DebtKind, string> = Object.fromEntries(
   DEBT_KINDS.map(({ key, label }) => [key, label]),
 ) as Record<DebtKind, string>
+
+/**
+ * Bens. A valorização padrão é a única premissa embutida: imóvel acompanhando a
+ * inflação de longo prazo, carro perdendo valor — ambas editáveis.
+ */
+export const ASSET_KINDS: {
+  key: AssetKind
+  label: string
+  hint: string
+  defaultAppreciationPct: number
+}[] = [
+  { key: 'imovel', label: 'Imóvel', hint: 'Casa, apartamento, terreno', defaultAppreciationPct: 4 },
+  { key: 'veiculo', label: 'Veículo', hint: 'Carro, moto', defaultAppreciationPct: -10 },
+  { key: 'outros', label: 'Outros', hint: 'Equipamento, participação', defaultAppreciationPct: 0 },
+]
+
+export const ASSET_KIND_LABELS: Record<AssetKind, string> = Object.fromEntries(
+  ASSET_KINDS.map(({ key, label }) => [key, label]),
+) as Record<AssetKind, string>
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   account: 'Conta',
@@ -197,6 +217,14 @@ export const DEBT_KIND_COLORS: Record<DebtKind, string> = {
   emprestimo: CHART_PALETTE.red,
   consignado: CHART_PALETTE.magenta,
   cartao: CHART_PALETTE.yellow,
+  outros: CHART_PALETTE.muted,
+}
+
+/** Amarelo para bens: precisa se distinguir do aqua (financeiro) e do vermelho
+ *  (dívidas) sempre que os três aparecem no mesmo gráfico. */
+export const ASSET_KIND_COLORS: Record<AssetKind, string> = {
+  imovel: CHART_PALETTE.yellow,
+  veiculo: CHART_PALETTE.orange,
   outros: CHART_PALETTE.muted,
 }
 

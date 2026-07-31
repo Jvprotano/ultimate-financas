@@ -18,12 +18,20 @@ import { finiteNumber, ledgerBalance, monthKey, monthsBetween, normalizeLedger, 
 // ela apenas observa) andam separados: só o primeiro entra no patrimônio.
 // ---------------------------------------------------------------------------
 
-const INCLUSION_TYPES: GoalInclusionType[] = ['reserve', 'investments', 'goals', 'class', 'debts']
+const INCLUSION_TYPES: GoalInclusionType[] = [
+  'reserve',
+  'investments',
+  'goals',
+  'class',
+  'debts',
+  'assets',
+]
 
 export const INCLUSION_LABELS: Record<Exclude<GoalInclusionType, 'class'>, string> = {
   reserve: 'Reserva de emergência',
   investments: 'Investimentos',
   goals: 'Outras metas',
+  assets: 'Bens',
   debts: '− Dívidas',
 }
 
@@ -34,6 +42,8 @@ export interface GoalContext {
   classBalances: { id: string; name: string; marketValue: number }[]
   /** Saldo do livro-razão de cada meta, indexado por id. */
   goalOwnBalances: Record<string, number>
+  /** Valor de mercado dos bens — imóvel, veículo. */
+  assetsBalance: number
   /** Saldo devedor total — entra na meta com sinal negativo. */
   debtBalance: number
 }
@@ -43,6 +53,7 @@ export const EMPTY_GOAL_CONTEXT: GoalContext = {
   investmentsBalance: 0,
   classBalances: [],
   goalOwnBalances: {},
+  assetsBalance: 0,
   debtBalance: 0,
 }
 
@@ -103,8 +114,12 @@ function resolveInclusions(goal: FinancialGoal, context: GoalContext) {
         if (id !== goal.id) balance += own
       }
       labels.push(INCLUSION_LABELS.goals)
+    } else if (inclusion.type === 'assets') {
+      balance += context.assetsBalance
+      labels.push(INCLUSION_LABELS.assets)
     } else if (inclusion.type === 'debts') {
-      // Uma meta de patrimônio *líquido* desconta o que você deve.
+      // Uma meta de patrimônio *líquido* desconta o que você deve. Junto com
+      // "Bens", vira o balanço completo; sozinha, mede só o dinheiro.
       balance -= context.debtBalance
       labels.push(INCLUSION_LABELS.debts)
     } else if (inclusion.type === 'class') {

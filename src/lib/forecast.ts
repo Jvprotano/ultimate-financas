@@ -6,6 +6,7 @@ import type {
   ForecastAssumptions,
   ForecastPoint,
 } from '../types'
+import { advanceAssetMonth } from './assets'
 import { advanceDebtMonth } from './debts'
 import { addMonths, finiteNumber, monthKey, monthsBetween, nowIso, uid } from './shared'
 
@@ -145,11 +146,20 @@ export interface ProjectedDebt {
   balance: number
   monthlyRatePct: number
   installment: number
+  /** Tem bem do outro lado: a amortização vira patrimônio, não some. */
+  secured?: boolean
+}
+
+/** Bem simplificado para a projeção: valor de hoje e valorização esperada. */
+export interface ProjectedProperty {
+  id: string
+  value: number
+  annualAppreciationPct: number
 }
 
 export interface ProjectionInput {
   startMonth: string
-  /** Ativos de hoje (a dívida entra separada, para as duas curvas serem visíveis). */
+  /** Ativos financeiros de hoje. Dívidas e bens entram separados. */
   startAssets: number
   monthlyContribution: number
   annualReturnPct: number
@@ -157,6 +167,7 @@ export interface ProjectionInput {
   horizonMonths: number
   events: ExpectedEvent[]
   debts?: ProjectedDebt[]
+  properties?: ProjectedProperty[]
   /** Somar ao aporte a parcela de cada dívida já quitada. */
   reinvestFreedInstallments?: boolean
 }
@@ -165,10 +176,13 @@ export interface ProjectionInput {
  * Patrimônio mês a mês a partir de hoje. O primeiro ponto é o presente (sem
  * aporte nem rendimento), para o gráfico começar no número que o app já mostra.
  *
- * Ativos e dívidas evoluem separados: os ativos recebem aporte, eventos e
- * rendimento; cada dívida corre juros e é abatida pela parcela. A parcela *não*
- * sai dos ativos porque ela já é um custo fixo do mês — o que sobra depois dela
- * é justamente o aporte.
+ * Três curvas correm separadas. Os ativos financeiros recebem aporte, eventos e
+ * rendimento. Cada dívida corre juros e é abatida pela parcela — que *não* sai
+ * dos ativos, porque já é um custo fixo do mês: o que sobra depois dela é
+ * justamente o aporte. E cada bem se valoriza pela premissa dele.
+ *
+ * Sem a terceira curva, um financiamento aparecia como perda pura: o saldo caía
+ * e nada crescia do outro lado, como se a amortização evaporasse.
  */
 export function projectNetWorth(input: ProjectionInput): ForecastPoint[] {
   const monthlyRate = Math.pow(1 + input.annualReturnPct / 100, 1 / 12) - 1
@@ -176,20 +190,33 @@ export function projectNetWorth(input: ProjectionInput): ForecastPoint[] {
 
   // Cópia local: a projeção consome os saldos, e o estado do app é imutável.
   const debts = (input.debts ?? []).map((debt) => ({ ...debt }))
+  const propertyList = (input.properties ?? []).map((property) => ({ ...property }))
   const startDebt = debts.reduce((sum, debt) => sum + debt.balance, 0)
+  const startSecured = debts
+    .filter((debt) => debt.secured)
+    .reduce((sum, debt) => sum + debt.balance, 0)
+  const startProperties = propertyList.reduce((sum, property) => sum + property.value, 0)
+  const startNetWorth = input.startAssets + startProperties - startDebt
+  const startFinancialNetWorth = input.startAssets - (startDebt - startSecured)
 
   const points: ForecastPoint[] = [
     {
       month: input.startMonth,
       assets: input.startAssets,
+      properties: startProperties,
       debt: startDebt,
-      netWorth: input.startAssets - startDebt,
+      securedDebt: startSecured,
+      netWorth: startNetWorth,
+      financialNetWorth: startFinancialNetWorth,
       assetsReal: input.startAssets,
-      netWorthReal: input.startAssets - startDebt,
+      propertiesReal: startProperties,
+      netWorthReal: startNetWorth,
+      financialNetWorthReal: startFinancialNetWorth,
       contribution: 0,
       eventsSaved: 0,
       returns: 0,
       debtPaid: 0,
+      equityBuilt: 0,
       occurrences: [],
     },
   ]
@@ -202,6 +229,7 @@ export function projectNetWorth(input: ProjectionInput): ForecastPoint[] {
     const returns = assets * monthlyRate
 
     let debtPaid = 0
+    let equityBuilt = 0
     let freedInstallments = 0
     for (const debt of debts) {
       if (debt.balance <= 0) {
@@ -209,28 +237,45 @@ export function projectNetWorth(input: ProjectionInput): ForecastPoint[] {
         continue
       }
       const next = advanceDebtMonth(debt.balance, debt.monthlyRatePct, debt.installment)
-      debtPaid += debt.balance - next.balance
+      const amortized = debt.balance - next.balance
+      debtPaid += amortized
+      if (debt.secured) equityBuilt += amortized
       debt.balance = next.balance
+    }
+
+    for (const property of propertyList) {
+      property.value = advanceAssetMonth(property.value, property.annualAppreciationPct)
     }
 
     const contribution = input.monthlyContribution + freedInstallments
     assets = Math.max(0, assets + contribution + eventsSaved + returns)
     const debt = debts.reduce((sum, item) => sum + item.balance, 0)
-    const netWorth = assets - debt
+    const securedDebt = debts
+      .filter((item) => item.secured)
+      .reduce((sum, item) => sum + item.balance, 0)
+    const properties = propertyList.reduce((sum, item) => sum + item.value, 0)
+    const netWorth = assets + properties - debt
+    const financialNetWorth = assets - (debt - securedDebt)
     // Deflator acumulado até este mês: os valores em reais de hoje.
     const deflator = Math.pow(1 + monthlyInflation, index)
 
     points.push({
       month,
       assets,
+      properties,
       debt,
+      securedDebt,
       netWorth,
+      financialNetWorth,
       assetsReal: assets / deflator,
+      propertiesReal: properties / deflator,
       netWorthReal: netWorth / deflator,
+      financialNetWorthReal: financialNetWorth / deflator,
       contribution,
       eventsSaved,
       returns,
       debtPaid,
+      equityBuilt,
       occurrences,
     })
   }
@@ -238,13 +283,25 @@ export function projectNetWorth(input: ProjectionInput): ForecastPoint[] {
   return points
 }
 
-/** Patrimônio projetado para um mês — null se estiver fora do horizonte. */
+/**
+ * Patrimônio projetado para um mês — null se estiver fora do horizonte.
+ * `metric` escolhe a curva: `financial` é o dinheiro (o que uma meta de
+ * poupança mede), `net` é o balanço inteiro, com bens e financiamento.
+ */
 export function projectedAt(
   points: ForecastPoint[],
   month: string,
   real = false,
+  metric: 'net' | 'financial' = 'financial',
 ): number | null {
-  const pick = (point: ForecastPoint) => (real ? point.netWorthReal : point.netWorth)
+  const pick = (point: ForecastPoint) =>
+    metric === 'financial'
+      ? real
+        ? point.financialNetWorthReal
+        : point.financialNetWorth
+      : real
+        ? point.netWorthReal
+        : point.netWorth
   const point = points.find((item) => item.month === month)
   if (point) return pick(point)
   // Mês anterior ao início: o presente é a melhor resposta possível.

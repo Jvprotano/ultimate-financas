@@ -102,8 +102,15 @@ function applyLedgerMove(transactions: LedgerEntry[], amount: number, note?: str
   return [...transactions, { id: uid(), amount: delta, date: nowIso(), note: note?.trim() || undefined }]
 }
 
-/** `liabilities` vem do módulo de dívidas: é o que separa ativo de líquido. */
-export function useInvestments(liabilities = 0) {
+/**
+ * `liabilities` vem do módulo de dívidas e `physicalAssets` do de bens: juntos
+ * fecham o balanço. `securedLiabilities` é a fatia da dívida que tem bem do
+ * outro lado — é ela que separa "quanto dinheiro eu tenho" de "quanto eu valho".
+ */
+export function useInvestments(
+  liabilities = 0,
+  { securedLiabilities = 0, physicalAssets = 0 } = {},
+) {
   const [storedFund, setStoredFund] = useLocalStorage<EmergencyFundState>(
     EMERGENCY_FUND_STORAGE_KEY,
     loadInitialEmergencyFund,
@@ -446,8 +453,17 @@ export function useInvestments(liabilities = 0) {
         reserveBalance,
         goalsBalance,
         liabilities,
+        { securedLiabilities, physicalAssets },
       ),
-    [holdings, investmentClasses, reserveBalance, goalsBalance, liabilities],
+    [
+      holdings,
+      investmentClasses,
+      reserveBalance,
+      goalsBalance,
+      liabilities,
+      securedLiabilities,
+      physicalAssets,
+    ],
   )
 
   // As metas leem os saldos já consolidados — por isso vêm depois do resumo.
@@ -461,9 +477,17 @@ export function useInvestments(liabilities = 0) {
         marketValue: item.marketValue,
       })),
       goalOwnBalances,
+      assetsBalance: physicalAssets,
       debtBalance: liabilities,
     }),
-    [reserveBalance, summary.totalMarketValue, summary.classes, goalOwnBalances, liabilities],
+    [
+      reserveBalance,
+      summary.totalMarketValue,
+      summary.classes,
+      goalOwnBalances,
+      physicalAssets,
+      liabilities,
+    ],
   )
   const goalSummaries = useMemo(() => summarizeGoals(goals, goalContext), [goals, goalContext])
 

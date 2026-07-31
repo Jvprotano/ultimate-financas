@@ -7,7 +7,7 @@ import {
   normalizeDebt,
   summarizeDebt,
 } from './debts'
-import type { CostItem, Debt } from '../types'
+import type { Asset, CostItem, Debt } from '../types'
 
 function debt(overrides: Partial<Debt> = {}): Debt {
   return normalizeDebt({
@@ -114,7 +114,7 @@ describe('calculateDebtsSummary', () => {
       debt({ id: 'b', balance: 1_000, monthlyRatePct: 14 }),
     ])
     // A média simples daria ~140% a.a.; ponderada fica perto do financiamento.
-    expect(summary.weightedAnnualRatePct).toBeLessThan(20)
+    expect(summary.unsecured.weightedAnnualRatePct).toBeLessThan(20)
   })
 
   it('elege a dívida de maior taxa, não a de maior saldo', () => {
@@ -122,7 +122,7 @@ describe('calculateDebtsSummary', () => {
       debt({ id: 'grande', name: 'Imóvel', balance: 300_000, monthlyRatePct: 0.8 }),
       debt({ id: 'caro', name: 'Rotativo', balance: 2_000, monthlyRatePct: 14 }),
     ])
-    expect(summary.costliest?.name).toBe('Rotativo')
+    expect(summary.unsecured.costliest?.name).toBe('Rotativo')
   })
 
   it('ignora dívidas quitadas nos totais', () => {
@@ -138,8 +138,67 @@ describe('calculateDebtsSummary', () => {
   it('sem dívidas, tudo é zero e nada é mais caro', () => {
     const summary = calculateDebtsSummary([])
     expect(summary.totalBalance).toBe(0)
-    expect(summary.weightedAnnualRatePct).toBe(0)
-    expect(summary.costliest).toBeNull()
+    expect(summary.unsecured.weightedAnnualRatePct).toBe(0)
+    expect(summary.unsecured.costliest).toBeNull()
+  })
+})
+
+describe('dívida garantida por um bem', () => {
+  const casa: Asset = {
+    id: 'casa',
+    name: 'Apartamento',
+    kind: 'imovel',
+    value: 480_000,
+    annualAppreciationPct: 4,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  }
+
+  it('reconhece a garantia e deriva equity e LTV', () => {
+    const summary = summarizeDebt(
+      debt({ balance: 262_000, linkedAssetId: 'casa' }),
+      [],
+      [casa],
+    )
+    expect(summary.isSecured).toBe(true)
+    expect(summary.equity).toBe(218_000)
+    expect(summary.ltvPct).toBeCloseTo(54.583, 3)
+  })
+
+  it('um bem apagado não deixa a dívida garantida por um fantasma', () => {
+    const summary = summarizeDebt(debt({ linkedAssetId: 'apagado' }), [], [casa])
+    expect(summary.isSecured).toBe(false)
+    expect(summary.equity).toBeNull()
+  })
+
+  it('o financiamento fica fora da média ponderada e do ranking', () => {
+    const summary = calculateDebtsSummary(
+      [
+        debt({ id: 'casa-fin', name: 'Financiamento', balance: 262_000, monthlyRatePct: 0.7, linkedAssetId: 'casa' }),
+        debt({ id: 'rotativo', name: 'Rotativo', balance: 2_000, monthlyRatePct: 14 }),
+      ],
+      [],
+      [casa],
+    )
+    // Sem a separação, o saldo do imóvel puxava a média para perto de 9% a.a.
+    expect(summary.unsecured.balance).toBe(2_000)
+    expect(summary.unsecured.weightedAnnualRatePct).toBeCloseTo(
+      (Math.pow(1.14, 12) - 1) * 100,
+      6,
+    )
+    expect(summary.securedBalance).toBe(262_000)
+    expect(summary.totalBalance).toBe(264_000)
+  })
+
+  it('só o financiamento: nada entra no bloco de dívida sem contrapartida', () => {
+    const summary = calculateDebtsSummary(
+      [debt({ balance: 262_000, installment: 2_180, linkedAssetId: 'casa' })],
+      [],
+      [casa],
+    )
+    expect(summary.unsecured.count).toBe(0)
+    expect(summary.unsecured.balance).toBe(0)
+    expect(summary.unsecured.costliest).toBeNull()
+    expect(summary.totalInstallment).toBe(2_180)
   })
 })
 

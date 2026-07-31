@@ -36,7 +36,10 @@ export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): Mo
     costsByCategory: categories,
     // Antes das dívidas existirem, o patrimônio gravado *era* o total de ativos.
     grossAssets: finiteNumber(raw?.grossAssets, finiteNumber(raw?.netWorth)),
+    // Snapshots anteriores aos bens não tinham imóvel nenhum registrado.
+    physicalAssets: finiteNumber(raw?.physicalAssets),
     liabilities: finiteNumber(raw?.liabilities),
+    securedLiabilities: finiteNumber(raw?.securedLiabilities),
     netWorth: finiteNumber(raw?.netWorth),
     emergencyFund: finiteNumber(raw?.emergencyFund),
     cardPersonalTotal: finiteNumber(raw?.cardPersonalTotal),
@@ -54,6 +57,9 @@ export function buildHistoryPoints(snapshots: MonthlySnapshot[]): HistoryPoint[]
     const previous = index > 0 ? ordered[index - 1] : null
     return {
       ...snapshot,
+      // Bens e o financiamento que os garante saem da conta: sobra o dinheiro.
+      financialNetWorth:
+        snapshot.grossAssets - (snapshot.liabilities - snapshot.securedLiabilities),
       netWorthDelta: previous ? snapshot.netWorth - previous.netWorth : null,
       costsDelta: previous ? snapshot.costs - previous.costs : null,
     }

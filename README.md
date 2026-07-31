@@ -13,9 +13,9 @@ Planejamento financeiro pessoal: orçamento do mês, patrimônio, cartões e o h
 | --- | --- |
 | **Visão geral** | Saldo livre do mês, caixa do mês (extrato), metas por caixa (planejado × realizado no cartão), custos por categoria, alertas e comparação de cenários |
 | **Planejamento** | Renda e descontos em folha, custos fixos (com rateio e forma de pagamento), modelo de orçamento, desejos, plano de aportes e reserva |
-| **Patrimônio** | Ativos e passivos: posições por classe, rentabilidade anualizada, reserva, metas com prazo e dívidas (saldo, juros, prazo, amortizar × investir) |
+| **Patrimônio** | Ativos e passivos: posições por classe, rentabilidade anualizada, reserva, metas com prazo, bens (imóvel, veículo) e dívidas (saldo, juros, prazo, amortizar × investir) |
 | **Cartões** | Fatura atual e próxima, cartões com fechamento e vencimento próprios, parcelas e assinaturas automáticas, importação por colagem do Sheets |
-| **Futuro** | 13º, bônus, IPVA e afins como ocorrências datadas; projeção de ativos, dívidas e patrimônio líquido, em valores nominais ou de hoje |
+| **Futuro** | 13º, bônus, IPVA e afins como ocorrências datadas; projeção do dinheiro por padrão, do balanço inteiro (bens, dívidas, líquido) sob demanda, em valores nominais ou de hoje |
 | **Histórico** | Realizado do mês, fechamento, evolução do patrimônio, custo médio real e correção de meses passados |
 
 ## Conceitos
@@ -25,9 +25,12 @@ Planejamento financeiro pessoal: orçamento do mês, patrimônio, cartões e o h
 - **Base do orçamento** — a renda que vira meta. Benefícios (VA, plano de saúde) saem porque não são dinheiro livre; previdência descontada em folha continua contando, porque é investimento seu.
 - **Custo pessoal** — contas divididas com outra pessoa entram no orçamento só pela sua parte; o valor cheio fica visível para você saber o tamanho real da conta.
 - **Área do orçamento no cartão** — cada compra pode ser marcada como necessidade, desejo ou investimento. Não cria gasto novo: diz de qual caixa do plano a compra saiu. O traço nas barras de meta mostra o realizado.
-- **Ativos × patrimônio líquido** — ativos são investimentos + reserva + o guardado nas metas. O líquido desconta as dívidas, e é ele que mede se você está ficando mais rico. As fatias de alocação são sempre sobre os *ativos*: dividir por um líquido pequeno (ou negativo) daria porcentagens sem sentido.
+- **Patrimônio financeiro × líquido total** — o financeiro é investimentos + reserva + metas, menos dívida *sem contrapartida*. É ele que responde "quanto dinheiro eu vou ter", e por isso é o número em destaque. O líquido total soma os bens e desconta tudo que você deve: responde "quanto eu valho". As fatias de alocação são sempre sobre o financeiro — um imóvel não se rebalanceia.
+- **Bens** — a casa, o carro. Não pagam a conta do mês e ficam fora da alocação, mas existem no balanço. Cada bem tem valor de mercado, valorização esperada e, opcionalmente, o aluguel equivalente.
+- **Dívida garantida × sem contrapartida** — um financiamento ligado a um bem não é a mesma coisa que um rotativo. A garantida fica fora da taxa média ponderada, do ranking da mais cara e da conta "amortizar ou investir": ela não pede essa decisão, pede a comparação com aluguel. Sem o bem cadastrado, o app soma o saldo devedor sem somar o que ele comprou — e o patrimônio líquido aparece muito abaixo do real (há um alerta para isso).
+- **A parcela não é toda despesa** — só o juro é. A amortização é dinheiro trocando de bolso, da conta para dentro do imóvel. Por isso a comparação "ser dono ou alugar" usa juros − valorização, não a parcela cheia; e a projeção faz o bem crescer enquanto o saldo devedor cai, em vez de deixar a amortização evaporar.
 - **Dívidas** — saldo devedor mantido por você (juros e seguros nunca saem de uma soma de pagamentos), com taxa, parcela e prazo. Amortizar R$ 1.000 e aportar R$ 1.000 movem o mesmo número; o app compara as duas taxas lado a lado. A parcela continua sendo o custo fixo do orçamento — a dívida não a cobra de novo.
-- **Meta de poupança × meta de patrimônio** — a primeira junta dinheiro próprio num livro-razão e soma ao patrimônio; a segunda apenas *engloba* saldos que já existem (reserva, investimentos, outras metas, e dívidas com sinal negativo) e por isso não duplica nada.
+- **Meta de poupança × meta de patrimônio** — a primeira junta dinheiro próprio num livro-razão e soma ao patrimônio; a segunda apenas *engloba* saldos que já existem (reserva, investimentos, outras metas, bens, e dívidas com sinal negativo) e por isso não duplica nada.
 - **Eventos esperados** — entradas e saídas que caem fora do mês a mês, com mês, recorrência e a fatia que você guarda. Alimentam o caixa do mês e a projeção.
 - **Realizado do mês** — o que de fato foi pago em débito e boleto, item por item. Sem ele o "custo médio real" do histórico é só a média dos planos, e a meta da reserva de emergência herda o mesmo otimismo. Valor informado manda; onde não houver, vale o planejado.
 - **Valores de hoje** — a projeção pode ser lida descontada da inflação. Em três ou cinco anos a diferença entre nominal e real é grande o bastante para mudar a decisão.
@@ -47,7 +50,8 @@ npm run preview
 ```
 
 Os testes vivem ao lado do código, em `src/lib/*.test.ts`. Cobrem o que quebra em silêncio:
-TIR anualizada, prazo e juros de dívida, projeção com amortização e inflação, rateio de custos,
+TIR anualizada, prazo e juros de dívida, dívida garantida × sem contrapartida, equity e a
+comparação ser dono × alugar, projeção com amortização, valorização e inflação, rateio de custos,
 inclusões de meta (o caso de contar duas vezes), geração de parcelas e assinaturas, e o
 calendário de fechamento dos cartões.
 
@@ -61,8 +65,9 @@ calendário de fechamento dos cartões.
 src/
   lib/               # cálculo puro, sem React
     scenario.ts      # orçamento do mês, normalização e migração v2→v3
-    investments.ts   # ativos, alocação, TIR anualizada
-    debts.ts         # saldo, juros, prazo, amortizar × investir
+    investments.ts   # ativos, alocação, TIR anualizada, balanço financeiro × total
+    assets.ts        # bens: equity, valorização, ser dono × alugar
+    debts.ts         # saldo, juros, prazo, amortizar × investir, garantia
     goals.ts         # metas: livro-razão próprio × saldos englobados
     forecast.ts      # eventos esperados, projeção e inflação
     cashflow.ts      # o mês no extrato: entra, vence, sobra
@@ -75,8 +80,8 @@ src/
     shared.ts        # ids, datas, livro-razão
   hooks/             # estado por domínio
     useScenarios.ts  useCreditCards.ts  useInvestments.ts  useDebts.ts
-    useHistory.ts    useForecast.ts     useActuals.ts
-    useFinancas.ts   # compõe os sete e calcula o que cruza domínios
+    useAssets.ts     useHistory.ts      useForecast.ts     useActuals.ts
+    useFinancas.ts   # compõe os oito e calcula o que cruza domínios
     useLocalStorage.ts  useKeyboardShortcuts.ts
   context/           # FinancasProvider + hooks de leitura
   components/        # ui.tsx é o design system; um arquivo por módulo
