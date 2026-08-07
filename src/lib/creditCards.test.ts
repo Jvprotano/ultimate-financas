@@ -3,7 +3,10 @@ import {
   buildRemainingInstallmentsAmount,
   calculateCreditCardSummary,
   describeCardCycles,
+  advanceCreditCardSettingsCycle,
+  inferDueMonthFromPaymentDate,
   normalizeCardAccount,
+  normalizeCreditCardSettings,
   normalizeCreditCardEntry,
   parsePaymentDay,
   syncGeneratedNextEntries,
@@ -181,6 +184,38 @@ describe('parsePaymentDay', () => {
     expect(parsePaymentDay(undefined)).toBe(5)
     expect(parsePaymentDay('todo mês')).toBe(5)
     expect(parsePaymentDay('45')).toBe(5)
+  })
+})
+
+describe('credit card due month settings', () => {
+  it('infere o mês de vencimento a partir do texto legado da data', () => {
+    expect(inferDueMonthFromPaymentDate('05/09', new Date(2026, 7, 7))).toBe('2026-09')
+  })
+
+  it('normaliza configurações antigas incluindo o mês da fatura ativa', () => {
+    expect(
+      normalizeCreditCardSettings(
+        { paymentDate: '05/09', personalSpendingLimit: 2_800 },
+        new Date(2026, 7, 7),
+      ),
+    ).toMatchObject({
+      paymentDate: '05/09',
+      personalSpendingLimit: 2_800,
+      currentDueMonth: '2026-09',
+    })
+  })
+
+  it('ao pagar a fatura, avança o vencimento ativo para o próximo mês', () => {
+    expect(
+      advanceCreditCardSettingsCycle({
+        paymentDate: '05/09',
+        personalSpendingLimit: 2_800,
+        currentDueMonth: '2026-09',
+      }),
+    ).toMatchObject({
+      paymentDate: '05/10',
+      currentDueMonth: '2026-10',
+    })
   })
 })
 

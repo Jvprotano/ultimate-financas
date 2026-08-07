@@ -528,6 +528,8 @@ export interface CreditCardSettings {
   /** Legado: texto livre do vencimento, antes de cada cartão ter o seu. */
   paymentDate: string
   personalSpendingLimit: number
+  /** Mês em que a fatura `current` vence, no formato AAAA-MM. */
+  currentDueMonth?: string
 }
 
 /**

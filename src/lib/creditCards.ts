@@ -7,7 +7,7 @@ import type {
   CreditCardSummary,
 } from '../types'
 import { BUDGET_AREAS } from '../types/constants'
-import { finiteNumber, normalizeText, uid } from './shared'
+import { addMonths, finiteNumber, normalizeText, uid } from './shared'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -29,6 +29,57 @@ export function parsePaymentDay(raw: string | undefined, fallback = 5): number {
   const match = raw?.match(/(\d{1,2})/)
   const day = match ? Number(match[1]) : NaN
   return Number.isFinite(day) && day >= 1 && day <= 31 ? day : fallback
+}
+
+function monthKeyFromDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+function isMonthKey(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}$/.test(value)
+}
+
+export function inferDueMonthFromPaymentDate(raw: string | undefined, now = new Date()): string {
+  const match = raw?.match(/(\d{1,2})(?:\D+(\d{1,2}))?/)
+  const explicitMonth = match?.[2] ? Number(match[2]) : NaN
+
+  if (Number.isFinite(explicitMonth) && explicitMonth >= 1 && explicitMonth <= 12) {
+    return `${now.getFullYear()}-${String(explicitMonth).padStart(2, '0')}`
+  }
+
+  return monthKeyFromDate(nextDateForDay(parsePaymentDay(raw, 5), now))
+}
+
+function paymentDateForMonth(day: number, dueMonth: string): string {
+  const [, month] = dueMonth.split('-')
+  return `${String(day).padStart(2, '0')}/${month ?? '01'}`
+}
+
+export function normalizeCreditCardSettings(
+  raw: Partial<CreditCardSettings> | undefined,
+  now = new Date(),
+): CreditCardSettings {
+  const paymentDate = raw?.paymentDate?.trim() || '05/07'
+  return {
+    paymentDate,
+    personalSpendingLimit: Math.max(0, finiteNumber(raw?.personalSpendingLimit, 1500)),
+    currentDueMonth: isMonthKey(raw?.currentDueMonth)
+      ? raw.currentDueMonth
+      : inferDueMonthFromPaymentDate(paymentDate, now),
+  }
+}
+
+export function advanceCreditCardSettingsCycle(settings: CreditCardSettings): CreditCardSettings {
+  const currentDueMonth =
+    settings.currentDueMonth ?? inferDueMonthFromPaymentDate(settings.paymentDate)
+  const nextDueMonth = addMonths(currentDueMonth, 1)
+  const dueDay = parsePaymentDay(settings.paymentDate, 5)
+
+  return {
+    ...settings,
+    paymentDate: paymentDateForMonth(dueDay, nextDueMonth),
+    currentDueMonth: nextDueMonth,
+  }
 }
 
 /** Próxima ocorrência de um dia do mês, a partir de `from`. */

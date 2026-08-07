@@ -7,9 +7,11 @@ import type {
   CreditCardSettings,
 } from '../types'
 import {
+  advanceCreditCardSettingsCycle,
   buildRemainingInstallmentsAmount,
   calculateCreditCardSummary,
   describeCardCycles,
+  normalizeCreditCardSettings,
   normalizeCardAccount,
   normalizeCreditCardEntry,
   parsePaymentDay,
@@ -50,10 +52,11 @@ export function useCreditCards() {
     () => (Array.isArray(storedEntries) ? storedEntries.map(normalizeCreditCardEntry) : []),
     [storedEntries],
   )
-  const [settings, setSettingsRaw] = useLocalStorage<CreditCardSettings>(
+  const [storedSettings, setSettingsRaw] = useLocalStorage<CreditCardSettings>(
     SETTINGS_STORAGE_KEY,
     DEFAULT_SETTINGS,
   )
+  const settings = useMemo(() => normalizeCreditCardSettings(storedSettings), [storedSettings])
   const [storedAccounts, setStoredAccounts] = useLocalStorage<CreditCardAccount[]>(
     ACCOUNTS_STORAGE_KEY,
     loadInitialAccounts,
@@ -214,11 +217,12 @@ export function useCreditCards() {
 
       return syncGeneratedNextEntries(newCurrentEntries)
     })
-  }, [setEntries])
+    setSettingsRaw((prev) => advanceCreditCardSettingsCycle(normalizeCreditCardSettings(prev)))
+  }, [setEntries, setSettingsRaw])
 
   const setSettings = useCallback(
     (next: CreditCardSettings) => {
-      setSettingsRaw({ ...next, personalSpendingLimit: Math.max(0, next.personalSpendingLimit) })
+      setSettingsRaw(normalizeCreditCardSettings(next))
     },
     [setSettingsRaw],
   )

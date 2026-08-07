@@ -29,7 +29,7 @@ import {
   StatTile,
 } from './ui'
 import { formatCurrency, formatMonthLong, inputClass } from '../lib/format'
-import { normalizeText } from '../lib/shared'
+import { addMonths, monthsBetween, normalizeText } from '../lib/shared'
 import {
   buildRemainingAmount,
   parseInstallments,
@@ -109,6 +109,10 @@ export function CreditCardManager() {
   } = useCardsStore()
   const { availableForBudget, budgetComparison, plannedOnCard } = useMetrics()
   const { financialCycle } = useFinancasStore()
+  const currentDueMonth = settings.currentDueMonth ?? financialCycle.cashMonth
+  const nextDueMonth = addMonths(currentDueMonth, 1)
+  const currentSpendingMonth = addMonths(currentDueMonth, -1)
+  const currentInvoiceDueNow = monthsBetween(financialCycle.cashMonth, currentDueMonth) <= 0
 
   const [view, setView] = useState<View>('current')
 
@@ -397,7 +401,7 @@ export function CreditCardManager() {
     <div className="space-y-4">
       <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
-          label={`Fatura a pagar em ${formatMonthLong(financialCycle.cashMonth)}`}
+          label={`Fatura a pagar em ${formatMonthLong(currentDueMonth)}`}
           value={formatCurrency(summary.currentTotal)}
           detail={
             summary.currentPrepaidTotal > 0
@@ -431,7 +435,7 @@ export function CreditCardManager() {
       <Panel>
         <PanelHeader
           title="Seu teto de gasto"
-          description={`Esta fatura reúne gastos de ${formatMonthLong(financialCycle.spendingMonth)} e é paga no caixa de ${formatMonthLong(financialCycle.cashMonth)}. A aba seguinte mostra a fatura que está se formando.`}
+          description={`Esta fatura reúne gastos de ${formatMonthLong(currentSpendingMonth)} e é paga em ${formatMonthLong(currentDueMonth)}. A aba seguinte mostra o ciclo seguinte.`}
           className="mb-4"
         />
         <div className="grid gap-4 lg:grid-cols-2">
@@ -473,8 +477,8 @@ export function CreditCardManager() {
           value={view}
           onChange={setView}
           options={[
-            { value: 'current' as View, label: `Pagar em ${formatMonthLong(financialCycle.cashMonth)}` },
-            { value: 'next' as View, label: `Em formação · ${formatMonthLong(financialCycle.nextSpendingMonth)}` },
+            { value: 'current' as View, label: `Pagar em ${formatMonthLong(currentDueMonth)}` },
+            { value: 'next' as View, label: `Em formação · pagar em ${formatMonthLong(nextDueMonth)}` },
             { value: 'import' as View, label: 'Importar' },
           ]}
         />
@@ -482,7 +486,7 @@ export function CreditCardManager() {
         {view === 'current' && (
           <PrimaryButton onClick={() => setShowPaySummary(true)}>
             <CheckCircle2 size={15} />
-            Pagar fatura
+            {currentInvoiceDueNow ? 'Pagar fatura' : 'Pagar antecipado'}
           </PrimaryButton>
         )}
         {view === 'next' && (
@@ -498,7 +502,7 @@ export function CreditCardManager() {
           <PanelHeader
             title="Resumo antes de pagar"
             icon={<CheckCircle2 size={16} />}
-            description={`Esta é a fatura de gastos de ${formatMonthLong(financialCycle.spendingMonth)}. Pagá-la movimenta o caixa de ${formatMonthLong(financialCycle.cashMonth)} e inicia o próximo ciclo do cartão; isso não fecha o mês do Histórico.`}
+            description={`Esta é a fatura de gastos de ${formatMonthLong(currentSpendingMonth)}, com vencimento em ${formatMonthLong(currentDueMonth)}. ${currentInvoiceDueNow ? `Pagá-la movimenta o caixa de ${formatMonthLong(financialCycle.cashMonth)}.` : `Como ela vence depois de ${formatMonthLong(financialCycle.cashMonth)}, pagar agora é antecipação.`} Isso não fecha o mês do Histórico.`}
           />
           <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
             <StatTile label="Total da fatura" value={formatCurrency(summary.currentTotal)} />
@@ -513,7 +517,10 @@ export function CreditCardManager() {
                   : undefined
               }
             />
-            <StatTile label="Em formação" value={formatCurrency(summary.nextTotal)} />
+            <StatTile
+              label={`Próxima: ${formatMonthLong(nextDueMonth)}`}
+              value={formatCurrency(summary.nextTotal)}
+            />
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             <PrimaryButton onClick={handlePayInvoice}>
@@ -1049,8 +1056,12 @@ export function CreditCardManager() {
                 onChange={(event) => setImportCycle(event.target.value as CreditCardCycle)}
                 className={inputClass}
               >
-                <option value="current">Fatura a pagar agora</option>
-                <option value="next">Fatura em formação</option>
+                <option value="current">
+                  Fatura ativa · pagar em {formatMonthLong(currentDueMonth)}
+                </option>
+                <option value="next">
+                  Próxima fatura · pagar em {formatMonthLong(nextDueMonth)}
+                </option>
               </select>
             </label>
             <label className="flex h-[46px] min-w-[200px] flex-1 cursor-pointer items-center gap-2 rounded-lg border border-dark-border bg-dark-input px-3 text-sm text-dark-text-secondary transition-colors hover:text-dark-text">
@@ -1159,8 +1170,8 @@ export function CreditCardManager() {
           <PanelHeader title="Resumo do futuro" />
           <dl className="mt-3 space-y-1.5 text-sm">
             {[
-              { label: 'Em formação', value: summary.nextTotal },
-              { label: 'Meu próximo', value: summary.nextPersonalTotal },
+              { label: `Próxima (${formatMonthLong(nextDueMonth)})`, value: summary.nextTotal },
+              { label: 'Minha parte próxima', value: summary.nextPersonalTotal },
               { label: 'Parcelas restantes', value: summary.remainingInstallmentsTotal },
               { label: 'Minhas parcelas restantes', value: summary.remainingPersonalInstallmentsTotal },
             ].map((row) => (

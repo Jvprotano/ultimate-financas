@@ -15,6 +15,7 @@ import { projectNetWorth } from '../lib/forecast'
 import { maybeCreateAutoBackup } from '../lib/backup'
 import type { BudgetArea, CostCategory, ScenarioSummary } from '../types'
 import { BUDGET_AREAS } from '../types/constants'
+import { monthsBetween } from '../lib/shared'
 
 export type { ScenarioMetrics } from '../lib/scenario'
 
@@ -89,23 +90,42 @@ export function useFinancas() {
 
   /** O mês visto pelo extrato: o que entra, o que vence e o que sobra. */
   const cashFlow = useMemo(
-    () =>
-      calculateCashFlow({
+    () => {
+      const currentCardInvoiceDueNow =
+        monthsBetween(forecast.currentMonth, cards.settings.currentDueMonth ?? forecast.currentMonth) <=
+        0
+      const invoiceToPay = currentCardInvoiceDueNow ? cards.summary.currentPersonalTotal : 0
+
+      return calculateCashFlow({
         paycheck: metrics.paycheckInAccount,
         costsOnAccount: metrics.costsOnAccount,
         costsOnCard: metrics.costsOnCard,
         wantsOnAccount: metrics.wantsOnAccount,
         wantsOnCard: metrics.wantsOnCard,
         directInvestment: metrics.directInvestmentTarget,
-        invoiceToPay: cards.summary.currentPersonalTotal,
+        invoiceToPay,
         occurrences: forecast.monthOccurrences,
-      }),
-    [metrics, cards.summary.currentPersonalTotal, forecast.monthOccurrences],
+      })
+    },
+    [
+      metrics,
+      cards.settings.currentDueMonth,
+      cards.summary.currentPersonalTotal,
+      forecast.currentMonth,
+      forecast.monthOccurrences,
+    ],
   )
 
   const financialCycle = useMemo(
-    () =>
-      calculateFinancialCycle({
+    () => {
+      const currentCardInvoiceDueNow =
+        monthsBetween(forecast.currentMonth, cards.settings.currentDueMonth ?? forecast.currentMonth) <=
+        0
+      const cardInvoiceToReserve = currentCardInvoiceDueNow
+        ? cards.summary.nextPersonalTotal
+        : cards.summary.currentPersonalTotal
+
+      return calculateFinancialCycle({
         cashMonth: forecast.currentMonth,
         income: cashFlow.totalIn,
         invoiceToPay: cashFlow.invoiceToPay,
@@ -113,10 +133,17 @@ export function useFinancas() {
         wantsOnAccount: cashFlow.wantsOnAccount,
         directInvestment: cashFlow.directInvestment,
         extraExpense: cashFlow.extraExpense,
-        nextInvoicePersonal: cards.summary.nextPersonalTotal,
+        nextInvoicePersonal: cardInvoiceToReserve,
         plannedNextInvoice: cashFlow.plannedOnCard,
-      }),
-    [cards.summary.nextPersonalTotal, cashFlow, forecast.currentMonth],
+      })
+    },
+    [
+      cards.settings.currentDueMonth,
+      cards.summary.currentPersonalTotal,
+      cards.summary.nextPersonalTotal,
+      cashFlow,
+      forecast.currentMonth,
+    ],
   )
 
   // Aporte recorrente da projeção: o do plano, salvo se você fixar outro. A
