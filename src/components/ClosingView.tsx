@@ -28,17 +28,8 @@ import {
 import { formatCurrency, formatMonthLong, inputClass } from '../lib/format'
 import { useFinancasStore } from '../context/financasStore'
 import { isWantIncludedInCardPlan } from '../lib/scenario'
-import {
-  cardDueDivergesFromCycle,
-  cycleSalaryMonth,
-  cycleSpendingMonth,
-  expectedCardDueMonth,
-} from '../lib/activeCycle'
-import {
-  allocateWantsToPool,
-  allocationChangesPlan,
-} from '../lib/allocateWants'
-import { parsePaymentDay } from '../lib/creditCards'
+import { cycleSalaryMonth, cycleSpendingMonth } from '../lib/activeCycle'
+import { allocateWantsToPool, allocationChangesPlan } from '../lib/allocateWants'
 
 function ComparisonRow({
   label,
@@ -151,6 +142,7 @@ export function ClosingView({
     financialCycle,
     actuals,
     cards,
+    cardCycleAccounting,
     scenarios,
     closeCurrentMonth,
   } = useFinancasStore()
@@ -163,10 +155,12 @@ export function ClosingView({
   const actualCostsOnAccount = accountCostRows.reduce((sum, row) => sum + row.effective, 0)
 
   const plannedOnCard = cashFlow.plannedOnCard
-  const invoiceActual = cards.summary.currentPersonalTotal
-  const cardDelta = plannedOnCard - invoiceActual
+  const cardSpendingActual = cardCycleAccounting.spendingThisCycle.spentPersonalTotal
+  const invoiceActual = cardCycleAccounting.invoiceThisCycle.personalTotal
+  const cardDelta = plannedOnCard - cardSpendingActual
   const salaryMonth = cycleSalaryMonth(activeCycle.month)
-  const spendingMonth = cycleSpendingMonth(activeCycle.month)
+  const previousSpendingMonth = cycleSpendingMonth(activeCycle.month)
+  const currentDueMonth = cards.settings.currentDueMonth ?? activeCycle.month
 
   const accountWantItems = scenarios.activeScenario.wants
     .filter(
@@ -184,10 +178,6 @@ export function ClosingView({
   const allocations = allocateWantsToPool(accountWantItems, pool)
   const canApplyAllocation = allocationChangesPlan(accountWantItems, allocations)
 
-  const currentDueMonth =
-    cards.settings.currentDueMonth ?? expectedCardDueMonth(activeCycle.month)
-  const dueDiverges = cardDueDivergesFromCycle(cards.settings.currentDueMonth, activeCycle.month)
-
   const handleClose = () => {
     closeCurrentMonth(currentMonth, note)
     setNote('')
@@ -197,17 +187,6 @@ export function ClosingView({
     scenarios.applyWantAmounts(allocations)
     setAllocatedFlash(true)
     window.setTimeout(() => setAllocatedFlash(false), 2500)
-  }
-
-  const handleAlignDueMonth = () => {
-    const dueDay = parsePaymentDay(cards.settings.paymentDate, activeCycle.cycle.cardDueHintDay)
-    const month = expectedCardDueMonth(activeCycle.month)
-    const [, monthPart] = month.split('-')
-    cards.setSettings({
-      ...cards.settings,
-      currentDueMonth: month,
-      paymentDate: `${String(dueDay).padStart(2, '0')}/${monthPart ?? '01'}`,
-    })
   }
 
   if (metrics.availableForBudget <= 0) {
@@ -228,6 +207,10 @@ export function ClosingView({
     )
   }
 
+  const invoiceStepDone =
+    cardCycleAccounting.invoiceThisCycle.paid ||
+    (cardCycleAccounting.invoiceThisCycle.amountKnown && invoiceActual <= 0.005)
+
   return (
     <div className="space-y-4">
       <Panel>
@@ -236,9 +219,10 @@ export function ClosingView({
           icon={<CalendarRange size={16} />}
           description={
             <>
-              Salário do fim de {formatMonthLong(salaryMonth)} financia este ciclo. Cartão = gastos
-              de {formatMonthLong(spendingMonth)}. Desejos = viver em{' '}
-              {formatMonthLong(activeCycle.month)}.
+              Salário do fim de {formatMonthLong(salaryMonth)} financia{' '}
+              {formatMonthLong(activeCycle.month)}. A fatura que vence neste ciclo traz compras de{' '}
+              {formatMonthLong(previousSpendingMonth)}; compras feitas agora entram na fatura de{' '}
+              {formatMonthLong(cardCycleAccounting.spendingThisCycle.dueMonth)}.
             </>
           }
           actions={
@@ -264,37 +248,30 @@ export function ClosingView({
         />
         <div className="mt-3 grid gap-2 text-xs leading-relaxed text-dark-text-muted sm:grid-cols-3">
           <div className="rounded-lg bg-dark-surface/50 px-3 py-2">
-            <span className="block font-medium text-dark-text">Salário</span>
+            <span className="block font-medium text-dark-text">Salário que financia o ciclo</span>
             ~dia {activeCycle.cycle.salaryHintDay} de {formatMonthLong(salaryMonth)}
           </div>
           <div className="rounded-lg bg-dark-surface/50 px-3 py-2">
-            <span className="block font-medium text-dark-text">Cartão a pagar</span>
-            gastos de {formatMonthLong(spendingMonth)} · vence ~dia{' '}
-            {activeCycle.cycle.cardDueHintDay}
+            <span className="block font-medium text-dark-text">Fatura paga neste ciclo</span>
+            vence em {formatMonthLong(activeCycle.month)} · compras de{' '}
+            {formatMonthLong(previousSpendingMonth)}
           </div>
           <div className="rounded-lg bg-dark-surface/50 px-3 py-2">
-            <span className="block font-medium text-dark-text">Desejos e aporte</span>
-            verba para viver {formatMonthLong(activeCycle.month)}
+            <span className="block font-medium text-dark-text">Compras no cartão agora</span>
+            gastos de {formatMonthLong(activeCycle.month)} · vencem em{' '}
+            {formatMonthLong(cardCycleAccounting.spendingThisCycle.dueMonth)}
           </div>
         </div>
       </Panel>
 
-      {dueDiverges && (
-        <div className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/[0.07] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0 text-sm leading-relaxed text-amber-100/90">
-            <strong className="font-semibold text-amber-200">Vencimento do cartão desalinhado.</strong>{' '}
-            A fatura está marcada para {formatMonthLong(currentDueMonth)}, mas o ciclo ativo é{' '}
-            {formatMonthLong(activeCycle.month)}. Na primeira configuração, o caminho seguro é
-            trazer o ciclo para o vencimento — não o contrário.
-          </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
-            <PrimaryButton onClick={() => activeCycle.setCycleMonth(currentDueMonth)}>
-              Usar ciclo de {formatMonthLong(currentDueMonth)}
-            </PrimaryButton>
-            <SecondaryButton onClick={handleAlignDueMonth}>
-              Só alinhar o rótulo
-            </SecondaryButton>
-          </div>
+      {!cardCycleAccounting.invoiceThisCycle.amountKnown && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.07] px-4 py-3 text-sm leading-relaxed text-amber-100/90">
+          <strong className="font-semibold text-amber-200">Fatura anterior já girada.</strong>{' '}
+          O cartão já está na fatura de {formatMonthLong(currentDueMonth)}, enquanto o ciclo ativo é{' '}
+          {formatMonthLong(activeCycle.month)}. Isso é esperado se a fatura de{' '}
+          {formatMonthLong(activeCycle.month)} foi paga antes desta atualização. O valor pago não
+          existia em snapshot nas versões anteriores, então ele não pode ser reconstruído
+          automaticamente; não avance o ciclo só para alinhar o rótulo.
         </div>
       )}
 
@@ -331,8 +308,12 @@ export function ClosingView({
           />
           <StepChip
             icon={<CreditCard size={13} />}
-            label="Fatura a pagar"
-            value={formatCurrency(financialCycle.invoiceToPay)}
+            label="Fatura que vence no ciclo"
+            value={
+              cardCycleAccounting.invoiceThisCycle.amountKnown
+                ? formatCurrency(financialCycle.invoiceToPay)
+                : '—'
+            }
           />
           <StepChip
             icon={<Landmark size={13} />}
@@ -353,7 +334,7 @@ export function ClosingView({
         <PanelHeader
           title="Fluxo do ciclo"
           icon={<ListChecks size={16} />}
-          description="Passos que escrevem estado. Pagar a fatura não fecha o ciclo — só Fechar avança."
+          description="Pagar uma fatura gira o cartão para o próximo vencimento, mas o ciclo financeiro continua no mês que este salário está financiando."
         />
         <div className="mt-3 space-y-2">
           <WorkflowStep
@@ -362,15 +343,19 @@ export function ClosingView({
             detail={`${formatCurrency(financialCycle.income)} no caixa deste ciclo.`}
           />
           <WorkflowStep
-            done={invoiceActual <= 0.005}
-            title="2. Pagar fatura"
+            done={invoiceStepDone}
+            title="2. Pagar fatura que vence neste ciclo"
             detail={
-              invoiceActual > 0.005
-                ? `${formatCurrency(invoiceActual)} de gastos de ${formatMonthLong(spendingMonth)} — conta neste ciclo.`
-                : 'Fatura atual zerada (já paga ou sem lançamentos).'
+              cardCycleAccounting.invoiceThisCycle.paid
+                ? `${formatCurrency(invoiceActual)} pagos neste ciclo. A fatura aberta agora vence em ${formatMonthLong(currentDueMonth)}.`
+                : !cardCycleAccounting.invoiceThisCycle.amountKnown
+                  ? `O cartão já avançou para ${formatMonthLong(currentDueMonth)}; a versão anterior não preservou o valor da fatura paga neste ciclo.`
+                  : invoiceActual > 0.005
+                    ? `${formatCurrency(invoiceActual)} de compras de ${formatMonthLong(previousSpendingMonth)} — sai do salário deste ciclo.`
+                    : 'Sem valor devido nesta fatura.'
             }
             action={
-              invoiceActual > 0.005 ? (
+              !invoiceStepDone && cardCycleAccounting.invoiceThisCycle.amountKnown ? (
                 <SecondaryButton onClick={onGoToCards}>
                   <CreditCard size={14} />
                   Ir para Cartões
@@ -411,7 +396,7 @@ export function ClosingView({
             detail={
               isCurrentMonthClosed
                 ? `${formatMonthLong(currentMonth)} já fechado — refechar não avança de novo.`
-                : 'Grava o snapshot e avança para o próximo ciclo.'
+                : 'Grava o snapshot do mês vivido e avança para o próximo ciclo.'
             }
             action={
               isCurrentMonthClosed ? (
@@ -485,11 +470,11 @@ export function ClosingView({
             tone="accent"
           />
           <StatTile
-            label="Cartão: plano × fatura"
+            label={`Cartão em ${formatMonthLong(activeCycle.month)}: plano × gasto`}
             value={`${cardDelta >= 0 ? '+' : '−'} ${formatCurrency(Math.abs(cardDelta))}`}
             detail={
               plannedOnCard > 0.005
-                ? `plano ${formatCurrency(plannedOnCard)} · fatura ${formatCurrency(invoiceActual)}`
+                ? `plano ${formatCurrency(plannedOnCard)} · gasto ${formatCurrency(cardSpendingActual)}`
                 : 'sem plano no cartão'
             }
             tone={cardDelta >= 0 ? 'positive' : 'negative'}
@@ -511,7 +496,7 @@ export function ClosingView({
         <PanelHeader
           title="Plano × realizado"
           icon={<ArrowRight size={16} />}
-          description="Onde o ciclo saiu diferente do planejado — positivo no delta libera dinheiro; negativo consome a folga."
+          description={`Competência de ${formatMonthLong(activeCycle.month)}: compras feitas agora contam no orçamento deste mês, mesmo sendo pagas na fatura de ${formatMonthLong(cardCycleAccounting.spendingThisCycle.dueMonth)}.`}
         />
 
         <div className="mt-3">
@@ -523,10 +508,10 @@ export function ClosingView({
           </div>
 
           <ComparisonRow
-            label="Cartão"
+            label={`Compras no cartão em ${formatMonthLong(activeCycle.month)}`}
             planned={plannedOnCard}
-            actual={invoiceActual}
-            hint={`Fatura pessoal de gastos de ${formatMonthLong(spendingMonth)} — conta neste ciclo`}
+            actual={cardSpendingActual}
+            hint={`vencem em ${formatMonthLong(cardCycleAccounting.spendingThisCycle.dueMonth)} e serão pagas com o próximo salário`}
           />
           <ComparisonRow
             label="Custos em conta"
@@ -545,19 +530,14 @@ export function ClosingView({
             hint="meta do ciclo (sem realizado separado ainda)"
             deltaHint="meta"
           />
-          <ComparisonRow
-            label="Cartão em formação (próximo ciclo)"
-            planned={financialCycle.plannedNextInvoice}
-            actual={financialCycle.nextInvoicePersonal}
-            hint={`compras de ${formatMonthLong(financialCycle.nextSpendingMonth)} — pagas com o próximo salário`}
-            deltaHint="prévia"
-          />
         </div>
 
         <p className="mt-3 border-t border-dark-border-subtle pt-3 text-xs leading-relaxed text-dark-text-muted">
-          Liberado = {formatCurrency(financialCycle.income)} − fatura{' '}
-          {formatCurrency(financialCycle.invoiceToPay)} − custos{' '}
-          {formatCurrency(financialCycle.costsOnAccount)} − aporte{' '}
+          Liberado = {formatCurrency(financialCycle.income)} − fatura que vence neste ciclo{' '}
+          {cardCycleAccounting.invoiceThisCycle.amountKnown
+            ? formatCurrency(financialCycle.invoiceToPay)
+            : 'valor não recuperado'}{' '}
+          − custos {formatCurrency(financialCycle.costsOnAccount)} − aporte{' '}
           {formatCurrency(financialCycle.directInvestment)}
           {financialCycle.extraExpense > 0.005 && (
             <> − saídas do ano {formatCurrency(financialCycle.extraExpense)}</>
@@ -566,8 +546,9 @@ export function ClosingView({
           <strong className={shortfall > 0.005 ? 'text-rose-300' : 'text-primary-300'}>
             {formatCurrency(available)}
           </strong>
-          . A fatura em formação (~{formatCurrency(financialCycle.reservedForNextInvoice)}) fica
-          para o próximo ciclo.
+          . As compras de {formatMonthLong(activeCycle.month)} no cartão (~
+          {formatCurrency(financialCycle.reservedForNextInvoice)}) ficam para a fatura de{' '}
+          {formatMonthLong(cardCycleAccounting.spendingThisCycle.dueMonth)}.
         </p>
       </Panel>
 
