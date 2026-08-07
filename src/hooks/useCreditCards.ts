@@ -18,11 +18,16 @@ import {
   syncGeneratedNextEntries,
   unregisteredCardNames,
 } from '../lib/creditCards'
+import {
+  normalizePaidInvoiceSnapshot,
+  type PaidInvoiceSnapshot,
+} from '../lib/cardCycleAccounting'
 import { readJson, uid } from '../lib/shared'
 
 const ENTRIES_STORAGE_KEY = 'uf_credit_card_entries_v1'
 const SETTINGS_STORAGE_KEY = 'uf_credit_card_settings_v1'
 const ACCOUNTS_STORAGE_KEY = 'uf_credit_card_accounts_v1'
+const LAST_PAID_INVOICE_STORAGE_KEY = 'uf_credit_card_last_paid_invoice_v1'
 const DEFAULT_SETTINGS: CreditCardSettings = { paymentDate: '05/07', personalSpendingLimit: 1500 }
 
 /**
@@ -64,6 +69,14 @@ export function useCreditCards() {
   const accounts = useMemo(
     () => (Array.isArray(storedAccounts) ? storedAccounts.map(normalizeCardAccount) : []),
     [storedAccounts],
+  )
+  const [storedLastPaidInvoice, setLastPaidInvoice] = useLocalStorage<PaidInvoiceSnapshot | null>(
+    LAST_PAID_INVOICE_STORAGE_KEY,
+    null,
+  )
+  const lastPaidInvoice = useMemo(
+    () => normalizePaidInvoiceSnapshot(storedLastPaidInvoice),
+    [storedLastPaidInvoice],
   )
 
   // Os cartões herdados dos lançamentos só existem em memória até a primeira
@@ -199,6 +212,16 @@ export function useCreditCards() {
   )
 
   const payInvoice = useCallback(() => {
+    const dueMonth = settings.currentDueMonth
+    if (dueMonth) {
+      const paidSummary = calculateCreditCardSummary(entries, settings)
+      setLastPaidInvoice({
+        dueMonth,
+        personalTotal: paidSummary.currentPersonalTotal,
+        paidAt: new Date().toISOString(),
+      })
+    }
+
     setEntries((prev) => {
       // Sincroniza antes de virar o ciclo: dados criados antes da geração
       // automática podem ainda não ter as parcelas materializadas na próxima.
@@ -218,7 +241,7 @@ export function useCreditCards() {
       return syncGeneratedNextEntries(newCurrentEntries)
     })
     setSettingsRaw((prev) => advanceCreditCardSettingsCycle(normalizeCreditCardSettings(prev)))
-  }, [setEntries, setSettingsRaw])
+  }, [entries, settings, setEntries, setLastPaidInvoice, setSettingsRaw])
 
   const setSettings = useCallback(
     (next: CreditCardSettings) => {
@@ -266,6 +289,7 @@ export function useCreditCards() {
     cycles,
     unregistered,
     summary,
+    lastPaidInvoice,
     addAccount,
     updateAccount,
     removeAccount,
