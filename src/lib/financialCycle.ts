@@ -27,12 +27,27 @@ export interface FinancialCycleSummary {
   extraExpense: number
   nextInvoicePersonal: number
   plannedNextInvoice: number
+  /** Obrigações que vencem agora, já incluindo desejos em conta. */
   commitmentsDueNow: number
   cashAfterDue: number
   reservedForNextInvoice: number
   availableAfterReservations: number
+  /**
+   * Folga depois de pagar obrigações *e* os desejos em conta planejados.
+   * Prefira `discretionaryPool` quando a pergunta for “quanto posso alocar”.
+   */
   safeToSpend: number
   shortfall: number
+  /**
+   * Quanto sobra para alocar em desejos ou investimentos — *antes* de
+   * comprometer os envelopes de desejos em conta (Viagens, Qualidade de vida…).
+   * `renda − fatura − custos − aporte − saídas do ano − reserva da próxima fatura`.
+   */
+  discretionaryAvailable: number
+  /** Parte positiva de `discretionaryAvailable` (zero se estiver no vermelho). */
+  discretionaryPool: number
+  /** Quanto falta para cobrir obrigações + reserva, sem contar desejos em conta. */
+  discretionaryShortfall: number
 }
 
 export function calculateFinancialCycle(input: FinancialCycleInput): FinancialCycleSummary {
@@ -45,6 +60,12 @@ export function calculateFinancialCycle(input: FinancialCycleInput): FinancialCy
   const cashAfterDue = input.income - commitmentsDueNow
   const reservedForNextInvoice = Math.max(input.nextInvoicePersonal, input.plannedNextInvoice)
   const availableAfterReservations = cashAfterDue - reservedForNextInvoice
+
+  // Pool discricionário: obrigações fixas + reserva, sem os envelopes de desejo.
+  const obligationsWithoutWants =
+    input.invoiceToPay + input.costsOnAccount + input.directInvestment + input.extraExpense
+  const discretionaryAvailable =
+    input.income - obligationsWithoutWants - reservedForNextInvoice
 
   return {
     cashMonth: input.cashMonth,
@@ -64,5 +85,8 @@ export function calculateFinancialCycle(input: FinancialCycleInput): FinancialCy
     availableAfterReservations,
     safeToSpend: Math.max(0, availableAfterReservations),
     shortfall: Math.max(0, -availableAfterReservations),
+    discretionaryAvailable,
+    discretionaryPool: Math.max(0, discretionaryAvailable),
+    discretionaryShortfall: Math.max(0, -discretionaryAvailable),
   }
 }

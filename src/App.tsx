@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import {
   Archive,
+  CalendarCheck,
   CalendarClock,
   CreditCard,
   Download,
@@ -24,7 +25,7 @@ import { CostManager } from './components/CostManager'
 import { WantsManager } from './components/WantsManager'
 import { InvestmentPlan } from './components/InvestmentPlan'
 import { EmergencyFund } from './components/EmergencyFund'
-import { SalaryClosingPlan } from './components/SalaryClosingPlan'
+import { ClosingView } from './components/ClosingView'
 import { CreditCardManager } from './components/CreditCardManager'
 import { InvestmentsManager } from './components/InvestmentsManager'
 import { ForecastView } from './components/ForecastView'
@@ -41,15 +42,25 @@ import {
   type BackupPayload,
 } from './lib/backup'
 
-type View = 'overview' | 'planning' | 'investments' | 'cards' | 'forecast' | 'history'
+type View =
+  | 'planning'
+  | 'cards'
+  | 'closing'
+  | 'investments'
+  | 'history'
+  | 'overview'
+  | 'forecast'
+
+const SECONDARY_VIEWS = new Set<View>(['overview', 'forecast'])
 
 const VIEWS: { id: View; label: string; icon: typeof LayoutDashboard }[] = [
-  { id: 'overview', label: 'Visão geral', icon: LayoutDashboard },
   { id: 'planning', label: 'Planejamento', icon: SlidersHorizontal },
-  { id: 'investments', label: 'Patrimônio', icon: Landmark },
   { id: 'cards', label: 'Cartões', icon: CreditCard },
-  { id: 'forecast', label: 'Futuro', icon: CalendarClock },
+  { id: 'closing', label: 'Fechamento', icon: CalendarCheck },
+  { id: 'investments', label: 'Patrimônio', icon: Landmark },
   { id: 'history', label: 'Histórico', icon: History },
+  { id: 'overview', label: 'Visão geral', icon: LayoutDashboard },
+  { id: 'forecast', label: 'Futuro', icon: CalendarClock },
 ]
 
 const SHORTCUTS: { keys: string; description: string }[] = [
@@ -70,25 +81,31 @@ function TabBar({
 }) {
   return (
     <nav
-      className={`grid grid-cols-3 gap-1 rounded-lg border border-dark-border bg-dark-surface p-1 sm:grid-cols-6 ${className}`}
+      className={`grid grid-cols-4 gap-1 rounded-lg border border-dark-border bg-dark-surface p-1 sm:grid-cols-7 ${className}`}
     >
-      {VIEWS.map(({ id, label, icon: Icon }) => (
-        <button
-          key={id}
-          type="button"
-          onClick={() => setActiveView(id)}
-          aria-current={activeView === id ? 'page' : undefined}
-          className={`inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${
-            activeView === id
-              ? 'bg-dark-hover text-dark-text shadow-sm'
-              : 'text-dark-text-muted hover:text-dark-text'
-          }`}
-        >
-          <Icon size={14} />
-          <span className="hidden whitespace-nowrap lg:inline">{label}</span>
-          <span className="whitespace-nowrap lg:hidden">{label.split(' ')[0]}</span>
-        </button>
-      ))}
+      {VIEWS.map(({ id, label, icon: Icon }) => {
+        const secondary = SECONDARY_VIEWS.has(id)
+        const active = activeView === id
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setActiveView(id)}
+            aria-current={active ? 'page' : undefined}
+            className={`inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors ${
+              active
+                ? 'bg-dark-hover text-dark-text shadow-sm'
+                : secondary
+                  ? 'text-dark-text-muted/70 hover:text-dark-text-muted'
+                  : 'text-dark-text-muted hover:text-dark-text'
+            }`}
+          >
+            <Icon size={14} className={secondary && !active ? 'opacity-70' : undefined} />
+            <span className="hidden whitespace-nowrap lg:inline">{label}</span>
+            <span className="whitespace-nowrap lg:hidden">{label.split(' ')[0]}</span>
+          </button>
+        )
+      })}
     </nav>
   )
 }
@@ -245,7 +262,7 @@ function MasonryColumns({ children }: { children: ReactNode }) {
 
 function AppShell() {
   const importInputRef = useRef<HTMLInputElement>(null)
-  const [activeView, setActiveView] = useState<View>('overview')
+  const [activeView, setActiveView] = useState<View>('planning')
   const [showShortcuts, setShowShortcuts] = useState(false)
   const scenarios = useScenarioStore()
 
@@ -337,33 +354,30 @@ function AppShell() {
       <main className="mx-auto max-w-6xl space-y-4 px-4 py-5 sm:px-6">
         <TabBar activeView={activeView} setActiveView={setActiveView} className="md:hidden" />
 
+        {activeView === 'planning' && (
+          <MasonryColumns>
+            {/* A ordem é a da leitura: quanto entra, quanto sai, como dividir,
+                no que gastar, quanto aportar, quanto já está guardado. */}
+            <IncomePanel />
+            <CostManager />
+            <BudgetModelPicker />
+            <WantsManager />
+            <InvestmentPlan />
+            <EmergencyFund onManage={() => setActiveView('investments')} />
+          </MasonryColumns>
+        )}
+
+        {activeView === 'cards' && <CreditCardManager />}
+        {activeView === 'closing' && <ClosingView />}
+        {activeView === 'investments' && <InvestmentsManager />}
+        {activeView === 'history' && <HistoryView />}
         {activeView === 'overview' && (
           <Dashboard
             onGoToPlanning={() => setActiveView('planning')}
-            onGoToHistory={() => setActiveView('history')}
+            onGoToClosing={() => setActiveView('closing')}
           />
         )}
-
-        {activeView === 'planning' && (
-          <>
-            <SalaryClosingPlan />
-            <MasonryColumns>
-              {/* A ordem é a da leitura: quanto entra, quanto sai, como dividir,
-                  no que gastar, quanto aportar, quanto já está guardado. */}
-              <IncomePanel />
-              <CostManager />
-              <BudgetModelPicker />
-              <WantsManager />
-              <InvestmentPlan />
-              <EmergencyFund onManage={() => setActiveView('investments')} />
-            </MasonryColumns>
-          </>
-        )}
-
-        {activeView === 'investments' && <InvestmentsManager />}
-        {activeView === 'cards' && <CreditCardManager />}
         {activeView === 'forecast' && <ForecastView />}
-        {activeView === 'history' && <HistoryView />}
       </main>
 
       <footer className="border-t border-dark-border-subtle">

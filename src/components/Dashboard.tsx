@@ -41,11 +41,11 @@ function buildAlerts(
     metrics
   const modelTotal = selectedModel.necessidades + selectedModel.desejos + selectedModel.investimentos
 
-  if (financialCycle.shortfall > 0.005) {
+  if (financialCycle.discretionaryShortfall > 0.005) {
     alerts.push({
       id: 'cash-negative',
       title: 'O ciclo financeiro não fecha',
-      detail: `Faltam ${formatCurrency(financialCycle.shortfall)} para pagar os compromissos atuais e reservar a próxima fatura.`,
+      detail: `Faltam ${formatCurrency(financialCycle.discretionaryShortfall)} para pagar fatura, contas e aporte e ainda reservar a próxima fatura.`,
       severity: 'critical',
     })
   }
@@ -167,10 +167,10 @@ const alertStyle: Record<Alert['severity'], { box: string; text: string }> = {
 
 export function Dashboard({
   onGoToPlanning,
-  onGoToHistory,
+  onGoToClosing,
 }: {
   onGoToPlanning: () => void
-  onGoToHistory: () => void
+  onGoToClosing: () => void
 }) {
   const store = useFinancasStore()
   const metrics = store.metrics
@@ -268,19 +268,23 @@ export function Dashboard({
         <div className="flex flex-col justify-between rounded-xl border border-dark-border bg-dark-card px-5 py-5">
           <div>
             <span className="text-[11px] font-medium uppercase tracking-wider text-dark-text-muted">
-              Folga final do ciclo de {formatMonthLong(financialCycle.cashMonth)}
+              Liberado para alocar em {formatMonthLong(financialCycle.cashMonth)}
             </span>
             <strong
               className={`mt-1 block text-4xl font-bold leading-tight tracking-tight tabular-nums ${
-                financialCycle.shortfall === 0 ? 'text-dark-text' : 'text-rose-400'
+                financialCycle.discretionaryShortfall === 0 ? 'text-dark-text' : 'text-rose-400'
               }`}
             >
-              {formatCurrency(financialCycle.safeToSpend)}
+              {formatCurrency(
+                financialCycle.discretionaryShortfall > 0
+                  ? -financialCycle.discretionaryShortfall
+                  : financialCycle.discretionaryPool,
+              )}
             </strong>
           </div>
           <p className="mt-4 text-xs leading-relaxed text-dark-text-muted">
-            {formatCurrency(financialCycle.income)} recebidos − {formatCurrency(financialCycle.commitmentsDueNow)}{' '}
-            de fatura/contas/desejos fora do cartão/aporte − {formatCurrency(financialCycle.reservedForNextInvoice)} reservados para a próxima fatura.
+            {formatCurrency(financialCycle.income)} recebidos − fatura − custos em conta − aporte −{' '}
+            {formatCurrency(financialCycle.reservedForNextInvoice)} reservados para a próxima fatura.
             {totalCostsShared > 0 && (
               <>
                 {' '}
@@ -290,12 +294,8 @@ export function Dashboard({
           </p>
           <p className="mt-2 border-t border-dark-border-subtle pt-2 text-xs leading-relaxed text-dark-text-muted">
             A fatura paga agora é de gastos de {formatMonthLong(financialCycle.spendingMonth)}, mas
-            pertence ao caixa de {formatMonthLong(financialCycle.cashMonth)}. Depois de pagar,
-            aportar, separar desejos fora do cartão e reservar a próxima fatura, a folga é{' '}
-            <strong className={financialCycle.shortfall === 0 ? 'text-dark-text' : 'text-rose-400'}>
-              {formatCurrency(financialCycle.safeToSpend)}
-            </strong>
-            .
+            pertence ao caixa de {formatMonthLong(financialCycle.cashMonth)}. Esse valor pode ir
+            para desejos (Viagens, Qualidade de vida) ou investimentos — sem se complicar.
           </p>
         </div>
 
@@ -544,22 +544,22 @@ export function Dashboard({
         </Panel>
       </div>
 
-      {/* Histórico */}
+      {/* Fechamento */}
       <Panel>
         <PanelHeader
-          title="Histórico"
+          title="Fechamento"
           description={
             lastMonth
               ? `Último mês fechado: ${lastMonth.month} · custo médio de ${formatCurrency(stats.averageCosts)} em ${stats.months} ${stats.months === 1 ? 'mês' : 'meses'}.`
-              : 'Nenhum mês fechado ainda — o app só conhece o seu plano, não o que aconteceu.'
+              : 'Nenhum mês fechado ainda — compare o plano com o realizado e registre o ciclo.'
           }
           actions={
             <button
               type="button"
-              onClick={onGoToHistory}
+              onClick={onGoToClosing}
               className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-400 transition-colors hover:text-primary-300"
             >
-              {lastMonth ? 'Ver histórico' : 'Fechar o primeiro mês'}
+              {lastMonth ? 'Ir para o fechamento' : 'Fechar o primeiro mês'}
               <ArrowRight size={15} />
             </button>
           }

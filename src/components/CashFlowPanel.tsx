@@ -83,13 +83,7 @@ export function CashFlowPanel() {
       !isWantIncludedInCardPlan(want, scenarios.activeScenario.wants),
   )
   const accountWantsPlanned = accountWantItems.reduce((sum, want) => sum + want.plannedAmount, 0)
-  const roomForAccountWants = Math.max(
-    0,
-    financialCycle.income -
-      dueNow -
-      financialCycle.directInvestment -
-      financialCycle.reservedForNextInvoice,
-  )
+  const roomForAccountWants = financialCycle.discretionaryPool
   const accountWantsAllowed = Math.min(accountWantsPlanned, roomForAccountWants)
   const accountWantsCut = Math.max(0, accountWantsPlanned - accountWantsAllowed)
   const accountWantsScale =
@@ -104,7 +98,6 @@ export function CashFlowPanel() {
   const segments: Segment[] = [
     { id: 'invoice', label: 'Fatura', value: invoiceToPay, color: CHART_PALETTE.orange },
     { id: 'costs', label: 'Custos em conta', value: costsOnAccount, color: CHART_PALETTE.blue },
-    { id: 'wants', label: 'Desejos em conta', value: wantsOnAccount, color: CHART_PALETTE.yellow },
     { id: 'invest', label: 'Aporte direto', value: directInvestment, color: CHART_PALETTE.aqua },
     { id: 'extra', label: 'Saídas do ano', value: extraExpense, color: CHART_PALETTE.red },
     {
@@ -114,9 +107,15 @@ export function CashFlowPanel() {
       color: CHART_PALETTE.violet,
     },
     {
+      id: 'wants',
+      label: 'Desejos em conta (sugerido)',
+      value: Math.min(wantsOnAccount, financialCycle.discretionaryPool),
+      color: CHART_PALETTE.yellow,
+    },
+    {
       id: 'left',
-      label: 'Livre',
-      value: financialCycle.safeToSpend,
+      label: 'Folga além dos desejos',
+      value: Math.max(0, financialCycle.discretionaryAvailable - wantsOnAccount),
       color: CHART_PALETTE.muted,
     },
   ]
@@ -130,14 +129,18 @@ export function CashFlowPanel() {
         actions={
           <span className="text-right">
             <span className="block text-[11px] uppercase tracking-wider text-dark-text-muted">
-              Livre depois das reservas
+              Liberado para alocar
             </span>
             <strong
               className={`block text-lg font-semibold tabular-nums ${
-                financialCycle.shortfall === 0 ? 'text-dark-text' : 'text-rose-400'
+                financialCycle.discretionaryShortfall === 0 ? 'text-dark-text' : 'text-rose-400'
               }`}
             >
-              {formatCurrency(financialCycle.safeToSpend)}
+              {formatCurrency(
+                financialCycle.discretionaryShortfall > 0
+                  ? -financialCycle.discretionaryShortfall
+                  : financialCycle.discretionaryPool,
+              )}
             </strong>
           </span>
         }
@@ -265,10 +268,10 @@ export function CashFlowPanel() {
         </div>
       )}
 
-      {financialCycle.shortfall > 0 && (
+      {financialCycle.discretionaryShortfall > 0 && (
         <p className="mt-2 text-[11px] leading-relaxed text-rose-300">
-          Faltam {formatCurrency(financialCycle.shortfall)} para cobrir os compromissos atuais e
-          deixar reservada a próxima fatura. Reduza desejos ou o aporte antes de assumir novas
+          Faltam {formatCurrency(financialCycle.discretionaryShortfall)} para cobrir fatura, contas,
+          aporte e a reserva da próxima fatura. Reduza desejos ou o aporte antes de assumir novas
           compras no cartão.
         </p>
       )}
@@ -306,7 +309,7 @@ export function CashFlowPanel() {
           </div>
           <div
             className={`rounded-lg px-3 py-2 ${
-              financialCycle.shortfall > 0
+              financialCycle.discretionaryShortfall > 0
                 ? 'bg-rose-500/[0.08] text-rose-200'
                 : 'bg-primary-500/[0.08] text-primary-200'
             }`}
@@ -315,9 +318,9 @@ export function CashFlowPanel() {
               4. Decisão para Viagens/Qualidade
             </span>
             <span>
-              {financialCycle.shortfall > 0
-                ? `Não aumente esses valores ainda: faltam ${formatCurrency(financialCycle.shortfall)} para fechar o ciclo.`
-                : `Depois de pagar, aportar e reservar cartão, sobram ${formatCurrency(financialCycle.safeToSpend)} livres para reforçar desejos ou manter como folga.`}
+              {financialCycle.discretionaryShortfall > 0
+                ? `Não aumente esses valores ainda: faltam ${formatCurrency(financialCycle.discretionaryShortfall)} para fechar o ciclo.`
+                : `Depois de pagar, aportar e reservar cartão, sobram ${formatCurrency(financialCycle.discretionaryPool)} livres para desejos ou investimentos.`}
             </span>
           </div>
         </div>

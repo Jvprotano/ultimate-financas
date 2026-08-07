@@ -95,10 +95,14 @@ export function useFinancas() {
         monthsBetween(forecast.currentMonth, cards.settings.currentDueMonth ?? forecast.currentMonth) <=
         0
       const invoiceToPay = currentCardInvoiceDueNow ? cards.summary.currentPersonalTotal : 0
+      // Contas/boleto usam o realizado quando informado — é o que sai de fato.
+      const costsOnAccount = actuals.summary.rows
+        .filter((row) => row.cost.paidWith !== 'card')
+        .reduce((sum, row) => sum + row.effective, 0)
 
       return calculateCashFlow({
         paycheck: metrics.paycheckInAccount,
-        costsOnAccount: metrics.costsOnAccount,
+        costsOnAccount,
         costsOnCard: metrics.costsOnCard,
         wantsOnAccount: metrics.wantsOnAccount,
         wantsOnCard: metrics.wantsOnCard,
@@ -109,6 +113,7 @@ export function useFinancas() {
     },
     [
       metrics,
+      actuals.summary.rows,
       cards.settings.currentDueMonth,
       cards.summary.currentPersonalTotal,
       forecast.currentMonth,
