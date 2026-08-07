@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   advanceCycleMonth,
+  cardDueDivergesFromCycle,
   cycleSalaryMonth,
   cycleSpendingMonth,
   defaultActiveCycle,
+  expectedCardDueMonth,
   normalizeActiveCycle,
   shiftCycleMonth,
 } from './activeCycle'
@@ -29,5 +31,12 @@ describe('activeCycle', () => {
   it('avança e recua o ciclo sem olhar o calendário', () => {
     expect(advanceCycleMonth('2026-12')).toBe('2027-01')
     expect(shiftCycleMonth('2026-08', -1)).toBe('2026-07')
+  })
+
+  it('o vencimento esperado do cartão é o próprio mês do ciclo', () => {
+    expect(expectedCardDueMonth('2026-08')).toBe('2026-08')
+    expect(cardDueDivergesFromCycle('2026-09', '2026-08')).toBe(true)
+    expect(cardDueDivergesFromCycle('2026-08', '2026-08')).toBe(false)
+    expect(cardDueDivergesFromCycle(undefined, '2026-08')).toBe(false)
   })
 })

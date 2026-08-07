@@ -228,6 +228,23 @@ export function useScenarios() {
     [updateActiveScenario],
   )
 
+  /** Atualiza vários desejos numa única escrita (rateio do pool). */
+  const applyWantAmounts = useCallback(
+    (updates: { id: string; plannedAmount: number }[]) => {
+      if (updates.length === 0) return
+      const byId = new Map(updates.map((item) => [item.id, item.plannedAmount]))
+      updateActiveScenario((scenario) => ({
+        ...scenario,
+        wants: scenario.wants.map((w) =>
+          byId.has(w.id)
+            ? { ...w, plannedAmount: Math.max(0, byId.get(w.id) ?? w.plannedAmount) }
+            : w,
+        ),
+      }))
+    },
+    [updateActiveScenario],
+  )
+
   const setWantPaidWith = useCallback(
     (id: string, paidWith: PaymentMethod) => {
       updateActiveScenario((scenario) => ({
@@ -397,6 +414,7 @@ export function useScenarios() {
     addWant,
     removeWant,
     updateWantAmount,
+    applyWantAmounts,
     setWantPaidWith,
     setWantIncludedInCardPlan,
     deductions: activeScenario.deductions,

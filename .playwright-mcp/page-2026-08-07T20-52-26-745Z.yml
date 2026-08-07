@@ -1,0 +1,193 @@
+- generic [ref=f5e3]:
+  - banner [ref=f5e4]:
+    - generic [ref=f5e5]:
+      - heading "Ultimate Finanças" [level=1] [ref=f5e6]
+      - navigation [ref=f5e7]:
+        - button "Ciclo" [ref=f5e8]
+        - button "Planejar" [ref=f5e13]
+        - button "Cartões" [active] [ref=f5e16]
+        - button "Patrimônio" [ref=f5e20]
+        - button "Histórico" [ref=f5e24]
+        - button "Futuro" [ref=f5e30]
+      - generic [ref=f5e36]:
+        - generic [ref=f5e38]:
+          - button "Ciclo anterior" [ref=f5e39]
+          - generic [ref=f5e42]:
+            - generic [ref=f5e43]: Ciclo
+            - strong [ref=f5e46]: Agosto de 2026
+            - generic [ref=f5e47]: salário Julho · cartão Julho
+          - button "Próximo ciclo" [ref=f5e48]
+        - button "Atual" [ref=f5e52]
+        - button "Mais opções" [ref=f5e61]
+  - main [ref=f5e66]:
+    - generic [ref=f5e453]:
+      - generic [ref=f5e454]:
+        - generic [ref=f5e455]:
+          - generic [ref=f5e456]: Fatura a pagar em Agosto de 2026
+          - strong [ref=f5e457]: R$ 2.000,00
+          - generic [ref=f5e458]: 1 lançamentos
+        - generic [ref=f5e459]:
+          - generic [ref=f5e460]: Minha parte
+          - strong [ref=f5e461]: R$ 2.000,00
+          - generic [ref=f5e462]: 23% da base do orçamento
+        - generic [ref=f5e463]:
+          - generic [ref=f5e464]: Não é meu
+          - strong [ref=f5e465]: R$ 0,00
+        - generic [ref=f5e466]:
+          - generic [ref=f5e467]: Limite disponível
+          - strong [ref=f5e468]: R$ 3.000,00
+          - generic [ref=f5e469]: 40% do teto de R$ 5.000,00
+      - generic [ref=f5e470]:
+        - generic [ref=f5e472]:
+          - heading "Seu teto de gasto" [level=3] [ref=f5e473]
+          - paragraph [ref=f5e474]: Esta fatura reúne gastos de Julho de 2026 e conta no caixa do ciclo Agosto de 2026 (vence ~Agosto de 2026). A aba seguinte é o cartão de Agosto de 2026.
+        - generic [ref=f5e475]:
+          - generic [ref=f5e476]:
+            - generic [ref=f5e477]: Limite pessoal (somando todos os cartões)
+            - generic [ref=f5e478]:
+              - generic: R$
+              - textbox "Limite pessoal (somando todos os cartões) R$" [ref=f5e479]:
+                - /placeholder: 0,00
+                - text: 5.000,00
+          - generic [ref=f5e481]:
+            - generic [ref=f5e482]: Uso do limite
+            - strong [ref=f5e483]: 40%
+      - generic [ref=f5e486]:
+        - generic [ref=f5e487]:
+          - button "Pagar em Agosto de 2026" [ref=f5e488]
+          - button "Em formação · pagar em Setembro de 2026" [ref=f5e489]
+          - button "Importar" [ref=f5e490]
+        - button "Pagar fatura (próxima fatura)" [ref=f5e491]
+      - generic [ref=f5e495]:
+        - generic [ref=f5e496]:
+          - generic [ref=f5e497]: Filtrar
+          - button "Todos" [ref=f5e500]
+          - button "Meus" [ref=f5e501]
+          - button "Não são meus" [ref=f5e502]
+          - textbox "Buscar lançamentos" [ref=f5e504]:
+            - /placeholder: Buscar...
+        - generic [ref=f5e506]:
+          - generic [ref=f5e507]:
+            - button "Descrição" [ref=f5e508]
+            - generic [ref=f5e512]: Parc.
+            - button "Data" [ref=f5e513]
+            - button "Cartão" [ref=f5e517]
+            - generic [ref=f5e521]: Área
+            - button "Fatura" [ref=f5e522]
+            - generic [ref=f5e526]: É meu
+            - generic [ref=f5e527]: Restante
+            - generic [ref=f5e528]: Obs / De
+          - generic [ref=f5e530]:
+            - textbox "Descrição da nova compra" [ref=f5e531]:
+              - /placeholder: Nova compra...
+            - generic [ref=f5e532]:
+              - textbox "Parcela atual" [ref=f5e533]:
+                - /placeholder: "1"
+              - generic [ref=f5e534]: /
+              - textbox "Total de parcelas" [ref=f5e535]:
+                - /placeholder: x
+              - button "Marcar como assinatura recorrente" [ref=f5e536]
+            - textbox "Data da compra" [ref=f5e542]:
+              - /placeholder: Data
+              - text: 07/08
+            - combobox "Cartão" [ref=f5e543]: Itaú
+            - combobox "Área do orçamento" [ref=f5e546]:
+              - option "— área" [selected]
+              - option "Necessidade"
+              - option "Desejo"
+              - option "Investim."
+            - generic [ref=f5e547]:
+              - generic [ref=f5e548]:
+                - generic: R$
+                - textbox "0,00" [ref=f5e549]
+              - generic [ref=f5e550]: valor que entra nesta fatura
+            - generic [ref=f5e551]:
+              - generic: R$
+              - textbox "0,00" [ref=f5e552]
+            - generic [ref=f5e553]:
+              - generic: R$
+              - textbox "0,00" [ref=f5e554]
+            - textbox "Pessoa ou observação" [ref=f5e555]:
+              - /placeholder: Pessoa/Obs
+            - button "Adicionar lançamento (Enter)" [disabled] [ref=f5e556]
+          - generic [ref=f5e559]:
+            - textbox "Descrição" [ref=f5e561]: Compra julho
+            - generic [ref=f5e562]:
+              - textbox "Parcela atual" [ref=f5e563]:
+                - /placeholder: "-"
+              - generic [ref=f5e564]: /
+              - textbox "Total de parcelas" [ref=f5e565]:
+                - /placeholder: "-"
+              - button "Marcar como assinatura recorrente" [ref=f5e566]
+            - textbox "Data" [ref=f5e572]: 2026-07-10
+            - textbox "Cartão" [ref=f5e573]: Nubank
+            - combobox "Área do orçamento" [ref=f5e576]:
+              - option "— área"
+              - option "Necessidade"
+              - option "Desejo" [selected]
+              - option "Investim."
+            - generic [ref=f5e577]:
+              - generic: R$
+              - textbox "0,00" [ref=f5e578]: 2.000,00
+            - generic [ref=f5e579]:
+              - generic: R$
+              - textbox "0,00" [ref=f5e580]: 2.000,00
+            - generic [ref=f5e581]:
+              - generic: R$
+              - textbox "0,00" [ref=f5e582]
+            - textbox "Pessoa ou observação" [ref=f5e583]:
+              - /placeholder: "-"
+            - generic [ref=f5e584]:
+              - button "Já paguei antecipado (tira do total da fatura)" [ref=f5e585]
+              - button "Remover" [ref=f5e592]
+        - generic [ref=f5e597]:
+          - text: "1 de 1 lançamentos · total do filtro:"
+          - strong [ref=f5e598]: R$ 2.000,00
+          - text: "· meu: R$ 2.000,00 · não meu: R$ 0,00"
+      - generic [ref=f5e599]:
+        - generic [ref=f5e600]:
+          - heading "Totais por cartão" [level=3] [ref=f5e606]
+          - generic [ref=f5e608]:
+            - generic [ref=f5e609]: Nubank
+            - generic [ref=f5e610]:
+              - strong [ref=f5e611]: R$ 2.000,00
+              - generic [ref=f5e612]: "meu: R$ 2.000,00"
+              - generic [ref=f5e613]: "não meu: R$ 0,00"
+        - generic [ref=f5e614]:
+          - generic [ref=f5e616]:
+            - heading "Área do orçamento" [level=3] [ref=f5e617]
+            - paragraph [ref=f5e618]: "A área não cria um gasto novo: ela diz de qual caixa do plano a compra saiu. Academia marcada como necessidade é o custo fixo que você já cadastrou, agora aparecendo realizado."
+          - generic [ref=f5e619]:
+            - generic [ref=f5e620]:
+              - generic [ref=f5e621]:
+                - generic [ref=f5e622]: Necessidade
+                - strong [ref=f5e624]: R$ 0,00
+              - paragraph [ref=f5e625]: 0% do plano de R$ 4.170,00
+            - generic [ref=f5e626]:
+              - generic [ref=f5e627]:
+                - generic [ref=f5e628]: Desejo
+                - strong [ref=f5e630]: R$ 2.000,00
+              - paragraph [ref=f5e631]: 109% do plano de R$ 1.827,40
+            - generic [ref=f5e632]:
+              - generic [ref=f5e633]:
+                - generic [ref=f5e634]: Investim.
+                - strong [ref=f5e636]: R$ 0,00
+              - paragraph [ref=f5e637]: 0% do plano de R$ 1.760,00
+          - paragraph [ref=f5e638]: Do seu planejamento, R$ 957,40 deveriam passar por aqui (o que você marcou como “no cartão” em custos e desejos). A fatura pessoal está em R$ 2.000,00.
+        - generic [ref=f5e639]:
+          - heading "Resumo do futuro" [level=3] [ref=f5e642]
+          - generic [ref=f5e643]:
+            - generic [ref=f5e644]:
+              - term [ref=f5e645]: Próxima (Setembro de 2026)
+              - definition [ref=f5e646]: R$ 400,00
+            - generic [ref=f5e647]:
+              - term [ref=f5e648]: Minha parte próxima
+              - definition [ref=f5e649]: R$ 400,00
+            - generic [ref=f5e650]:
+              - term [ref=f5e651]: Parcelas restantes
+              - definition [ref=f5e652]: R$ 0,00
+            - generic [ref=f5e653]:
+              - term [ref=f5e654]: Minhas parcelas restantes
+              - definition [ref=f5e655]: R$ 0,00
+  - contentinfo [ref=f5e440]:
+    - generic [ref=f5e441]: Dados salvos apenas neste navegador (1 cenário). Exporte um backup para guardar uma cópia. Aperte ? para ver os atalhos.

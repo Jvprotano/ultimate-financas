@@ -68,3 +68,19 @@ export function advanceCycleMonth(month: string): string {
 export function shiftCycleMonth(month: string, delta: number): string {
   return addMonths(month, delta)
 }
+
+/**
+ * Vencimento “esperado” da fatura deste ciclo: no próprio mês do ciclo
+ * (salário financia o acerto no início/meio do ciclo). Só lembrete — não é gate.
+ */
+export function expectedCardDueMonth(cycleMonth: string): string {
+  return cycleMonth
+}
+
+/** True quando o vencimento persistido do cartão não bate com o ciclo ativo. */
+export function cardDueDivergesFromCycle(
+  currentDueMonth: string | undefined,
+  cycleMonth: string,
+): boolean {
+  return Boolean(currentDueMonth && currentDueMonth !== expectedCardDueMonth(cycleMonth))
+}

@@ -8,7 +8,6 @@ import {
   History,
   Keyboard,
   Landmark,
-  LayoutDashboard,
   MoreVertical,
   RotateCcw,
   SlidersHorizontal,
@@ -18,13 +17,11 @@ import {
 import { FinancasProvider } from './context/FinancasContext'
 import { useScenarioStore } from './context/financasStore'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
-import { Dashboard } from './components/Dashboard'
 import { IncomePanel } from './components/IncomePanel'
 import { BudgetModelPicker } from './components/BudgetModelPicker'
 import { CostManager } from './components/CostManager'
 import { WantsManager } from './components/WantsManager'
 import { InvestmentPlan } from './components/InvestmentPlan'
-import { EmergencyFund } from './components/EmergencyFund'
 import { ClosingView } from './components/ClosingView'
 import { CreditCardManager } from './components/CreditCardManager'
 import { InvestmentsManager } from './components/InvestmentsManager'
@@ -43,24 +40,16 @@ import {
   type BackupPayload,
 } from './lib/backup'
 
-type View =
-  | 'planning'
-  | 'cards'
-  | 'closing'
-  | 'investments'
-  | 'history'
-  | 'overview'
-  | 'forecast'
+type View = 'closing' | 'planning' | 'cards' | 'investments' | 'history' | 'forecast'
 
-const SECONDARY_VIEWS = new Set<View>(['overview', 'forecast'])
+const SECONDARY_VIEWS = new Set<View>(['forecast'])
 
-const VIEWS: { id: View; label: string; icon: typeof LayoutDashboard }[] = [
-  { id: 'planning', label: 'Planejamento', icon: SlidersHorizontal },
+const VIEWS: { id: View; label: string; icon: typeof CalendarCheck }[] = [
+  { id: 'closing', label: 'Ciclo', icon: CalendarCheck },
+  { id: 'planning', label: 'Planejar', icon: SlidersHorizontal },
   { id: 'cards', label: 'Cartões', icon: CreditCard },
-  { id: 'closing', label: 'Fechamento', icon: CalendarCheck },
   { id: 'investments', label: 'Patrimônio', icon: Landmark },
   { id: 'history', label: 'Histórico', icon: History },
-  { id: 'overview', label: 'Visão geral', icon: LayoutDashboard },
   { id: 'forecast', label: 'Futuro', icon: CalendarClock },
 ]
 
@@ -82,7 +71,7 @@ function TabBar({
 }) {
   return (
     <nav
-      className={`grid grid-cols-4 gap-1 rounded-lg border border-dark-border bg-dark-surface p-1 sm:grid-cols-7 ${className}`}
+      className={`grid grid-cols-3 gap-1 rounded-lg border border-dark-border bg-dark-surface p-1 sm:grid-cols-6 ${className}`}
     >
       {VIEWS.map(({ id, label, icon: Icon }) => {
         const secondary = SECONDARY_VIEWS.has(id)
@@ -263,7 +252,7 @@ function MasonryColumns({ children }: { children: ReactNode }) {
 
 function AppShell() {
   const importInputRef = useRef<HTMLInputElement>(null)
-  const [activeView, setActiveView] = useState<View>('planning')
+  const [activeView, setActiveView] = useState<View>('closing')
   const [showShortcuts, setShowShortcuts] = useState(false)
   const scenarios = useScenarioStore()
 
@@ -363,29 +352,27 @@ function AppShell() {
           <CycleSwitcher />
         </div>
 
+        {activeView === 'closing' && (
+          <ClosingView
+            onGoToCards={() => setActiveView('cards')}
+            onGoToPlanning={() => setActiveView('planning')}
+          />
+        )}
+
         {activeView === 'planning' && (
           <MasonryColumns>
-            {/* A ordem é a da leitura: quanto entra, quanto sai, como dividir,
-                no que gastar, quanto aportar, quanto já está guardado. */}
+            {/* Renda → custos → modelo → desejos → aporte. Reserva vive em Patrimônio. */}
             <IncomePanel />
             <CostManager />
             <BudgetModelPicker />
             <WantsManager />
             <InvestmentPlan />
-            <EmergencyFund onManage={() => setActiveView('investments')} />
           </MasonryColumns>
         )}
 
         {activeView === 'cards' && <CreditCardManager />}
-        {activeView === 'closing' && <ClosingView />}
         {activeView === 'investments' && <InvestmentsManager />}
         {activeView === 'history' && <HistoryView />}
-        {activeView === 'overview' && (
-          <Dashboard
-            onGoToPlanning={() => setActiveView('planning')}
-            onGoToClosing={() => setActiveView('closing')}
-          />
-        )}
         {activeView === 'forecast' && <ForecastView />}
       </main>
 

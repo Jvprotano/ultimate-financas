@@ -1,0 +1,270 @@
+- generic [ref=f5e3]:
+  - banner [ref=f5e4]:
+    - generic [ref=f5e5]:
+      - heading "Ultimate Finanças" [level=1] [ref=f5e6]
+      - navigation [ref=f5e7]:
+        - button "Ciclo" [ref=f5e8]
+        - button "Planejar" [active] [ref=f5e13]
+        - button "Cartões" [ref=f5e16]
+        - button "Patrimônio" [ref=f5e20]
+        - button "Histórico" [ref=f5e24]
+        - button "Futuro" [ref=f5e30]
+      - generic [ref=f5e36]:
+        - generic [ref=f5e38]:
+          - button "Ciclo anterior" [ref=f5e39]
+          - generic [ref=f5e42]:
+            - generic [ref=f5e43]: Ciclo
+            - strong [ref=f5e46]: Agosto de 2026
+            - generic [ref=f5e47]: salário Julho · cartão Julho
+          - button "Próximo ciclo" [ref=f5e48]
+        - button "Atual" [ref=f5e52]
+        - button "Mais opções" [ref=f5e61]
+  - main [ref=f5e66]:
+    - generic [ref=f5e714]:
+      - generic [ref=f5e715]:
+        - button "Renda Base R$ 8.800,00" [expanded] [ref=f5e716]:
+          - heading "Renda" [level=2] [ref=f5e721]
+          - generic [ref=f5e722]:
+            - generic [ref=f5e723]: Base
+            - generic [ref=f5e724]: R$ 8.800,00
+        - generic [ref=f5e728]:
+          - generic [ref=f5e729]:
+            - generic [ref=f5e730]: Salário mensal
+            - generic [ref=f5e731]:
+              - generic: R$
+              - textbox "Salário mensal" [ref=f5e732]:
+                - /placeholder: 0,00
+                - text: 8.800,00
+            - generic [ref=f5e733]:
+              - button "Antes dos descontos" [ref=f5e734]
+              - button "Valor que cai na conta" [ref=f5e735]
+            - paragraph [ref=f5e736]: Os descontos abaixo serão abatidos do valor informado. Benefícios saem da base do orçamento; previdência continua contando como investimento.
+          - generic [ref=f5e737]:
+            - heading "Descontos em folha" [level=3] [ref=f5e739]
+            - generic [ref=f5e740]:
+              - generic [ref=f5e741]:
+                - 'textbox "Nome (ex: Previdência XP)" [ref=f5e742]'
+                - combobox [ref=f5e743]:
+                  - option "Previdência Privada" [selected]
+                  - option "Plano de Saúde"
+                  - option "Vale Alimentação"
+                  - option "Vale Transporte"
+                  - option "Seguro de Vida"
+                  - option "Outros"
+                - generic [ref=f5e744]:
+                  - generic: R$
+                  - textbox "Seu desconto" [ref=f5e745]
+                - generic [ref=f5e746]:
+                  - generic: R$
+                  - textbox "Contrapartida da empresa" [ref=f5e747]
+              - button "Adicionar desconto" [disabled] [ref=f5e748]
+          - generic [ref=f5e750]:
+            - generic [ref=f5e751]:
+              - term [ref=f5e752]: Cai na conta
+              - definition [ref=f5e753]: R$ 8.800,00
+            - generic [ref=f5e754]:
+              - term [ref=f5e755]: Base do orçamento
+              - definition [ref=f5e756]: R$ 8.800,00
+      - generic [ref=f5e757]:
+        - button "Custos fixos Total R$ 4.170,00 47% da base · meta 50%" [expanded] [ref=f5e758]:
+          - heading "Custos fixos" [level=2] [ref=f5e763]
+          - generic [ref=f5e764]:
+            - generic [ref=f5e765]: Total
+            - generic [ref=f5e766]: R$ 4.170,00
+            - generic [ref=f5e767]: 47% da base · meta 50%
+        - generic [ref=f5e771]:
+          - generic [ref=f5e773]:
+            - generic [ref=f5e774]: "Meta de necessidades: R$ 4.400,00"
+            - generic [ref=f5e775]: R$ 230,00 de folga
+          - generic [ref=f5e778]:
+            - button "+ Condomínio" [ref=f5e779]
+            - button "+ Energia" [ref=f5e780]
+            - button "+ Internet" [ref=f5e781]
+            - button "+ Celular" [ref=f5e782]
+            - button "+ Supermercado" [ref=f5e783]
+            - button "+ Combustível" [ref=f5e784]
+            - button "+ Academia" [ref=f5e785]
+          - generic [ref=f5e786]:
+            - generic [ref=f5e787]:
+              - textbox "Nome do custo" [ref=f5e788]
+              - combobox [ref=f5e789]:
+                - option "Moradia" [selected]
+                - option "Contas & Serviços"
+                - option "Alimentação"
+                - option "Transporte"
+                - option "Saúde"
+                - option "Educação"
+                - option "Lazer & Pessoal"
+                - option "Dívidas & Parcelas"
+                - option "Outros"
+            - paragraph [ref=f5e790]: "Ex: Aluguel, condomínio, IPTU, água"
+            - generic [ref=f5e791]:
+              - generic [ref=f5e793]:
+                - generic: R$
+                - textbox "Valor cheio da conta" [ref=f5e794]
+              - button "Adicionar" [disabled] [ref=f5e795]
+            - generic [ref=f5e797]:
+              - generic [ref=f5e798]:
+                - generic [ref=f5e799]: Pago por
+                - generic [ref=f5e800]:
+                  - button "Pago por Cartão" [ref=f5e801]:
+                    - generic [ref=f5e802]: Conta
+                  - button "Cartão" [ref=f5e805]
+              - button "Dividir com outra pessoa" [ref=f5e809]
+          - list [ref=f5e815]:
+            - listitem [ref=f5e816]:
+              - generic [ref=f5e817]:
+                - generic [ref=f5e820]:
+                  - generic [ref=f5e821]: Aluguel
+                  - generic [ref=f5e822]: Moradia
+                - generic [ref=f5e823]:
+                  - generic [ref=f5e824]: R$ 2.500,00
+                  - button "Editar Aluguel" [ref=f5e826]
+                  - button "Remover Aluguel" [ref=f5e828]
+            - listitem [ref=f5e832]:
+              - generic [ref=f5e833]:
+                - generic [ref=f5e836]:
+                  - generic [ref=f5e837]: Contas
+                  - generic [ref=f5e838]: Outros
+                - generic [ref=f5e839]:
+                  - generic [ref=f5e840]: R$ 1.670,00
+                  - button "Editar Contas" [ref=f5e842]
+                  - button "Remover Contas" [ref=f5e844]
+      - generic [ref=f5e848]:
+        - button "Modelo de orçamento Modelo 50 / 30 / 20" [expanded] [ref=f5e849]:
+          - heading "Modelo de orçamento" [level=2] [ref=f5e852]
+          - generic [ref=f5e853]:
+            - generic [ref=f5e854]: Modelo
+            - generic [ref=f5e855]: 50 / 30 / 20
+        - generic [ref=f5e859]:
+          - generic [ref=f5e860]:
+            - button "50 / 30 / 20 Equilíbrio clássico entre presente e futuro" [ref=f5e861]:
+              - generic [ref=f5e862]: 50 / 30 / 20
+              - generic [ref=f5e863]: Equilíbrio clássico entre presente e futuro
+            - button "60 / 20 / 20 Para quem tem custos fixos mais pesados" [ref=f5e864]:
+              - generic [ref=f5e865]: 60 / 20 / 20
+              - generic [ref=f5e866]: Para quem tem custos fixos mais pesados
+            - button "70 / 20 / 10 Primeiro passo para quem está apertado" [ref=f5e867]:
+              - generic [ref=f5e868]: 70 / 20 / 10
+              - generic [ref=f5e869]: Primeiro passo para quem está apertado
+            - button "40 / 30 / 30 Agressivo em investimentos" [ref=f5e870]:
+              - generic [ref=f5e871]: 40 / 30 / 30
+              - generic [ref=f5e872]: Agressivo em investimentos
+            - button "Personalizado Você define as proporções" [ref=f5e873]:
+              - generic [ref=f5e874]: Personalizado
+              - generic [ref=f5e875]: Você define as proporções
+          - generic [ref=f5e876]:
+            - generic [ref=f5e877]:
+              - generic [ref=f5e878]: Necessidades
+              - strong [ref=f5e880]: R$ 4.400,00
+            - generic [ref=f5e881]:
+              - generic [ref=f5e882]: Desejos
+              - strong [ref=f5e884]: R$ 2.640,00
+            - generic [ref=f5e885]:
+              - generic [ref=f5e886]: Investimentos
+              - strong [ref=f5e888]: R$ 1.760,00
+      - generic [ref=f5e889]:
+        - button "Desejos Planejado R$ 1.827,40 21% da base · meta 30%" [expanded] [ref=f5e890]:
+          - heading "Desejos" [level=2] [ref=f5e894]
+          - generic [ref=f5e895]:
+            - generic [ref=f5e896]: Planejado
+            - generic [ref=f5e897]: R$ 1.827,40
+            - generic [ref=f5e898]: 21% da base · meta 30%
+        - generic [ref=f5e902]:
+          - generic [ref=f5e903]:
+            - generic [ref=f5e904]:
+              - generic [ref=f5e905]: "Meta de desejos: R$ 2.640,00"
+              - generic [ref=f5e906]: R$ 812,60 livres
+            - 'generic "Já gasto no cartão: R$ 2.000,00" [ref=f5e909]'
+            - paragraph [ref=f5e910]: R$ 2.000,00 já gastos no cartão neste ciclo — 109% do planejado. É o mesmo orçamento sendo consumido, não um gasto extra.
+          - generic [ref=f5e912]:
+            - button "+ Streaming" [ref=f5e913]
+            - button "+ Comer fora" [ref=f5e914]
+            - button "+ Delivery" [ref=f5e915]
+            - button "+ Roupas" [ref=f5e916]
+            - button "+ Jogos / Hobbies" [ref=f5e917]
+            - button "+ Cinema / Shows" [ref=f5e918]
+            - button "+ Presentes" [ref=f5e919]
+          - generic [ref=f5e921]:
+            - 'textbox "Novo desejo (ex: Netflix, viagem...)" [ref=f5e922]'
+            - generic [ref=f5e924]:
+              - generic: R$
+              - textbox "0,00" [ref=f5e925]
+            - button "Adicionar" [disabled] [ref=f5e926]
+          - list [ref=f5e928]:
+            - listitem [ref=f5e929]:
+              - generic [ref=f5e930]: Viagens
+              - generic [ref=f5e932]:
+                - button "Forma de pagamento de Viagens" [ref=f5e933]
+                - generic [ref=f5e937]:
+                  - generic: R$
+                  - textbox "0,00" [ref=f5e938]: 483,33
+                - button "Remover Viagens" [ref=f5e939]
+            - listitem [ref=f5e943]:
+              - generic [ref=f5e944]: Qualidade de vida
+              - generic [ref=f5e946]:
+                - button "Forma de pagamento de Qualidade de vida" [ref=f5e947]
+                - generic [ref=f5e951]:
+                  - generic: R$
+                  - textbox "0,00" [ref=f5e952]: 386,67
+                - button "Remover Qualidade de vida" [ref=f5e953]
+            - listitem [ref=f5e957]:
+              - generic [ref=f5e958]: Cartão planejado
+              - generic [ref=f5e960]:
+                - button "Forma de pagamento de Cartão planejado" [ref=f5e961]
+                - generic [ref=f5e965]:
+                  - generic: R$
+                  - textbox "0,00" [ref=f5e966]: 957,40
+                - button "Remover Cartão planejado" [ref=f5e967]
+      - generic [ref=f5e971]:
+        - button "Plano de aportes Investimento R$ 1.760,00 20% da base · meta 20%" [expanded] [ref=f5e972]:
+          - heading "Plano de aportes" [level=2] [ref=f5e978]
+          - generic [ref=f5e979]:
+            - generic [ref=f5e980]: Investimento
+            - generic [ref=f5e981]: R$ 1.760,00
+            - generic [ref=f5e982]: 20% da base · meta 20%
+        - generic [ref=f5e986]:
+          - generic [ref=f5e987]:
+            - generic [ref=f5e988]:
+              - term [ref=f5e989]: Meta do mês
+              - definition [ref=f5e990]: R$ 1.760,00
+            - generic [ref=f5e991]:
+              - term [ref=f5e992]: Aporte direto pela conta
+              - definition [ref=f5e993]: R$ 1.760,00
+          - generic [ref=f5e994]:
+            - button "+ Renda Fixa" [ref=f5e995]
+            - button "+ Fundos Imobiliários" [ref=f5e996]
+            - button "+ Criptomoedas" [ref=f5e997]
+            - button "+ Ações Internacionais" [ref=f5e998]
+            - button "+ ETFs" [ref=f5e999]
+          - generic [ref=f5e1000]:
+            - textbox "Outra classe de ativo..." [ref=f5e1001]
+            - button [disabled] [ref=f5e1002]
+          - generic [ref=f5e1004]:
+            - generic [ref=f5e1005]:
+              - generic [ref=f5e1006]:
+                - generic [ref=f5e1007]:
+                  - generic [ref=f5e1009]: Renda fixa
+                  - button "Remover Renda fixa" [ref=f5e1010]
+                - generic [ref=f5e1014]:
+                  - generic [ref=f5e1015]:
+                    - spinbutton "Percentual de Renda fixa" [ref=f5e1016]: "70"
+                    - generic: "%"
+                  - generic [ref=f5e1017]: R$ 1.232,00
+              - slider "Ajustar Renda fixa" [ref=f5e1018] [cursor=pointer]: "70"
+            - generic [ref=f5e1019]:
+              - generic [ref=f5e1020]:
+                - generic [ref=f5e1021]:
+                  - generic [ref=f5e1023]: Ações
+                  - button "Remover Ações" [ref=f5e1024]
+                - generic [ref=f5e1028]:
+                  - generic [ref=f5e1029]:
+                    - spinbutton "Percentual de Ações" [ref=f5e1030]: "30"
+                    - generic: "%"
+                  - generic [ref=f5e1031]: R$ 528,00
+              - slider "Ajustar Ações" [ref=f5e1032] [cursor=pointer]: "30"
+            - generic [ref=f5e1033]:
+              - generic [ref=f5e1034]: Distribuído
+              - generic [ref=f5e1035]: 100% · R$ 1.760,00
+  - contentinfo [ref=f5e440]:
+    - generic [ref=f5e441]: Dados salvos apenas neste navegador (1 cenário). Exporte um backup para guardar uma cópia. Aperte ? para ver os atalhos.

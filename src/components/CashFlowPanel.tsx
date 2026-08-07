@@ -71,10 +71,10 @@ export function CashFlowPanel() {
         .map((card) => `${card.name} dia ${card.dueDay}${card.isClosed ? ' (fechada)' : ''}`)
         .join(' · ')
     : `vence ~${cards.settings.paymentDate} · gastos de ${formatMonthLong(financialCycle.spendingMonth)}`
-  const nextInvoiceReserveHint =
+  const nextInvoiceHint =
     financialCycle.plannedNextInvoice > financialCycle.nextInvoicePersonal
-      ? `plano do cartão de ${formatMonthLong(financialCycle.nextSpendingMonth)}; já lançado: ${formatCurrency(financialCycle.nextInvoicePersonal)}`
-      : `compras de ${formatMonthLong(financialCycle.nextSpendingMonth)} já feitas no cartão`
+      ? `plano ${formatCurrency(financialCycle.plannedNextInvoice)} · já lançado ${formatCurrency(financialCycle.nextInvoicePersonal)}`
+      : `compras de ${formatMonthLong(financialCycle.nextSpendingMonth)} já no cartão`
   const dueNow = invoiceToPay + costsOnAccount + extraExpense
   const accountWantItems = scenarios.activeScenario.wants.filter(
     (want) =>
@@ -100,12 +100,6 @@ export function CashFlowPanel() {
     { id: 'costs', label: 'Custos em conta', value: costsOnAccount, color: CHART_PALETTE.blue },
     { id: 'invest', label: 'Aporte direto', value: directInvestment, color: CHART_PALETTE.aqua },
     { id: 'extra', label: 'Saídas do ano', value: extraExpense, color: CHART_PALETTE.red },
-    {
-      id: 'reserve',
-      label: 'Reserva da próxima fatura',
-      value: financialCycle.reservedForNextInvoice,
-      color: CHART_PALETTE.violet,
-    },
     {
       id: 'wants',
       label: 'Desejos em conta (sugerido)',
@@ -187,14 +181,6 @@ export function CashFlowPanel() {
             hint="o que você transfere para investir, além da folha"
           />
         )}
-        {financialCycle.reservedForNextInvoice > 0 && (
-          <FlowRow
-            label="Reserva da próxima fatura"
-            value={financialCycle.reservedForNextInvoice}
-            direction="out"
-            hint={nextInvoiceReserveHint}
-          />
-        )}
         {extraExpense > 0 && (
           <FlowRow
             label="Saídas do ano"
@@ -204,6 +190,13 @@ export function CashFlowPanel() {
           />
         )}
       </div>
+
+      {financialCycle.reservedForNextInvoice > 0.005 && (
+        <p className="mt-3 rounded-lg border border-dark-border-subtle bg-dark-surface/40 px-3 py-2 text-[11px] leading-relaxed text-dark-text-muted">
+          Cartão em formação (próximo ciclo): ~{formatCurrency(financialCycle.reservedForNextInvoice)}{' '}
+          — {nextInvoiceHint}. Paga-se com o próximo salário, não com este.
+        </p>
+      )}
 
       {accountWantItems.length > 0 && (
         <div
@@ -219,9 +212,9 @@ export function CashFlowPanel() {
                 Quanto enviar para desejos fora do cartão
               </p>
               <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-dark-text-muted">
-                Primeiro entram fatura, contas, aporte e reserva do próximo cartão. Só depois disso
-                este bloco diz quanto cabe enviar para Viagens, Qualidade de Vida e outros desejos
-                que não passam no cartão.
+                Depois de pagar a fatura deste ciclo, as contas e o aporte, este bloco diz quanto
+                cabe enviar para Viagens, Qualidade de Vida e outros desejos que não passam no
+                cartão.
               </p>
             </div>
             <div className="text-right">
@@ -270,8 +263,8 @@ export function CashFlowPanel() {
 
       {financialCycle.discretionaryShortfall > 0 && (
         <p className="mt-2 text-[11px] leading-relaxed text-rose-300">
-          Faltam {formatCurrency(financialCycle.discretionaryShortfall)} para cobrir fatura, contas,
-          aporte e a reserva da próxima fatura. Reduza desejos ou o aporte antes de assumir novas
+          Faltam {formatCurrency(financialCycle.discretionaryShortfall)} para cobrir a fatura deste
+          ciclo, as contas e o aporte. Reduza desejos em conta ou o aporte antes de assumir novas
           compras no cartão.
         </p>
       )}
@@ -300,11 +293,12 @@ export function CashFlowPanel() {
           </div>
           <div className="rounded-lg bg-dark-card px-3 py-2">
             <span className="block font-medium text-dark-text">
-              3. Reserve a próxima fatura
+              3. Cartão em formação
             </span>
             <span>
-              Separe {formatCurrency(financialCycle.reservedForNextInvoice)} para o cartão do
-              próximo ciclo. Se a fatura atual veio maior que o plano, ela reduz a folga de desejos.
+              ~{formatCurrency(financialCycle.reservedForNextInvoice)} já é prévia do próximo ciclo
+              ({formatMonthLong(financialCycle.nextSpendingMonth)}). Esse valor não sai deste
+              salário — o próximo paga.
             </span>
           </div>
           <div
@@ -320,7 +314,7 @@ export function CashFlowPanel() {
             <span>
               {financialCycle.discretionaryShortfall > 0
                 ? `Não aumente esses valores ainda: faltam ${formatCurrency(financialCycle.discretionaryShortfall)} para fechar o ciclo.`
-                : `Depois de pagar, aportar e reservar cartão, sobram ${formatCurrency(financialCycle.discretionaryPool)} livres para desejos ou investimentos.`}
+                : `Depois de pagar fatura, contas e aporte, sobram ${formatCurrency(financialCycle.discretionaryPool)} livres para desejos ou investimentos.`}
             </span>
           </div>
         </div>

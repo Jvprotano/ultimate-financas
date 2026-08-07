@@ -37,6 +37,8 @@ import {
   stripInstallmentToken,
 } from '../lib/cardImport'
 import { useCardsStore, useFinancasStore, useMetrics } from '../context/financasStore'
+import { expectedCardDueMonth } from '../lib/activeCycle'
+import { parsePaymentDay } from '../lib/creditCards'
 import type { BudgetArea, CreditCardCycle, CreditCardEntry } from '../types'
 import { BUDGET_AREAS, BUDGET_AREA_COLORS, BUDGET_AREA_SHORT_LABELS } from '../types/constants'
 
@@ -108,13 +110,16 @@ export function CreditCardManager() {
     setSettings,
   } = useCardsStore()
   const { availableForBudget, budgetComparison, plannedOnCard } = useMetrics()
-  const { financialCycle } = useFinancasStore()
+  const { financialCycle, activeCycle } = useFinancasStore()
   const currentDueMonth = settings.currentDueMonth ?? financialCycle.cashMonth
   const nextDueMonth = addMonths(currentDueMonth, 1)
   // O que está na fatura “atual” do cartão segue o ciclo do cartão (avança ao
   // pagar). O ciclo ativo do app é outra fonte — só diz em qual caixa isso conta.
   const currentSpendingMonth = addMonths(currentDueMonth, -1)
   const nextSpendingMonth = addMonths(nextDueMonth, -1)
+  const dueDiverges = Boolean(
+    settings.currentDueMonth && settings.currentDueMonth !== activeCycle.month,
+  )
 
   const [view, setView] = useState<View>('current')
 
@@ -399,8 +404,32 @@ export function CreditCardManager() {
   const moneyCellClass =
     '!border-transparent !bg-transparent !py-1 !pl-6 !pr-2 text-sm transition-all hover:!bg-white/5 focus:!border-dark-border focus:!bg-dark-input'
 
+  const handleAlignDueMonth = () => {
+    const dueDay = parsePaymentDay(settings.paymentDate, 5)
+    const month = expectedCardDueMonth(activeCycle.month)
+    const [, monthPart] = month.split('-')
+    setSettings({
+      ...settings,
+      currentDueMonth: month,
+      paymentDate: `${String(dueDay).padStart(2, '0')}/${monthPart ?? '01'}`,
+    })
+  }
+
   return (
     <div className="space-y-4">
+      {dueDiverges && (
+        <div className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/[0.07] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 text-sm leading-relaxed text-amber-100/90">
+            <strong className="font-semibold text-amber-200">Vencimento desalinhado do ciclo.</strong>{' '}
+            Fatura marcada para {formatMonthLong(currentDueMonth)}; ciclo ativo{' '}
+            {formatMonthLong(activeCycle.month)}. Pagar a fatura não fecha o ciclo.
+          </div>
+          <SecondaryButton onClick={handleAlignDueMonth}>
+            Alinhar vencimento ao ciclo
+          </SecondaryButton>
+        </div>
+      )}
+
       <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
           label={`Fatura a pagar em ${formatMonthLong(currentDueMonth)}`}
@@ -488,7 +517,7 @@ export function CreditCardManager() {
         {view === 'current' && (
           <PrimaryButton onClick={() => setShowPaySummary(true)}>
             <CheckCircle2 size={15} />
-            Pagar fatura
+            Pagar fatura (próxima fatura)
           </PrimaryButton>
         )}
         {view === 'next' && (
@@ -504,7 +533,7 @@ export function CreditCardManager() {
           <PanelHeader
             title="Resumo antes de pagar"
             icon={<CheckCircle2 size={16} />}
-            description={`Fatura de gastos de ${formatMonthLong(currentSpendingMonth)}, com vencimento ~${formatMonthLong(currentDueMonth)}. Sai do caixa do ciclo ativo ${formatMonthLong(financialCycle.cashMonth)}. Pagar a fatura não fecha o ciclo — feche em Fechamento.`}
+            description={`Fatura de gastos de ${formatMonthLong(currentSpendingMonth)}, com vencimento ~${formatMonthLong(currentDueMonth)}. Sai do caixa do ciclo ativo ${formatMonthLong(financialCycle.cashMonth)}. Isto só gira a fatura do cartão — o ciclo do app fecha na aba Ciclo.`}
           />
           <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
             <StatTile label="Total da fatura" value={formatCurrency(summary.currentTotal)} />
@@ -527,7 +556,7 @@ export function CreditCardManager() {
           <div className="mt-4 flex flex-wrap gap-2">
             <PrimaryButton onClick={handlePayInvoice}>
               <CheckCircle2 size={15} />
-              Pagar e iniciar próximo ciclo
+              Pagar e abrir próxima fatura
             </PrimaryButton>
             <button
               type="button"
@@ -912,7 +941,7 @@ export function CreditCardManager() {
                                 type="button"
                                 onClick={() => updateEntry(entry.id, { isRecurring: true })}
                                 title="Marcar como assinatura recorrente"
-                                className="text-dark-text-muted/40 opacity-0 transition-all hover:text-dark-text focus-visible:opacity-100 group-hover:opacity-100"
+                                className="text-dark-text-muted/40 opacity-100 transition-all hover:text-dark-text md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100"
                               >
                                 <Repeat size={12} />
                               </button>
@@ -966,7 +995,7 @@ export function CreditCardManager() {
                           className={`flex h-7 w-7 items-center justify-center rounded-md transition-all ${
                             entry.isPrepaid
                               ? 'bg-primary-500/15 text-primary-400 hover:bg-primary-500/25'
-                              : 'text-dark-text-muted opacity-0 hover:bg-primary-500/15 hover:text-primary-400 focus-visible:opacity-100 group-hover:opacity-100'
+                              : 'text-dark-text-muted opacity-100 hover:bg-primary-500/15 hover:text-primary-400 focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100'
                           }`}
                           title={
                             entry.isPrepaid
@@ -985,7 +1014,7 @@ export function CreditCardManager() {
                                 setAnticipateId(entry.id)
                                 setAnticipateCount(1)
                               }}
-                              className="flex h-7 w-7 items-center justify-center rounded-md text-dark-text-muted opacity-0 transition-all hover:bg-amber-500/15 hover:text-amber-300 focus-visible:opacity-100 group-hover:opacity-100"
+                              className="flex h-7 w-7 items-center justify-center rounded-md text-dark-text-muted opacity-100 transition-all hover:bg-amber-500/15 hover:text-amber-300 focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
                               title="Antecipar parcelas"
                             >
                               <FastForward size={15} />
@@ -993,7 +1022,7 @@ export function CreditCardManager() {
                           )}
                         <button
                           onClick={() => handleDelete(entry)}
-                          className="flex h-7 w-7 items-center justify-center rounded-md text-dark-text-muted opacity-0 transition-all hover:bg-rose-500/15 hover:text-rose-400 focus-visible:opacity-100 group-hover:opacity-100"
+                          className="flex h-7 w-7 items-center justify-center rounded-md text-dark-text-muted opacity-100 transition-all hover:bg-rose-500/15 hover:text-rose-400 focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
                           title="Remover"
                         >
                           <Trash2 size={15} />

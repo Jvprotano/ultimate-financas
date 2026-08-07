@@ -14,6 +14,7 @@ import {
   PrimaryButton,
   SecondaryButton,
   SegmentedBar,
+  SegmentedControl,
   StatTile,
   Tag,
 } from './ui'
@@ -421,6 +422,9 @@ export function InvestmentsManager() {
   const { summary, goals } = useInvestmentsStore()
   const { debts } = useFinancasStore()
   const [showForm, setShowForm] = useState(false)
+  const [section, setSection] = useState<
+    'reserve' | 'goals' | 'holdings' | 'assets' | 'debts'
+  >('reserve')
 
   const {
     financialAssets,
@@ -558,82 +562,94 @@ export function InvestmentsManager() {
         </Panel>
       )}
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <ReserveSection />
-        <GoalsSection />
-      </div>
+      <SegmentedControl
+        className="w-full"
+        value={section}
+        onChange={setSection}
+        options={[
+          { value: 'reserve' as const, label: 'Reserva' },
+          { value: 'goals' as const, label: 'Metas' },
+          { value: 'holdings' as const, label: 'Posições' },
+          { value: 'assets' as const, label: 'Bens' },
+          { value: 'debts' as const, label: 'Dívidas' },
+        ]}
+      />
 
-      <AssetsManager />
-      <DebtsManager />
+      {section === 'reserve' && <ReserveSection />}
+      {section === 'goals' && <GoalsSection />}
+      {section === 'assets' && <AssetsManager />}
+      {section === 'debts' && <DebtsManager />}
 
-      <Panel>
-        <PanelHeader
-          title="Posições"
-          icon={<Landmark size={16} />}
-          description="Cada posição tem um livro-razão de aportes e um valor de mercado que você atualiza."
-          actions={
-            !showForm && (
-              <SecondaryButton onClick={() => setShowForm(true)}>
-                <Plus size={14} />
-                Nova posição
-              </SecondaryButton>
-            )
-          }
-        />
+      {section === 'holdings' && (
+        <Panel>
+          <PanelHeader
+            title="Posições"
+            icon={<Landmark size={16} />}
+            description="Cada posição tem um livro-razão de aportes e um valor de mercado que você atualiza."
+            actions={
+              !showForm && (
+                <SecondaryButton onClick={() => setShowForm(true)}>
+                  <Plus size={14} />
+                  Nova posição
+                </SecondaryButton>
+              )
+            }
+          />
 
-        {showForm && <NewHoldingForm onClose={() => setShowForm(false)} />}
+          {showForm && <NewHoldingForm onClose={() => setShowForm(false)} />}
 
-        <div className="mt-4">
-          {summary.classes.length === 0 ? (
-            <EmptyState
-              icon={<Landmark size={26} />}
-              title="Nenhuma posição cadastrada"
-              action={
-                !showForm && (
-                  <PrimaryButton onClick={() => setShowForm(true)}>
-                    <Plus size={15} />
-                    Adicionar a primeira
-                  </PrimaryButton>
-                )
-              }
-            >
-              Cadastre onde seu dinheiro está para acompanhar patrimônio, alocação e rentabilidade
-              por classe de ativo.
-            </EmptyState>
-          ) : (
-            <div className="space-y-4">
-              {summary.classes.map((assetClass) => (
-                <div key={assetClass.id} className="rounded-xl border border-dark-border">
-                  <div className="flex flex-wrap items-center gap-3 border-b border-dark-border/60 px-4 py-3">
-                    <span
-                      className="h-2.5 w-2.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: assetClass.color }}
-                    />
-                    <h4 className="text-sm font-semibold text-dark-text">{assetClass.name}</h4>
-                    <Tag>{assetClass.allocationPct.toFixed(0)}% do patrimônio</Tag>
-                    <div className="ml-auto text-right">
-                      <p className="text-sm font-semibold tabular-nums text-dark-text">
-                        {formatCurrency(assetClass.marketValue)}
-                      </p>
-                      <p className="text-[11px]">
-                        <GainLabel
-                          gain={assetClass.gain}
-                          pct={assetClass.invested > 0 ? assetClass.gainPct : null}
-                        />
-                      </p>
+          <div className="mt-4">
+            {summary.classes.length === 0 ? (
+              <EmptyState
+                icon={<Landmark size={26} />}
+                title="Nenhuma posição cadastrada"
+                action={
+                  !showForm && (
+                    <PrimaryButton onClick={() => setShowForm(true)}>
+                      <Plus size={15} />
+                      Adicionar a primeira
+                    </PrimaryButton>
+                  )
+                }
+              >
+                Cadastre onde seu dinheiro está para acompanhar patrimônio, alocação e rentabilidade
+                por classe de ativo.
+              </EmptyState>
+            ) : (
+              <div className="space-y-4">
+                {summary.classes.map((assetClass) => (
+                  <div key={assetClass.id} className="rounded-xl border border-dark-border">
+                    <div className="flex flex-wrap items-center gap-3 border-b border-dark-border/60 px-4 py-3">
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: assetClass.color }}
+                      />
+                      <h4 className="text-sm font-semibold text-dark-text">{assetClass.name}</h4>
+                      <Tag>{assetClass.allocationPct.toFixed(0)}% do patrimônio</Tag>
+                      <div className="ml-auto text-right">
+                        <p className="text-sm font-semibold tabular-nums text-dark-text">
+                          {formatCurrency(assetClass.marketValue)}
+                        </p>
+                        <p className="text-[11px]">
+                          <GainLabel
+                            gain={assetClass.gain}
+                            pct={assetClass.invested > 0 ? assetClass.gainPct : null}
+                          />
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-2 p-3">
+                      {assetClass.holdings.map((holding) => (
+                        <HoldingRow key={holding.id} holding={holding} />
+                      ))}
                     </div>
                   </div>
-                  <div className="space-y-2 p-3">
-                    {assetClass.holdings.map((holding) => (
-                      <HoldingRow key={holding.id} holding={holding} />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </Panel>
+                ))}
+              </div>
+            )}
+          </div>
+        </Panel>
+      )}
     </div>
   )
 }

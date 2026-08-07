@@ -125,7 +125,7 @@ export function useFinancas() {
         wantsOnAccount: cashFlow.wantsOnAccount,
         directInvestment: cashFlow.directInvestment,
         extraExpense: cashFlow.extraExpense,
-        // Próxima fatura = o que já está no ciclo "next" do cartão.
+        // Próxima fatura = prévia do próximo ciclo (não drena este salário).
         nextInvoicePersonal: cards.summary.nextPersonalTotal,
         plannedNextInvoice: cashFlow.plannedOnCard,
       }),

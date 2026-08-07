@@ -82,7 +82,7 @@ function SnapshotEditor({ point, onClose }: { point: HistoryPoint; onClose: () =
   )
 }
 
-/** Só leitura do passado — o fechamento do mês corrente vive na aba Fechamento. */
+/** Só leitura do passado — o fechamento do mês corrente vive na aba Ciclo. */
 export function HistoryView() {
   const { history } = useFinancasStore()
   const { points, stats } = history
@@ -135,7 +135,7 @@ export function HistoryView() {
   if (points.length === 0) {
     return (
       <EmptyState icon={<History size={26} />} title="Nenhum mês fechado ainda">
-        O histórico só mostra o que você já fechou. Vá em Fechamento para registrar o mês
+        O histórico só mostra o que você já fechou. Vá em Ciclo para registrar o mês
         corrente — a partir do segundo fechamento aparecem a evolução do patrimônio e o custo
         médio real.
       </EmptyState>

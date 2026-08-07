@@ -1,0 +1,197 @@
+- generic [ref=f1e3]:
+  - banner [ref=f1e4]:
+    - generic [ref=f1e5]:
+      - heading "Ultimate Finanças" [level=1] [ref=f1e6]
+      - navigation [ref=f1e7]:
+        - button "Ciclo" [ref=f1e8]
+        - button "Planejar" [ref=f1e13]
+        - button "Cartões" [ref=f1e16]
+        - button "Patrimônio" [ref=f1e20]
+        - button "Histórico" [ref=f1e24]
+        - button "Futuro" [ref=f1e30]
+      - generic [ref=f1e36]:
+        - generic [ref=f1e38]:
+          - button "Ciclo anterior" [ref=f1e39]
+          - generic [ref=f1e42]:
+            - generic [ref=f1e43]: Ciclo
+            - strong [ref=f1e46]: Agosto de 2026
+            - generic [ref=f1e47]: salário Julho · cartão Julho
+          - button "Próximo ciclo" [ref=f1e48]
+        - button "Atual" [ref=f1e52]
+        - button "Mais opções" [ref=f1e61]
+  - main [ref=f1e66]:
+    - generic [ref=f1e75]:
+      - generic [ref=f1e76]:
+        - button [expanded] [ref=f1e77]:
+          - heading "Renda" [level=2] [ref=f1e82]
+        - generic [ref=f1e86]:
+          - generic [ref=f1e87]:
+            - generic [ref=f1e88]: Salário mensal
+            - generic [ref=f1e89]:
+              - generic: R$
+              - textbox "Salário mensal" [ref=f1e90]:
+                - /placeholder: 0,00
+            - generic [ref=f1e91]:
+              - button "Antes dos descontos" [ref=f1e92]
+              - button "Valor que cai na conta" [ref=f1e93]
+            - paragraph [ref=f1e94]: Os descontos abaixo serão abatidos do valor informado. Benefícios saem da base do orçamento; previdência continua contando como investimento.
+          - generic [ref=f1e95]:
+            - heading "Descontos em folha" [level=3] [ref=f1e97]
+            - generic [ref=f1e98]:
+              - generic [ref=f1e99]:
+                - 'textbox "Nome (ex: Previdência XP)" [ref=f1e100]'
+                - combobox [ref=f1e101]:
+                  - option "Previdência Privada" [selected]
+                  - option "Plano de Saúde"
+                  - option "Vale Alimentação"
+                  - option "Vale Transporte"
+                  - option "Seguro de Vida"
+                  - option "Outros"
+                - generic [ref=f1e102]:
+                  - generic: R$
+                  - textbox "Seu desconto" [ref=f1e103]
+                - generic [ref=f1e104]:
+                  - generic: R$
+                  - textbox "Contrapartida da empresa" [ref=f1e105]
+              - button "Adicionar desconto" [disabled] [ref=f1e106]
+      - generic [ref=f1e108]:
+        - button [expanded] [ref=f1e109]:
+          - heading "Custos fixos" [level=2] [ref=f1e114]
+        - generic [ref=f1e118]:
+          - generic [ref=f1e119]:
+            - button "+ Aluguel" [ref=f1e120]
+            - button "+ Condomínio" [ref=f1e121]
+            - button "+ Energia" [ref=f1e122]
+            - button "+ Internet" [ref=f1e123]
+            - button "+ Celular" [ref=f1e124]
+            - button "+ Supermercado" [ref=f1e125]
+            - button "+ Combustível" [ref=f1e126]
+            - button "+ Academia" [ref=f1e127]
+          - generic [ref=f1e128]:
+            - generic [ref=f1e129]:
+              - textbox "Nome do custo" [ref=f1e130]
+              - combobox [ref=f1e131]:
+                - option "Moradia" [selected]
+                - option "Contas & Serviços"
+                - option "Alimentação"
+                - option "Transporte"
+                - option "Saúde"
+                - option "Educação"
+                - option "Lazer & Pessoal"
+                - option "Dívidas & Parcelas"
+                - option "Outros"
+            - paragraph [ref=f1e132]: "Ex: Aluguel, condomínio, IPTU, água"
+            - generic [ref=f1e133]:
+              - generic [ref=f1e135]:
+                - generic: R$
+                - textbox "Valor cheio da conta" [ref=f1e136]
+              - button "Adicionar" [disabled] [ref=f1e137]
+            - generic [ref=f1e139]:
+              - generic [ref=f1e140]:
+                - generic [ref=f1e141]: Pago por
+                - generic [ref=f1e142]:
+                  - button "Pago por Cartão" [ref=f1e143]:
+                    - generic [ref=f1e144]: Conta
+                  - button "Cartão" [ref=f1e147]
+              - button "Dividir com outra pessoa" [ref=f1e151]
+      - generic [ref=f1e157]:
+        - button "Modelo de orçamento Modelo 50 / 30 / 20" [expanded] [ref=f1e158]:
+          - heading "Modelo de orçamento" [level=2] [ref=f1e161]
+          - generic [ref=f1e162]:
+            - generic [ref=f1e163]: Modelo
+            - generic [ref=f1e164]: 50 / 30 / 20
+        - generic [ref=f1e169]:
+          - button "50 / 30 / 20 Equilíbrio clássico entre presente e futuro" [ref=f1e170]:
+            - generic [ref=f1e171]: 50 / 30 / 20
+            - generic [ref=f1e172]: Equilíbrio clássico entre presente e futuro
+          - button "60 / 20 / 20 Para quem tem custos fixos mais pesados" [ref=f1e173]:
+            - generic [ref=f1e174]: 60 / 20 / 20
+            - generic [ref=f1e175]: Para quem tem custos fixos mais pesados
+          - button "70 / 20 / 10 Primeiro passo para quem está apertado" [ref=f1e176]:
+            - generic [ref=f1e177]: 70 / 20 / 10
+            - generic [ref=f1e178]: Primeiro passo para quem está apertado
+          - button "40 / 30 / 30 Agressivo em investimentos" [ref=f1e179]:
+            - generic [ref=f1e180]: 40 / 30 / 30
+            - generic [ref=f1e181]: Agressivo em investimentos
+          - button "Personalizado Você define as proporções" [ref=f1e182]:
+            - generic [ref=f1e183]: Personalizado
+            - generic [ref=f1e184]: Você define as proporções
+      - generic [ref=f1e185]:
+        - button [expanded] [ref=f1e186]:
+          - heading "Desejos" [level=2] [ref=f1e190]
+        - generic [ref=f1e194]:
+          - generic [ref=f1e195]:
+            - button "+ Streaming" [ref=f1e196]
+            - button "+ Comer fora" [ref=f1e197]
+            - button "+ Delivery" [ref=f1e198]
+            - button "+ Viagens" [ref=f1e199]
+            - button "+ Roupas" [ref=f1e200]
+            - button "+ Jogos / Hobbies" [ref=f1e201]
+            - button "+ Cinema / Shows" [ref=f1e202]
+            - button "+ Presentes" [ref=f1e203]
+          - generic [ref=f1e205]:
+            - 'textbox "Novo desejo (ex: Netflix, viagem...)" [ref=f1e206]'
+            - generic [ref=f1e208]:
+              - generic: R$
+              - textbox "0,00" [ref=f1e209]
+            - button "Adicionar" [disabled] [ref=f1e210]
+      - generic [ref=f1e212]:
+        - button [expanded] [ref=f1e213]:
+          - heading "Plano de aportes" [level=2] [ref=f1e219]
+        - generic [ref=f1e223]:
+          - generic [ref=f1e224]:
+            - button "+ Ações Internacionais" [ref=f1e225]
+            - button "+ ETFs" [ref=f1e226]
+          - generic [ref=f1e227]:
+            - textbox "Outra classe de ativo..." [ref=f1e228]
+            - button [disabled] [ref=f1e229]
+          - generic [ref=f1e231]:
+            - generic [ref=f1e232]:
+              - generic [ref=f1e233]:
+                - generic [ref=f1e234]:
+                  - generic [ref=f1e236]: Renda Fixa
+                  - button "Remover Renda Fixa" [ref=f1e237]
+                - generic [ref=f1e241]:
+                  - generic [ref=f1e242]:
+                    - spinbutton "Percentual de Renda Fixa" [ref=f1e243]: "50"
+                    - generic: "%"
+                  - generic [ref=f1e244]: R$ 0,00
+              - slider "Ajustar Renda Fixa" [ref=f1e245] [cursor=pointer]: "50"
+            - generic [ref=f1e246]:
+              - generic [ref=f1e247]:
+                - generic [ref=f1e248]:
+                  - generic [ref=f1e250]: Ações
+                  - button "Remover Ações" [ref=f1e251]
+                - generic [ref=f1e255]:
+                  - generic [ref=f1e256]:
+                    - spinbutton "Percentual de Ações" [ref=f1e257]: "30"
+                    - generic: "%"
+                  - generic [ref=f1e258]: R$ 0,00
+              - slider "Ajustar Ações" [ref=f1e259] [cursor=pointer]: "30"
+            - generic [ref=f1e260]:
+              - generic [ref=f1e261]:
+                - generic [ref=f1e262]:
+                  - generic [ref=f1e264]: Fundos Imobiliários
+                  - button "Remover Fundos Imobiliários" [ref=f1e265]
+                - generic [ref=f1e269]:
+                  - generic [ref=f1e270]:
+                    - spinbutton "Percentual de Fundos Imobiliários" [ref=f1e271]: "10"
+                    - generic: "%"
+                  - generic [ref=f1e272]: R$ 0,00
+              - slider "Ajustar Fundos Imobiliários" [ref=f1e273] [cursor=pointer]: "10"
+            - generic [ref=f1e274]:
+              - generic [ref=f1e275]:
+                - generic [ref=f1e276]:
+                  - generic [ref=f1e278]: Criptomoedas
+                  - button "Remover Criptomoedas" [ref=f1e279]
+                - generic [ref=f1e283]:
+                  - generic [ref=f1e284]:
+                    - spinbutton "Percentual de Criptomoedas" [ref=f1e285]: "10"
+                    - generic: "%"
+                  - generic [ref=f1e286]: R$ 0,00
+              - slider "Ajustar Criptomoedas" [ref=f1e287] [cursor=pointer]: "10"
+            - generic [ref=f1e288]:
+              - generic [ref=f1e289]: Distribuído
+              - generic [ref=f1e290]: 100%
+  - contentinfo [ref=f1e73]:
+    - generic [ref=f1e74]: Dados salvos apenas neste navegador (1 cenário). Exporte um backup para guardar uma cópia. Aperte ? para ver os atalhos.

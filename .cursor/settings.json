@@ -1,0 +1,10 @@
+{
+  "plugins": {
+    "playwright": {
+      "enabled": true
+    },
+    "browser-use": {
+      "enabled": true
+    }
+  }
+}
