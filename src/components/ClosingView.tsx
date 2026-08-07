@@ -2,6 +2,9 @@ import { useState, type ReactNode } from 'react'
 import {
   ArrowRight,
   CalendarCheck,
+  CalendarRange,
+  ChevronLeft,
+  ChevronRight,
   CreditCard,
   Landmark,
   PiggyBank,
@@ -19,6 +22,7 @@ import {
 import { formatCurrency, formatMonthLong, inputClass } from '../lib/format'
 import { useFinancasStore } from '../context/financasStore'
 import { isWantIncludedInCardPlan } from '../lib/scenario'
+import { cycleSalaryMonth, cycleSpendingMonth } from '../lib/activeCycle'
 
 function ComparisonRow({
   label,
@@ -142,6 +146,7 @@ function StepChip({
 
 export function ClosingView() {
   const {
+    activeCycle,
     history,
     metrics,
     cashFlow,
@@ -159,8 +164,10 @@ export function ClosingView() {
   const actualCostsOnAccount = accountCostRows.reduce((sum, row) => sum + row.effective, 0)
 
   const plannedOnCard = cashFlow.plannedOnCard
-  const invoiceActual = cashFlow.invoiceToPay
+  const invoiceActual = cards.summary.currentPersonalTotal
   const cardDelta = plannedOnCard - invoiceActual
+  const salaryMonth = cycleSalaryMonth(activeCycle.month)
+  const spendingMonth = cycleSpendingMonth(activeCycle.month)
 
   const accountWantItems = scenarios.activeScenario.wants
     .filter(
@@ -184,25 +191,73 @@ export function ClosingView() {
     <div className="space-y-4">
       <Panel>
         <PanelHeader
+          title={`Ciclo ativo: ${formatMonthLong(activeCycle.month)}`}
+          icon={<CalendarRange size={16} />}
+          description={
+            <>
+              Salário do fim de {formatMonthLong(salaryMonth)} financia este ciclo. Cartão = gastos
+              de {formatMonthLong(spendingMonth)}. Desejos = viver em{' '}
+              {formatMonthLong(activeCycle.month)}. O calendário não muda o ciclo — só você.
+            </>
+          }
+          actions={
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => activeCycle.shiftCycle(-1)}
+                className="rounded-md border border-dark-border p-1.5 text-dark-text-muted transition-colors hover:text-dark-text"
+                aria-label="Ciclo anterior"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={() => activeCycle.shiftCycle(1)}
+                className="rounded-md border border-dark-border p-1.5 text-dark-text-muted transition-colors hover:text-dark-text"
+                aria-label="Próximo ciclo"
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          }
+        />
+        <div className="mt-3 grid gap-2 text-xs leading-relaxed text-dark-text-muted sm:grid-cols-3">
+          <div className="rounded-lg bg-dark-surface/50 px-3 py-2">
+            <span className="block font-medium text-dark-text">Salário</span>
+            ~dia {activeCycle.cycle.salaryHintDay} de {formatMonthLong(salaryMonth)}
+          </div>
+          <div className="rounded-lg bg-dark-surface/50 px-3 py-2">
+            <span className="block font-medium text-dark-text">Cartão a pagar</span>
+            gastos de {formatMonthLong(spendingMonth)} · vence ~dia{' '}
+            {activeCycle.cycle.cardDueHintDay}
+          </div>
+          <div className="rounded-lg bg-dark-surface/50 px-3 py-2">
+            <span className="block font-medium text-dark-text">Desejos e aporte</span>
+            verba para viver {formatMonthLong(activeCycle.month)}
+          </div>
+        </div>
+      </Panel>
+
+      <Panel>
+        <PanelHeader
           title={`Fechamento de ${formatMonthLong(financialCycle.cashMonth)}`}
           icon={<CalendarCheck size={16} />}
           description={
             <>
-              Depois de receber o salário, pagar a fatura de{' '}
-              {formatMonthLong(financialCycle.spendingMonth)}, as contas e o aporte — e reservar a
-              próxima fatura — sobra o que você pode alocar em desejos ou investimentos sem se
-              complicar.
+              Depois de receber o salário, pagar a fatura de {formatMonthLong(spendingMonth)}, as
+              contas e o aporte — e reservar a próxima fatura — sobra o que você pode alocar em
+              desejos ou investimentos. Fechar avança o ciclo para o próximo mês.
             </>
           }
           actions={
             isCurrentMonthClosed ? (
               <ConfirmButton onConfirm={handleClose} confirmLabel="Substituir" tone="primary">
-                Refechar o mês
+                Refechar o ciclo
               </ConfirmButton>
             ) : (
               <PrimaryButton onClick={handleClose}>
                 <CalendarCheck size={15} />
-                Fechar o mês
+                Fechar o ciclo
               </PrimaryButton>
             )
           }
@@ -232,7 +287,7 @@ export function ClosingView() {
             <p className="mt-4 text-xs leading-relaxed text-dark-text-muted">
               {shortfall > 0.005
                 ? `Faltam ${formatCurrency(shortfall)} para cobrir fatura, contas, aporte e a reserva da próxima fatura. Corte desejos ou o aporte antes de assumir mais gastos.`
-                : `Pode ir para Qualidade de vida, Viagens, reforço de aporte ou qualquer coisa que não seja custo. Não precisa “queimar” o envelope planejado se o realizado veio menor.`}
+                : `Pode ir para Qualidade de vida, Viagens, reforço de aporte ou qualquer coisa que não seja custo. Se a fatura veio menor que o plano, essa diferença libera verba neste ciclo.`}
             </p>
           </div>
 
@@ -254,7 +309,7 @@ export function ClosingView() {
             />
             <StepChip
               icon={<PiggyBank size={13} />}
-              label="Aporte + reserva"
+              label="Aporte + próxima fatura"
               value={formatCurrency(
                 financialCycle.directInvestment + financialCycle.reservedForNextInvoice,
               )}
@@ -297,15 +352,15 @@ export function ClosingView() {
         <input
           value={note}
           onChange={(event) => setNote(event.target.value)}
-          placeholder="Nota do mês (opcional) — ex.: 13º salário, mudança de aluguel"
+          placeholder="Nota do ciclo (opcional) — ex.: 13º salário, mudança de aluguel"
           className={`${inputClass} mt-4`}
-          aria-label="Nota do mês"
+          aria-label="Nota do ciclo"
         />
 
         {isCurrentMonthClosed && (
           <p className="mt-2 text-xs text-dark-text-muted">
             {formatMonthLong(currentMonth)} já está fechado. Refechar substitui o registro pelos
-            números atuais.
+            números atuais, sem avançar o ciclo de novo.
           </p>
         )}
       </Panel>
@@ -314,7 +369,7 @@ export function ClosingView() {
         <PanelHeader
           title="Plano × realizado"
           icon={<ArrowRight size={16} />}
-          description="Onde o mês saiu diferente do planejado — positivo no delta libera dinheiro; negativo consome a folga."
+          description="Onde o ciclo saiu diferente do planejado — positivo no delta libera dinheiro; negativo consome a folga."
         />
 
         <div className="mt-3">
@@ -329,7 +384,7 @@ export function ClosingView() {
             label="Cartão"
             planned={plannedOnCard}
             actual={invoiceActual}
-            hint={`Fatura pessoal de gastos de ${formatMonthLong(financialCycle.spendingMonth)}`}
+            hint={`Fatura pessoal de gastos de ${formatMonthLong(spendingMonth)} — conta neste ciclo`}
           />
           <ComparisonRow
             label="Custos em conta"
@@ -345,7 +400,7 @@ export function ClosingView() {
             label="Aporte direto"
             planned={metrics.directInvestmentTarget}
             actual={metrics.directInvestmentTarget}
-            hint="meta do mês (sem realizado separado ainda)"
+            hint="meta do ciclo (sem realizado separado ainda)"
             deltaHint="meta"
           />
           <ComparisonRow
@@ -368,7 +423,7 @@ export function ClosingView() {
           {financialCycle.extraExpense > 0.005 && (
             <> − saídas do ano {formatCurrency(financialCycle.extraExpense)}</>
           )}{' '}
-          − reserva {formatCurrency(financialCycle.reservedForNextInvoice)} ={' '}
+          − reserva próxima {formatCurrency(financialCycle.reservedForNextInvoice)} ={' '}
           <strong className={shortfall > 0.005 ? 'text-rose-300' : 'text-primary-300'}>
             {formatCurrency(available)}
           </strong>
@@ -377,17 +432,6 @@ export function ClosingView() {
       </Panel>
 
       <ActualsPanel />
-
-      {(cards.summary.currentPersonalTotal > 0 || metrics.plannedOnCard > 0) && (
-        <p className="text-center text-xs text-dark-text-muted">
-          Limite pessoal do cartão:{' '}
-          {cards.settings.personalSpendingLimit > 0
-            ? formatCurrency(cards.settings.personalSpendingLimit)
-            : 'não definido'}
-          {' · '}
-          fatura atual {formatCurrency(cards.summary.currentPersonalTotal)}
-        </p>
-      )}
     </div>
   )
 }

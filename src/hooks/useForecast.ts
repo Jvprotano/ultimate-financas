@@ -14,7 +14,7 @@ const EVENTS_STORAGE_KEY = 'uf_expected_events_v1'
 const ASSUMPTIONS_STORAGE_KEY = 'uf_forecast_assumptions_v1'
 
 /** Eventos esperados (13º, bônus, IPVA…) e as premissas da projeção. */
-export function useForecast() {
+export function useForecast(cycleMonth = monthKey()) {
   const [storedEvents, setEvents] = useLocalStorage<ExpectedEvent[]>(EVENTS_STORAGE_KEY, [])
   const events = useMemo(
     () =>
@@ -67,7 +67,7 @@ export function useForecast() {
     [setStoredAssumptions],
   )
 
-  const currentMonth = monthKey()
+  const currentMonth = cycleMonth
   const monthOccurrences = useMemo(
     () => occurrencesInMonth(events, currentMonth),
     [events, currentMonth],

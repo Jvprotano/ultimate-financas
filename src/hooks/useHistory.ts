@@ -11,7 +11,7 @@ import { monthKey, nowIso, uid } from '../lib/shared'
 
 const HISTORY_STORAGE_KEY = 'uf_history_v1'
 
-export function useHistory() {
+export function useHistory(cycleMonth = monthKey()) {
   const [stored, setStored] = useLocalStorage<MonthlySnapshot[]>(HISTORY_STORAGE_KEY, [])
   const snapshots = useMemo(
     () => (Array.isArray(stored) ? stored.map(normalizeSnapshot) : []),
@@ -75,7 +75,7 @@ export function useHistory() {
     [setStored],
   )
 
-  const currentMonth = monthKey()
+  const currentMonth = cycleMonth
   const isCurrentMonthClosed = snapshots.some((item) => item.month === currentMonth)
   /** Custo médio real dos últimos meses fechados — base da reserva. */
   const averageCosts = useMemo(() => averageMonthlyCosts(points), [points])

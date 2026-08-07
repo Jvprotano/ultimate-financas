@@ -70,7 +70,7 @@ export function CashFlowPanel() {
     ? invoices
         .map((card) => `${card.name} dia ${card.dueDay}${card.isClosed ? ' (fechada)' : ''}`)
         .join(' · ')
-    : `vence em ${cards.settings.paymentDate} — é o gasto do ciclo que fechou`
+    : `vence ~${cards.settings.paymentDate} · gastos de ${formatMonthLong(financialCycle.spendingMonth)}`
   const nextInvoiceReserveHint =
     financialCycle.plannedNextInvoice > financialCycle.nextInvoicePersonal
       ? `plano do cartão de ${formatMonthLong(financialCycle.nextSpendingMonth)}; já lançado: ${formatCurrency(financialCycle.nextInvoicePersonal)}`
@@ -125,7 +125,7 @@ export function CashFlowPanel() {
       <PanelHeader
         title={`Ciclo financeiro de ${formatMonthLong(financialCycle.cashMonth)}`}
         icon={<Wallet size={16} />}
-        description={`O dinheiro recebido no fim de ${formatMonthLong(financialCycle.spendingMonth)} financia ${formatMonthLong(financialCycle.cashMonth)}. A fatura abaixo é de gastos de ${formatMonthLong(financialCycle.spendingMonth)}.`}
+        description={`Salário do fim de ${formatMonthLong(financialCycle.spendingMonth)} financia o ciclo ${formatMonthLong(financialCycle.cashMonth)}. A fatura abaixo é de gastos de ${formatMonthLong(financialCycle.spendingMonth)} e conta neste ciclo.`}
         actions={
           <span className="text-right">
             <span className="block text-[11px] uppercase tracking-wider text-dark-text-muted">
@@ -163,7 +163,7 @@ export function CashFlowPanel() {
           />
         )}
         <FlowRow
-          label={invoices.length > 1 ? 'Faturas anteriores' : 'Fatura anterior'}
+          label="Fatura do ciclo"
           value={invoiceToPay}
           direction="out"
           hint={`${invoiceHint} · gastos de ${formatMonthLong(financialCycle.spendingMonth)}`}
@@ -282,16 +282,16 @@ export function CashFlowPanel() {
         </p>
         <div className="mt-3 grid gap-2 text-xs leading-relaxed text-dark-text-muted md:grid-cols-2">
           <div className="rounded-lg bg-dark-card px-3 py-2">
-            <span className="block font-medium text-dark-text">1. Pague o que vence agora</span>
+            <span className="block font-medium text-dark-text">1. Pague as obrigações do ciclo</span>
             <span>
-              {formatCurrency(dueNow)} em fatura, contas e saídas de{' '}
-              {formatMonthLong(financialCycle.cashMonth)}. A fatura veio de gastos de{' '}
-              {formatMonthLong(financialCycle.spendingMonth)}, mas o dinheiro sai neste ciclo.
+              {formatCurrency(dueNow)} em fatura, contas e saídas do ciclo{' '}
+              {formatMonthLong(financialCycle.cashMonth)}. A fatura é de gastos de{' '}
+              {formatMonthLong(financialCycle.spendingMonth)} e conta neste ciclo.
             </span>
           </div>
           <div className="rounded-lg bg-dark-card px-3 py-2">
             <span className="block font-medium text-dark-text">
-              2. Preserve a verba do mês
+              2. Preserve a verba do ciclo
             </span>
             <span>
               {formatCurrency(wantsOnAccount)} está planejado fora do cartão para desejos como
@@ -303,8 +303,8 @@ export function CashFlowPanel() {
               3. Reserve a próxima fatura
             </span>
             <span>
-              Separe {formatCurrency(financialCycle.reservedForNextInvoice)} para o cartão que será
-              pago no próximo ciclo. Se a fatura atual veio maior, ela reduz esta folga.
+              Separe {formatCurrency(financialCycle.reservedForNextInvoice)} para o cartão do
+              próximo ciclo. Se a fatura atual veio maior que o plano, ela reduz a folga de desejos.
             </span>
           </div>
           <div

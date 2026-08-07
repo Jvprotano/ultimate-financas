@@ -293,9 +293,9 @@ export function Dashboard({
             )}
           </p>
           <p className="mt-2 border-t border-dark-border-subtle pt-2 text-xs leading-relaxed text-dark-text-muted">
-            A fatura paga agora é de gastos de {formatMonthLong(financialCycle.spendingMonth)}, mas
-            pertence ao caixa de {formatMonthLong(financialCycle.cashMonth)}. Esse valor pode ir
-            para desejos (Viagens, Qualidade de vida) ou investimentos — sem se complicar.
+            A fatura deste ciclo é de gastos de {formatMonthLong(financialCycle.spendingMonth)}.
+            Desejos e aporte são a verba para viver {formatMonthLong(financialCycle.cashMonth)}. Se
+            o cartão veio maior que o plano, a folga de desejos deste ciclo diminui.
           </p>
         </div>
 

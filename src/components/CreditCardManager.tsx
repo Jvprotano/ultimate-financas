@@ -29,7 +29,7 @@ import {
   StatTile,
 } from './ui'
 import { formatCurrency, formatMonthLong, inputClass } from '../lib/format'
-import { addMonths, monthsBetween, normalizeText } from '../lib/shared'
+import { addMonths, normalizeText } from '../lib/shared'
 import {
   buildRemainingAmount,
   parseInstallments,
@@ -111,8 +111,10 @@ export function CreditCardManager() {
   const { financialCycle } = useFinancasStore()
   const currentDueMonth = settings.currentDueMonth ?? financialCycle.cashMonth
   const nextDueMonth = addMonths(currentDueMonth, 1)
+  // O que está na fatura “atual” do cartão segue o ciclo do cartão (avança ao
+  // pagar). O ciclo ativo do app é outra fonte — só diz em qual caixa isso conta.
   const currentSpendingMonth = addMonths(currentDueMonth, -1)
-  const currentInvoiceDueNow = monthsBetween(financialCycle.cashMonth, currentDueMonth) <= 0
+  const nextSpendingMonth = addMonths(nextDueMonth, -1)
 
   const [view, setView] = useState<View>('current')
 
@@ -435,7 +437,7 @@ export function CreditCardManager() {
       <Panel>
         <PanelHeader
           title="Seu teto de gasto"
-          description={`Esta fatura reúne gastos de ${formatMonthLong(currentSpendingMonth)} e é paga em ${formatMonthLong(currentDueMonth)}. A aba seguinte mostra o ciclo seguinte.`}
+          description={`Esta fatura reúne gastos de ${formatMonthLong(currentSpendingMonth)} e conta no caixa do ciclo ${formatMonthLong(financialCycle.cashMonth)} (vence ~${formatMonthLong(currentDueMonth)}). A aba seguinte é o cartão de ${formatMonthLong(nextSpendingMonth)}.`}
           className="mb-4"
         />
         <div className="grid gap-4 lg:grid-cols-2">
@@ -486,7 +488,7 @@ export function CreditCardManager() {
         {view === 'current' && (
           <PrimaryButton onClick={() => setShowPaySummary(true)}>
             <CheckCircle2 size={15} />
-            {currentInvoiceDueNow ? 'Pagar fatura' : 'Pagar antecipado'}
+            Pagar fatura
           </PrimaryButton>
         )}
         {view === 'next' && (
@@ -502,7 +504,7 @@ export function CreditCardManager() {
           <PanelHeader
             title="Resumo antes de pagar"
             icon={<CheckCircle2 size={16} />}
-            description={`Esta é a fatura de gastos de ${formatMonthLong(currentSpendingMonth)}, com vencimento em ${formatMonthLong(currentDueMonth)}. ${currentInvoiceDueNow ? `Pagá-la movimenta o caixa de ${formatMonthLong(financialCycle.cashMonth)}.` : `Como ela vence depois de ${formatMonthLong(financialCycle.cashMonth)}, pagar agora é antecipação.`} Isso não fecha o mês do Histórico.`}
+            description={`Fatura de gastos de ${formatMonthLong(currentSpendingMonth)}, com vencimento ~${formatMonthLong(currentDueMonth)}. Sai do caixa do ciclo ativo ${formatMonthLong(financialCycle.cashMonth)}. Pagar a fatura não fecha o ciclo — feche em Fechamento.`}
           />
           <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
             <StatTile label="Total da fatura" value={formatCurrency(summary.currentTotal)} />

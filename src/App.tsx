@@ -31,6 +31,7 @@ import { InvestmentsManager } from './components/InvestmentsManager'
 import { ForecastView } from './components/ForecastView'
 import { HistoryView } from './components/HistoryView'
 import { ScenarioSwitcher } from './components/ScenarioSwitcher'
+import { CycleSwitcher } from './components/CycleSwitcher'
 import { formatDate } from './lib/format'
 import {
   clearAppStorage,
@@ -332,6 +333,9 @@ function AppShell() {
           <TabBar activeView={activeView} setActiveView={setActiveView} className="hidden md:grid" />
 
           <div className="flex items-center gap-2">
+            <div className="hidden sm:block">
+              <CycleSwitcher />
+            </div>
             <ScenarioSwitcher />
             <AppMenu
               onExport={downloadBackup}
@@ -352,7 +356,12 @@ function AppShell() {
       </header>
 
       <main className="mx-auto max-w-6xl space-y-4 px-4 py-5 sm:px-6">
-        <TabBar activeView={activeView} setActiveView={setActiveView} className="md:hidden" />
+        <div className="flex items-center justify-between gap-3 md:hidden">
+          <TabBar activeView={activeView} setActiveView={setActiveView} className="flex-1" />
+        </div>
+        <div className="sm:hidden">
+          <CycleSwitcher />
+        </div>
 
         {activeView === 'planning' && (
           <MasonryColumns>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react'
+import { useActiveCycle } from './useActiveCycle'
 import { useScenarios } from './useScenarios'
 import { useCreditCards } from './useCreditCards'
 import { useAssets } from './useAssets'
@@ -15,7 +16,6 @@ import { projectNetWorth } from '../lib/forecast'
 import { maybeCreateAutoBackup } from '../lib/backup'
 import type { BudgetArea, CostCategory, ScenarioSummary } from '../types'
 import { BUDGET_AREAS } from '../types/constants'
-import { monthsBetween } from '../lib/shared'
 
 export type { ScenarioMetrics } from '../lib/scenario'
 
@@ -33,6 +33,7 @@ export type { ScenarioMetrics } from '../lib/scenario'
  * o resumo dos bens, que precisa do saldo devedor de cada um, é montado aqui.
  */
 export function useFinancas() {
+  const activeCycle = useActiveCycle()
   const scenarios = useScenarios()
   const cards = useCreditCards()
   const assetsState = useAssets()
@@ -53,9 +54,9 @@ export function useFinancas() {
     securedLiabilities: debts.summary.securedBalance,
     physicalAssets: assets.summary.totalValue,
   })
-  const history = useHistory()
-  const forecast = useForecast()
-  const actuals = useActuals(scenarios.activeScenario.costs, history.currentMonth)
+  const history = useHistory(activeCycle.month)
+  const forecast = useForecast(activeCycle.month)
+  const actuals = useActuals(scenarios.activeScenario.costs, activeCycle.month)
 
   useEffect(() => {
     maybeCreateAutoBackup()
@@ -89,66 +90,46 @@ export function useFinancas() {
   )
 
   /** O mês visto pelo extrato: o que entra, o que vence e o que sobra. */
-  const cashFlow = useMemo(
-    () => {
-      const currentCardInvoiceDueNow =
-        monthsBetween(forecast.currentMonth, cards.settings.currentDueMonth ?? forecast.currentMonth) <=
-        0
-      const invoiceToPay = currentCardInvoiceDueNow ? cards.summary.currentPersonalTotal : 0
-      // Contas/boleto usam o realizado quando informado — é o que sai de fato.
-      const costsOnAccount = actuals.summary.rows
-        .filter((row) => row.cost.paidWith !== 'card')
-        .reduce((sum, row) => sum + row.effective, 0)
+  const cashFlow = useMemo(() => {
+    // No ciclo ativo a fatura atual sempre conta — o calendário não decide.
+    const invoiceToPay = cards.summary.currentPersonalTotal
+    // Contas/boleto usam o realizado quando informado — é o que sai de fato.
+    const costsOnAccount = actuals.summary.rows
+      .filter((row) => row.cost.paidWith !== 'card')
+      .reduce((sum, row) => sum + row.effective, 0)
 
-      return calculateCashFlow({
-        paycheck: metrics.paycheckInAccount,
-        costsOnAccount,
-        costsOnCard: metrics.costsOnCard,
-        wantsOnAccount: metrics.wantsOnAccount,
-        wantsOnCard: metrics.wantsOnCard,
-        directInvestment: metrics.directInvestmentTarget,
-        invoiceToPay,
-        occurrences: forecast.monthOccurrences,
-      })
-    },
-    [
-      metrics,
-      actuals.summary.rows,
-      cards.settings.currentDueMonth,
-      cards.summary.currentPersonalTotal,
-      forecast.currentMonth,
-      forecast.monthOccurrences,
-    ],
-  )
+    return calculateCashFlow({
+      paycheck: metrics.paycheckInAccount,
+      costsOnAccount,
+      costsOnCard: metrics.costsOnCard,
+      wantsOnAccount: metrics.wantsOnAccount,
+      wantsOnCard: metrics.wantsOnCard,
+      directInvestment: metrics.directInvestmentTarget,
+      invoiceToPay,
+      occurrences: forecast.monthOccurrences,
+    })
+  }, [
+    metrics,
+    actuals.summary.rows,
+    cards.summary.currentPersonalTotal,
+    forecast.monthOccurrences,
+  ])
 
   const financialCycle = useMemo(
-    () => {
-      const currentCardInvoiceDueNow =
-        monthsBetween(forecast.currentMonth, cards.settings.currentDueMonth ?? forecast.currentMonth) <=
-        0
-      const cardInvoiceToReserve = currentCardInvoiceDueNow
-        ? cards.summary.nextPersonalTotal
-        : cards.summary.currentPersonalTotal
-
-      return calculateFinancialCycle({
-        cashMonth: forecast.currentMonth,
+    () =>
+      calculateFinancialCycle({
+        cashMonth: activeCycle.month,
         income: cashFlow.totalIn,
         invoiceToPay: cashFlow.invoiceToPay,
         costsOnAccount: cashFlow.costsOnAccount,
         wantsOnAccount: cashFlow.wantsOnAccount,
         directInvestment: cashFlow.directInvestment,
         extraExpense: cashFlow.extraExpense,
-        nextInvoicePersonal: cardInvoiceToReserve,
+        // Próxima fatura = o que já está no ciclo "next" do cartão.
+        nextInvoicePersonal: cards.summary.nextPersonalTotal,
         plannedNextInvoice: cashFlow.plannedOnCard,
-      })
-    },
-    [
-      cards.settings.currentDueMonth,
-      cards.summary.currentPersonalTotal,
-      cards.summary.nextPersonalTotal,
-      cashFlow,
-      forecast.currentMonth,
-    ],
+      }),
+    [activeCycle.month, cards.summary.nextPersonalTotal, cashFlow],
   )
 
   // Aporte recorrente da projeção: o do plano, salvo se você fixar outro. A
@@ -193,7 +174,7 @@ export function useFinancas() {
   const projection = useMemo(
     () =>
       projectNetWorth({
-        startMonth: forecast.currentMonth,
+        startMonth: activeCycle.month,
         // Só o financeiro cresce por aporte e rendimento; o bem tem a curva dele.
         startAssets: investments.summary.financialAssets,
         monthlyContribution,
@@ -206,7 +187,7 @@ export function useFinancas() {
         reinvestFreedInstallments: forecast.assumptions.reinvestFreedInstallments,
       }),
     [
-      forecast.currentMonth,
+      activeCycle.month,
       forecast.assumptions.annualReturnPct,
       forecast.assumptions.inflationPct,
       forecast.assumptions.horizonMonths,
@@ -220,12 +201,16 @@ export function useFinancas() {
   )
 
   /**
-   * Congela o mês corrente (ou outro informado) com os números de agora. Os
-   * custos entram pelo realizado onde ele foi informado — é o que faz o custo
-   * médio do histórico ser um fato e não a média dos planos.
+   * Congela o ciclo ativo com os números de agora e avança para o próximo.
+   * Os custos entram pelo realizado onde ele foi informado — é o que faz o
+   * custo médio do histórico ser um fato e não a média dos planos.
    */
   const closeCurrentMonth = useCallback(
-    (month = history.currentMonth, note?: string) => {
+    (month = activeCycle.month, note?: string) => {
+      const shouldAdvance =
+        month === activeCycle.month &&
+        !history.snapshots.some((snapshot) => snapshot.month === month)
+
       const costsByCategory: Partial<Record<CostCategory, number>> = {}
       actuals.summary.byCategory.forEach((value, category) => {
         costsByCategory[category] = value
@@ -266,8 +251,14 @@ export function useFinancas() {
         cashLeftover: cashFlow.leftover,
         note,
       })
+
+      // Só avança na primeira vez que o ciclo ativo é fechado — refechar não pula mês.
+      if (shouldAdvance) {
+        activeCycle.advanceCycle()
+      }
     },
     [
+      activeCycle,
       activeScenario.id,
       activeScenario.name,
       actuals.summary,
@@ -282,6 +273,7 @@ export function useFinancas() {
   )
 
   return {
+    activeCycle,
     scenarios,
     cards,
     assets,
