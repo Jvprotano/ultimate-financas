@@ -26,6 +26,18 @@ export function personalCostValue(cost: CostItem): number {
   return Math.max(0, cost.value - shared)
 }
 
+export function isCardEnvelopeWant(want: WantItem): boolean {
+  if (want.paidWith === 'account') return false
+  const name = normalizeText(want.name)
+  return name === 'cartao' || name === 'cartao de credito' || name === 'cartoes'
+}
+
+export function isWantIncludedInCardPlan(want: WantItem, wants: WantItem[]): boolean {
+  if (want.paidWith === 'account' || isCardEnvelopeWant(want)) return false
+  if (!wants.some(isCardEnvelopeWant)) return false
+  return want.includedInCardPlan !== false
+}
+
 function normalizeCost(raw: Partial<CostItem> | undefined): CostItem {
   const value = Math.max(0, finiteNumber(raw?.value))
   return {
@@ -64,6 +76,12 @@ export function normalizeScenario(scenario: FinanceScenario): FinanceScenario {
           plannedAmount: Math.max(0, finiteNumber(want.plannedAmount)),
           // Desejo é o caixa do cartão: comer fora, viagem, assinatura.
           paidWith: want.paidWith === 'account' ? ('account' as const) : ('card' as const),
+          includedInCardPlan:
+            want.includedInCardPlan === true
+              ? true
+              : want.includedInCardPlan === false
+                ? false
+                : undefined,
         }))
       : [],
     deductions: Array.isArray(scenario.deductions)
@@ -320,8 +338,12 @@ export function calculateScenario(
     investimentos: (availableForBudget * selectedModel.investimentos) / 100,
   }
 
-  const totalWantsAmount = state.wants.reduce((sum, w) => sum + w.plannedAmount, 0)
-  const wantsOnCard = state.wants
+  const standaloneWants = state.wants.filter((w) => !isWantIncludedInCardPlan(w, state.wants))
+  const cardIncludedWantsAmount = state.wants
+    .filter((w) => isWantIncludedInCardPlan(w, state.wants))
+    .reduce((sum, w) => sum + w.plannedAmount, 0)
+  const totalWantsAmount = standaloneWants.reduce((sum, w) => sum + w.plannedAmount, 0)
+  const wantsOnCard = standaloneWants
     .filter((w) => w.paidWith !== 'account')
     .reduce((sum, w) => sum + w.plannedAmount, 0)
   const wantsOnAccount = totalWantsAmount - wantsOnCard
@@ -392,6 +414,7 @@ export function calculateScenario(
     costsOnAccount,
     wantsOnCard,
     wantsOnAccount,
+    cardIncludedWantsAmount,
     plannedOnCard,
     totalDeductions,
     investmentDeductions,

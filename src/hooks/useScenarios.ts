@@ -232,7 +232,26 @@ export function useScenarios() {
     (id: string, paidWith: PaymentMethod) => {
       updateActiveScenario((scenario) => ({
         ...scenario,
-        wants: scenario.wants.map((w) => (w.id === id ? { ...w, paidWith } : w)),
+        wants: scenario.wants.map((w) =>
+          w.id === id
+            ? {
+                ...w,
+                paidWith,
+                includedInCardPlan:
+                  paidWith === 'account' ? false : w.includedInCardPlan,
+              }
+            : w,
+        ),
+      }))
+    },
+    [updateActiveScenario],
+  )
+
+  const setWantIncludedInCardPlan = useCallback(
+    (id: string, includedInCardPlan: boolean) => {
+      updateActiveScenario((scenario) => ({
+        ...scenario,
+        wants: scenario.wants.map((w) => (w.id === id ? { ...w, includedInCardPlan } : w)),
       }))
     },
     [updateActiveScenario],
@@ -379,6 +398,7 @@ export function useScenarios() {
     removeWant,
     updateWantAmount,
     setWantPaidWith,
+    setWantIncludedInCardPlan,
     deductions: activeScenario.deductions,
     addDeduction,
     removeDeduction,

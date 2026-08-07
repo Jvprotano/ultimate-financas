@@ -59,6 +59,11 @@ export interface WantItem {
   plannedAmount: number
   /** Desejos costumam ser cartão — é o padrão de quem planeja pelo limite. */
   paidWith?: PaymentMethod
+  /**
+   * Quando há um desejo agregador "Cartão", este item vira só a composição dele
+   * (assinatura, recorrência, parcela conhecida) e não soma de novo no plano.
+   */
+  includedInCardPlan?: boolean
 }
 
 export type DeductionType =

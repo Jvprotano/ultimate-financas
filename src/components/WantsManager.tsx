@@ -5,6 +5,7 @@ import { CurrencyInput } from './CurrencyInput'
 import { HeaderMetric } from './HeaderMetric'
 import { MeterWithMarker, PrimaryButton, SuggestionChip } from './ui'
 import { formatCurrency, inputClass } from '../lib/format'
+import { isCardEnvelopeWant, isWantIncludedInCardPlan } from '../lib/scenario'
 import { useCardsStore, useMetrics, useScenarioStore } from '../context/financasStore'
 import { BUDGET_AREA_COLORS } from '../types/constants'
 
@@ -20,9 +21,23 @@ const SUGGESTIONS = [
 ]
 
 export function WantsManager() {
-  const { wants, addWant, removeWant, updateWantAmount, setWantPaidWith } = useScenarioStore()
-  const { totalWantsAmount, budgetAllocation, availableForBudget, selectedModel, wantsOnCard } =
-    useMetrics()
+  const {
+    wants,
+    addWant,
+    removeWant,
+    updateWantAmount,
+    setWantPaidWith,
+    setWantIncludedInCardPlan,
+  } = useScenarioStore()
+  const {
+    totalWantsAmount,
+    budgetAllocation,
+    availableForBudget,
+    selectedModel,
+    wantsOnCard,
+    wantsOnAccount,
+    cardIncludedWantsAmount,
+  } = useMetrics()
   const { summary } = useCardsStore()
 
   const [newName, setNewName] = useState('')
@@ -31,6 +46,9 @@ export function WantsManager() {
   const desejosTarget = budgetAllocation.desejos
   const remaining = desejosTarget - totalWantsAmount
   const realized = summary.personalByArea.desejos
+  const cardEnvelopeAmount = wants
+    .filter(isCardEnvelopeWant)
+    .reduce((sum, want) => sum + want.plannedAmount, 0)
 
   const handleAdd = () => {
     if (!newName.trim()) return
@@ -98,6 +116,24 @@ export function WantsManager() {
                 </p>
               )
             )}
+            {cardEnvelopeAmount > 0 && (
+              <div className="mt-3 grid gap-1.5 rounded-lg border border-dark-border-subtle bg-dark-surface/50 p-3 text-[11px] text-dark-text-muted sm:grid-cols-3">
+                <span>
+                  Fatura planejada:{' '}
+                  <strong className="text-dark-text">{formatCurrency(cardEnvelopeAmount)}</strong>
+                </span>
+                <span>
+                  Dentro do cartão:{' '}
+                  <strong className="text-dark-text">
+                    {formatCurrency(cardIncludedWantsAmount)}
+                  </strong>
+                </span>
+                <span>
+                  Fora do cartão:{' '}
+                  <strong className="text-dark-text">{formatCurrency(wantsOnAccount)}</strong>
+                </span>
+              </div>
+            )}
           </div>
         )}
 
@@ -129,51 +165,88 @@ export function WantsManager() {
 
         {wants.length > 0 && (
           <ul className="space-y-1.5">
-            {wants.map((want) => (
-              <li
-                key={want.id}
-                className="group flex items-center justify-between gap-3 rounded-lg bg-dark-surface px-3 py-2"
-              >
-                <span className="min-w-0 flex-1 truncate text-sm font-medium text-dark-text">
-                  {want.name}
-                </span>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setWantPaidWith(want.id, want.paidWith === 'account' ? 'card' : 'account')
-                    }
-                    className="rounded-md p-1.5 text-dark-text-muted transition-colors hover:text-dark-text"
-                    title={
-                      want.paidWith === 'account'
-                        ? 'Sai direto da conta — clique para marcar como cartão'
-                        : 'Passa no cartão — clique para marcar como débito em conta'
-                    }
-                    aria-label={`Forma de pagamento de ${want.name}`}
-                  >
-                    {want.paidWith === 'account' ? (
-                      <Landmark size={14} />
-                    ) : (
-                      <CreditCard size={14} className="text-dark-text-secondary" />
+            {wants.map((want) => {
+              const isEnvelope = isCardEnvelopeWant(want)
+              const isIncluded = isWantIncludedInCardPlan(want, wants)
+
+              return (
+                <li
+                  key={want.id}
+                  className={`group flex items-center justify-between gap-3 rounded-lg px-3 py-2 ${
+                    isIncluded
+                      ? 'ml-4 border-l-2 border-primary-500/40 bg-dark-surface/60'
+                      : 'bg-dark-surface'
+                  }`}
+                >
+                  <span className="min-w-0 flex-1 text-sm font-medium text-dark-text">
+                    <span className="block truncate">{want.name}</span>
+                    {isIncluded && (
+                      <span className="mt-0.5 block text-[11px] font-normal text-primary-300/80">
+                        incluído no Cartão — não soma de novo
+                      </span>
                     )}
-                  </button>
-                  <div className="w-32">
-                    <CurrencyInput
-                      value={want.plannedAmount}
-                      onChange={(next) => updateWantAmount(want.id, next)}
-                      className="!py-1.5"
-                    />
+                    {isEnvelope && cardIncludedWantsAmount > 0 && (
+                      <span className="mt-0.5 block text-[11px] font-normal text-dark-text-muted">
+                        inclui {formatCurrency(cardIncludedWantsAmount)} em assinaturas/detalhes
+                      </span>
+                    )}
+                  </span>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setWantPaidWith(want.id, want.paidWith === 'account' ? 'card' : 'account')
+                      }
+                      className="rounded-md p-1.5 text-dark-text-muted transition-colors hover:text-dark-text"
+                      title={
+                        want.paidWith === 'account'
+                          ? 'Sai direto da conta — clique para marcar como cartão'
+                          : 'Passa no cartão — clique para marcar como débito em conta'
+                      }
+                      aria-label={`Forma de pagamento de ${want.name}`}
+                    >
+                      {want.paidWith === 'account' ? (
+                        <Landmark size={14} />
+                      ) : (
+                        <CreditCard size={14} className="text-dark-text-secondary" />
+                      )}
+                    </button>
+                    {want.paidWith !== 'account' && !isEnvelope && cardEnvelopeAmount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setWantIncludedInCardPlan(want.id, !isIncluded)}
+                        className={`rounded-md px-2 py-1 text-[11px] transition-colors ${
+                          isIncluded
+                            ? 'bg-primary-500/10 text-primary-300 hover:bg-primary-500/15'
+                            : 'bg-dark-card text-dark-text-muted hover:text-dark-text'
+                        }`}
+                        title={
+                          isIncluded
+                            ? 'Clique para somar este item além do envelope Cartão'
+                            : 'Clique para tratar como detalhe já incluído no envelope Cartão'
+                        }
+                      >
+                        {isIncluded ? 'dentro' : 'fora'}
+                      </button>
+                    )}
+                    <div className="w-32">
+                      <CurrencyInput
+                        value={want.plannedAmount}
+                        onChange={(next) => updateWantAmount(want.id, next)}
+                        className="!py-1.5"
+                      />
+                    </div>
+                    <button
+                      onClick={() => removeWant(want.id)}
+                      className="rounded-md p-1.5 text-dark-text-muted opacity-0 transition-all hover:bg-rose-500/10 hover:text-rose-400 focus-visible:opacity-100 group-hover:opacity-100"
+                      aria-label={`Remover ${want.name}`}
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => removeWant(want.id)}
-                    className="rounded-md p-1.5 text-dark-text-muted opacity-0 transition-all hover:bg-rose-500/10 hover:text-rose-400 focus-visible:opacity-100 group-hover:opacity-100"
-                    aria-label={`Remover ${want.name}`}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </li>
-            ))}
+                </li>
+              )
+            })}
           </ul>
         )}
 

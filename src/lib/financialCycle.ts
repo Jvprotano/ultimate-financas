@@ -11,6 +11,8 @@ export interface FinancialCycleInput {
   extraExpense: number
   /** Compras já feitas no cartão, reservadas para a próxima fatura. */
   nextInvoicePersonal: number
+  /** Plano do cartão para o mês em formação, mesmo que nem tudo tenha sido lançado. */
+  plannedNextInvoice: number
 }
 
 export interface FinancialCycleSummary {
@@ -24,6 +26,7 @@ export interface FinancialCycleSummary {
   directInvestment: number
   extraExpense: number
   nextInvoicePersonal: number
+  plannedNextInvoice: number
   commitmentsDueNow: number
   cashAfterDue: number
   reservedForNextInvoice: number
@@ -40,7 +43,8 @@ export function calculateFinancialCycle(input: FinancialCycleInput): FinancialCy
     input.directInvestment +
     input.extraExpense
   const cashAfterDue = input.income - commitmentsDueNow
-  const availableAfterReservations = cashAfterDue - input.nextInvoicePersonal
+  const reservedForNextInvoice = Math.max(input.nextInvoicePersonal, input.plannedNextInvoice)
+  const availableAfterReservations = cashAfterDue - reservedForNextInvoice
 
   return {
     cashMonth: input.cashMonth,
@@ -53,9 +57,10 @@ export function calculateFinancialCycle(input: FinancialCycleInput): FinancialCy
     directInvestment: input.directInvestment,
     extraExpense: input.extraExpense,
     nextInvoicePersonal: input.nextInvoicePersonal,
+    plannedNextInvoice: input.plannedNextInvoice,
     commitmentsDueNow,
     cashAfterDue,
-    reservedForNextInvoice: input.nextInvoicePersonal,
+    reservedForNextInvoice,
     availableAfterReservations,
     safeToSpend: Math.max(0, availableAfterReservations),
     shortfall: Math.max(0, -availableAfterReservations),

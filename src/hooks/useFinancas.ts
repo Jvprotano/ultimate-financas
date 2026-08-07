@@ -114,6 +114,7 @@ export function useFinancas() {
         directInvestment: cashFlow.directInvestment,
         extraExpense: cashFlow.extraExpense,
         nextInvoicePersonal: cards.summary.nextPersonalTotal,
+        plannedNextInvoice: cashFlow.plannedOnCard,
       }),
     [cards.summary.nextPersonalTotal, cashFlow, forecast.currentMonth],
   )

@@ -70,6 +70,10 @@ export function CashFlowPanel() {
         .map((card) => `${card.name} dia ${card.dueDay}${card.isClosed ? ' (fechada)' : ''}`)
         .join(' · ')
     : `vence em ${cards.settings.paymentDate} — é o gasto do ciclo que fechou`
+  const nextInvoiceReserveHint =
+    financialCycle.plannedNextInvoice > financialCycle.nextInvoicePersonal
+      ? `plano do cartão de ${formatMonthLong(financialCycle.nextSpendingMonth)}; já lançado: ${formatCurrency(financialCycle.nextInvoicePersonal)}`
+      : `compras de ${formatMonthLong(financialCycle.nextSpendingMonth)} já feitas no cartão`
 
   const segments: Segment[] = [
     { id: 'invoice', label: 'Fatura', value: invoiceToPay, color: CHART_PALETTE.orange },
@@ -159,7 +163,7 @@ export function CashFlowPanel() {
             label="Reserva da próxima fatura"
             value={financialCycle.reservedForNextInvoice}
             direction="out"
-            hint={`compras de ${formatMonthLong(financialCycle.nextSpendingMonth)} já feitas no cartão`}
+            hint={nextInvoiceReserveHint}
           />
         )}
         {extraExpense > 0 && (

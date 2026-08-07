@@ -12,6 +12,7 @@ describe('calculateFinancialCycle', () => {
       directInvestment: 2_000,
       extraExpense: 0,
       nextInvoicePersonal: 1_500,
+      plannedNextInvoice: 1_500,
     })
 
     expect(cycle.spendingMonth).toBe('2026-07')
@@ -32,10 +33,28 @@ describe('calculateFinancialCycle', () => {
       directInvestment: 1_500,
       extraExpense: 0,
       nextInvoicePersonal: 1_000,
+      plannedNextInvoice: 1_000,
     })
 
     expect(cycle.availableAfterReservations).toBe(-500)
     expect(cycle.safeToSpend).toBe(0)
     expect(cycle.shortfall).toBe(500)
+  })
+
+  it('reserva a próxima fatura pelo plano quando o cartão ainda não foi todo lançado', () => {
+    const cycle = calculateFinancialCycle({
+      cashMonth: '2026-08',
+      income: 8_800,
+      invoiceToPay: 2_800,
+      costsOnAccount: 4_170,
+      wantsOnAccount: 700,
+      directInvestment: 1_494,
+      extraExpense: 0,
+      nextInvoicePersonal: 153,
+      plannedNextInvoice: 2_800,
+    })
+
+    expect(cycle.reservedForNextInvoice).toBe(2_800)
+    expect(cycle.shortfall).toBe(3_164)
   })
 })

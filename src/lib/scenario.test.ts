@@ -129,6 +129,47 @@ describe('calculateScenario — competência e caixa', () => {
     expect(metrics.wantsOnCard + metrics.wantsOnAccount).toBe(metrics.totalWantsAmount)
   })
 
+  it('trata desejos de cartão como detalhes quando existe envelope Cartão', () => {
+    const metrics = calculateScenario(
+      scenario({
+        wants: [
+          { id: 'card', name: 'Cartão', plannedAmount: 2_800, paidWith: 'card' },
+          { id: 'yt', name: 'YT Premium', plannedAmount: 54, paidWith: 'card' },
+          { id: 'gym', name: 'Academia', plannedAmount: 80, paidWith: 'card' },
+          { id: 'trip', name: 'Viagens', plannedAmount: 300, paidWith: 'account' },
+        ],
+      }),
+      fund,
+    )
+
+    expect(metrics.totalWantsAmount).toBe(3_100)
+    expect(metrics.wantsOnCard).toBe(2_800)
+    expect(metrics.wantsOnAccount).toBe(300)
+    expect(metrics.cardIncludedWantsAmount).toBe(134)
+  })
+
+  it('permite somar um item de cartão fora do envelope', () => {
+    const metrics = calculateScenario(
+      scenario({
+        wants: [
+          { id: 'card', name: 'Cartão', plannedAmount: 2_800, paidWith: 'card' },
+          {
+            id: 'extra',
+            name: 'Compra fora do limite',
+            plannedAmount: 200,
+            paidWith: 'card',
+            includedInCardPlan: false,
+          },
+        ],
+      }),
+      fund,
+    )
+
+    expect(metrics.totalWantsAmount).toBe(3_000)
+    expect(metrics.wantsOnCard).toBe(3_000)
+    expect(metrics.cardIncludedWantsAmount).toBe(0)
+  })
+
   it('o rateio com terceiros vale também para a parte no cartão', () => {
     const metrics = calculateScenario(
       scenario({
