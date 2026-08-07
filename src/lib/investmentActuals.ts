@@ -4,6 +4,7 @@ import type {
   InvestmentHolding,
   LedgerEntry,
 } from '../types'
+import { holdingPurpose } from './investments'
 import { normalizeText } from './shared'
 
 export interface MonthlyInvestmentActuals {
@@ -34,11 +35,8 @@ function monthlyLedgerNet(entries: LedgerEntry[], month: string) {
 /**
  * Quanto realmente foi colocado em patrimônio financeiro no mês, pelo caixa.
  *
- * - soma aportes e subtrai retiradas;
- * - transferências entre reserva/posição/meta tendem a se anular naturalmente;
- * - ignora saldo inicial e marcação a mercado;
- * - previdência descontada em folha é adicionada separadamente pelo cenário,
- *   porque não passa por estes livros-razão.
+ * A reserva agora usa o mesmo livro-razão das posições. O bucket antigo só é
+ * consultado como fallback durante a migração de backups anteriores.
  */
 export function calculateMonthlyInvestmentActuals(input: {
   month: string
@@ -46,8 +44,22 @@ export function calculateMonthlyInvestmentActuals(input: {
   holdings: InvestmentHolding[]
   goals: FinancialGoal[]
 }): MonthlyInvestmentActuals {
-  const reserveNet = monthlyLedgerNet(input.emergencyFund.transactions, input.month)
-  const holdingsNet = input.holdings.reduce(
+  const reserveHoldings = input.holdings.filter(
+    (holding) => holdingPurpose(holding) === 'emergency_fund',
+  )
+  const portfolioHoldings = input.holdings.filter(
+    (holding) => holdingPurpose(holding) === 'portfolio',
+  )
+
+  const reserveNet =
+    reserveHoldings.length > 0
+      ? reserveHoldings.reduce(
+          (sum, holding) => sum + monthlyLedgerNet(holding.transactions, input.month),
+          0,
+        )
+      : monthlyLedgerNet(input.emergencyFund.transactions, input.month)
+
+  const holdingsNet = portfolioHoldings.reduce(
     (sum, holding) => sum + monthlyLedgerNet(holding.transactions, input.month),
     0,
   )
