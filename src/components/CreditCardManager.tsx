@@ -185,9 +185,15 @@ export function CreditCardManager() {
   const newInstallmentTotalValue = newIsRecurring
     ? 0
     : Number(newInstallmentTotal) || parsedInstallmentsFromName.installmentTotal || 0
+  const isAddingInstallmentPurchase =
+    !newIsRecurring &&
+    (newInstallmentCurrent.trim() !== '' ||
+      newInstallmentTotal.trim() !== '' ||
+      Boolean(parsedInstallmentsFromName.installmentTotal))
+  const effectiveAmountInputMode = isAddingInstallmentPurchase ? amountInputMode : 'installment'
   const newPurchaseTotal =
     newInstallmentTotalValue > 1 ? amount * newInstallmentTotalValue : amount
-  const amountInputValue = amountInputMode === 'total' ? amountTotalInput : amount
+  const amountInputValue = effectiveAmountInputMode === 'total' ? amountTotalInput : amount
 
   const toggleSort = (key: SortKey) =>
     setSort((prev) => {
@@ -243,7 +249,7 @@ export function CreditCardManager() {
   }
 
   const handleAmountInputChange = (val: number) => {
-    if (amountInputMode === 'total') {
+    if (effectiveAmountInputMode === 'total') {
       setAmountTotalInput(val)
       handleAmountChange(newInstallmentTotalValue > 1 ? val / newInstallmentTotalValue : val)
       return
@@ -263,7 +269,7 @@ export function CreditCardManager() {
     const next = raw.replace(/\D/g, '')
     const nextTotal = Number(next) || parsedInstallmentsFromName.installmentTotal || 0
     setNewInstallmentTotal(next)
-    if (amountInputMode === 'total') {
+    if (effectiveAmountInputMode === 'total') {
       handleAmountChange(nextTotal > 1 ? amountTotalInput / nextTotal : amountTotalInput)
     } else {
       setAmountTotalInput(nextTotal > 1 ? amount * nextTotal : amount)
@@ -677,7 +683,7 @@ export function CreditCardManager() {
                         placeholder="1"
                         inputMode="numeric"
                         aria-label="Parcela atual"
-                        className="w-7 rounded-md border border-dark-border/60 bg-dark-input px-0.5 py-1.5 text-center text-xs tabular-nums outline-none transition-all placeholder:text-dark-text-muted focus:border-primary-500/60"
+                        className="w-8 rounded-md border border-dark-border/60 bg-dark-input px-1 py-1.5 text-center text-sm tabular-nums outline-none transition-all placeholder:text-dark-text-muted focus:border-primary-500/60"
                       />
                       <span className="text-xs text-dark-text-muted/60">/</span>
                       <input
@@ -686,7 +692,7 @@ export function CreditCardManager() {
                         placeholder="x"
                         inputMode="numeric"
                         aria-label="Total de parcelas"
-                        className="w-7 rounded-md border border-dark-border/60 bg-dark-input px-0.5 py-1.5 text-center text-xs tabular-nums outline-none transition-all placeholder:text-dark-text-muted focus:border-primary-500/60"
+                        className="w-8 rounded-md border border-dark-border/60 bg-dark-input px-1 py-1.5 text-center text-sm tabular-nums outline-none transition-all placeholder:text-dark-text-muted focus:border-primary-500/60"
                       />
                       <button
                         type="button"
@@ -726,36 +732,14 @@ export function CreditCardManager() {
                     onChange={handleAmountInputChange}
                     className="!border-dark-border/60 !bg-dark-input !py-1.5 !pl-7 !pr-2.5 text-sm transition-all"
                   />
-                  <div className="-mt-0.5 flex items-center justify-between px-1 text-[10px] text-dark-text-muted">
-                    <span>
-                      {amountInputMode === 'total'
-                        ? `parcela: ${formatCurrency(amount)}`
+                  <div className="-mt-0.5 px-1 text-[10px] text-dark-text-muted">
+                    {isAddingInstallmentPurchase
+                      ? effectiveAmountInputMode === 'total'
+                        ? `parcela calculada: ${formatCurrency(amount)}`
                         : newInstallmentTotalValue > 1
-                          ? `total: ${formatCurrency(newPurchaseTotal)}`
-                          : 'valor da fatura'}
-                    </span>
-                    <span className="inline-flex rounded border border-dark-border/60 bg-dark-input">
-                      <button
-                        type="button"
-                        onClick={() => handleAmountModeChange('installment')}
-                        className={`px-1.5 py-0.5 ${
-                          amountInputMode === 'installment'
-                            ? 'text-dark-text'
-                            : 'text-dark-text-muted'
-                        }`}
-                      >
-                        Parc.
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleAmountModeChange('total')}
-                        className={`border-l border-dark-border/60 px-1.5 py-0.5 ${
-                          amountInputMode === 'total' ? 'text-dark-text' : 'text-dark-text-muted'
-                        }`}
-                      >
-                        Total
-                      </button>
-                    </span>
+                          ? `total estimado: ${formatCurrency(newPurchaseTotal)}`
+                          : 'valor da parcela'
+                      : 'valor que entra nesta fatura'}
                   </div>
                 </div>
                 <CurrencyInput
@@ -783,6 +767,66 @@ export function CreditCardManager() {
                 >
                   <Plus size={18} />
                 </button>
+                {isAddingInstallmentPurchase && (
+                  <div className="col-span-full rounded-xl border border-primary-500/20 bg-primary-500/[0.06] p-3">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-dark-text">
+                          Como você quer informar o valor da compra parcelada?
+                        </p>
+                        <p className="mt-0.5 text-xs leading-relaxed text-dark-text-muted">
+                          Use “valor da parcela” quando a fatura já mostra a parcela mensal. Use
+                          “valor total” quando você sabe o preço cheio e quer que o app calcule a
+                          parcela.
+                        </p>
+                      </div>
+                      <div className="grid min-w-full grid-cols-2 gap-2 rounded-lg bg-dark-card p-1 md:min-w-[360px]">
+                        <button
+                          type="button"
+                          onClick={() => handleAmountModeChange('installment')}
+                          className={`rounded-md px-3 py-2 text-sm font-medium transition-all ${
+                            amountInputMode === 'installment'
+                              ? 'bg-primary-600 text-white shadow-sm'
+                              : 'text-dark-text-muted hover:bg-dark-surface hover:text-dark-text'
+                          }`}
+                        >
+                          Valor da parcela
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAmountModeChange('total')}
+                          className={`rounded-md px-3 py-2 text-sm font-medium transition-all ${
+                            amountInputMode === 'total'
+                              ? 'bg-primary-600 text-white shadow-sm'
+                              : 'text-dark-text-muted hover:bg-dark-surface hover:text-dark-text'
+                          }`}
+                        >
+                          Valor total
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid gap-2 text-xs text-dark-text-muted sm:grid-cols-3">
+                      <span>
+                        Parcelas:{' '}
+                        <strong className="text-dark-text">
+                          {newInstallmentTotalValue > 1
+                            ? `${newInstallmentCurrent || parsedInstallmentsFromName.installmentCurrent || 1}/${newInstallmentTotalValue}`
+                            : 'preencha o total'}
+                        </strong>
+                      </span>
+                      <span>
+                        Entra na fatura:{' '}
+                        <strong className="text-dark-text">{formatCurrency(amount)}</strong>
+                      </span>
+                      <span>
+                        Compra cheia:{' '}
+                        <strong className="text-dark-text">
+                          {formatCurrency(newPurchaseTotal)}
+                        </strong>
+                      </span>
+                    </div>
+                  </div>
+                )}
               </form>
 
               <div className="divide-y divide-dark-border/40">
