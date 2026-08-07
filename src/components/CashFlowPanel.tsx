@@ -2,6 +2,7 @@ import { ArrowDownRight, ArrowUpRight, Wallet } from 'lucide-react'
 import { Panel, PanelHeader, SegmentedBar, type Segment } from './ui'
 import { formatCurrency, formatMonthLong } from '../lib/format'
 import { useFinancasStore } from '../context/financasStore'
+import { isWantIncludedInCardPlan } from '../lib/scenario'
 import { CHART_PALETTE } from '../types/constants'
 
 // ---------------------------------------------------------------------------
@@ -46,7 +47,7 @@ function FlowRow({
 }
 
 export function CashFlowPanel() {
-  const { cashFlow, cards, financialCycle, forecast } = useFinancasStore()
+  const { cashFlow, cards, financialCycle, forecast, scenarios } = useFinancasStore()
   const {
     paycheck,
     extraIncome,
@@ -75,6 +76,30 @@ export function CashFlowPanel() {
       ? `plano do cartão de ${formatMonthLong(financialCycle.nextSpendingMonth)}; já lançado: ${formatCurrency(financialCycle.nextInvoicePersonal)}`
       : `compras de ${formatMonthLong(financialCycle.nextSpendingMonth)} já feitas no cartão`
   const dueNow = invoiceToPay + costsOnAccount + extraExpense
+  const accountWantItems = scenarios.activeScenario.wants.filter(
+    (want) =>
+      want.paidWith === 'account' &&
+      want.plannedAmount > 0 &&
+      !isWantIncludedInCardPlan(want, scenarios.activeScenario.wants),
+  )
+  const accountWantsPlanned = accountWantItems.reduce((sum, want) => sum + want.plannedAmount, 0)
+  const roomForAccountWants = Math.max(
+    0,
+    financialCycle.income -
+      dueNow -
+      financialCycle.directInvestment -
+      financialCycle.reservedForNextInvoice,
+  )
+  const accountWantsAllowed = Math.min(accountWantsPlanned, roomForAccountWants)
+  const accountWantsCut = Math.max(0, accountWantsPlanned - accountWantsAllowed)
+  const accountWantsScale =
+    accountWantsPlanned > 0 ? Math.min(1, accountWantsAllowed / accountWantsPlanned) : 1
+  const decisionRows = accountWantItems.map((want) => ({
+    id: want.id,
+    name: want.name,
+    planned: want.plannedAmount,
+    recommended: want.plannedAmount * accountWantsScale,
+  }))
 
   const segments: Segment[] = [
     { id: 'invoice', label: 'Fatura', value: invoiceToPay, color: CHART_PALETTE.orange },
@@ -176,6 +201,69 @@ export function CashFlowPanel() {
           />
         )}
       </div>
+
+      {accountWantItems.length > 0 && (
+        <div
+          className={`mt-4 rounded-xl border p-4 ${
+            accountWantsCut > 0
+              ? 'border-rose-500/25 bg-rose-500/[0.06]'
+              : 'border-primary-500/20 bg-primary-500/[0.05]'
+          }`}
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-dark-text">
+                Quanto enviar para desejos fora do cartão
+              </p>
+              <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-dark-text-muted">
+                Primeiro entram fatura, contas, aporte e reserva do próximo cartão. Só depois disso
+                este bloco diz quanto cabe enviar para Viagens, Qualidade de Vida e outros desejos
+                que não passam no cartão.
+              </p>
+            </div>
+            <div className="text-right">
+              <span className="block text-[11px] uppercase tracking-wider text-dark-text-muted">
+                Cabe neste ciclo
+              </span>
+              <strong
+                className={`block text-lg font-semibold tabular-nums ${
+                  accountWantsCut > 0 ? 'text-rose-300' : 'text-primary-300'
+                }`}
+              >
+                {formatCurrency(accountWantsAllowed)}
+              </strong>
+              {accountWantsCut > 0 && (
+                <span className="text-[11px] text-rose-200">
+                  corte {formatCurrency(accountWantsCut)}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            {decisionRows.map((row) => (
+              <div key={row.id} className="rounded-lg bg-dark-card px-3 py-2">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 truncate text-sm font-medium text-dark-text">
+                    {row.name}
+                  </span>
+                  <strong className="shrink-0 text-sm tabular-nums text-dark-text">
+                    {formatCurrency(row.recommended)}
+                  </strong>
+                </div>
+                <div className="mt-1 flex items-center justify-between gap-3 text-[11px] text-dark-text-muted">
+                  <span>planejado {formatCurrency(row.planned)}</span>
+                  {row.recommended < row.planned - 0.005 && (
+                    <span className="text-rose-200">
+                      adiar {formatCurrency(row.planned - row.recommended)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {financialCycle.shortfall > 0 && (
         <p className="mt-2 text-[11px] leading-relaxed text-rose-300">

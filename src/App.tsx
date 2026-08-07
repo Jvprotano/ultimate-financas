@@ -24,6 +24,7 @@ import { CostManager } from './components/CostManager'
 import { WantsManager } from './components/WantsManager'
 import { InvestmentPlan } from './components/InvestmentPlan'
 import { EmergencyFund } from './components/EmergencyFund'
+import { SalaryClosingPlan } from './components/SalaryClosingPlan'
 import { CreditCardManager } from './components/CreditCardManager'
 import { InvestmentsManager } from './components/InvestmentsManager'
 import { ForecastView } from './components/ForecastView'
@@ -344,16 +345,19 @@ function AppShell() {
         )}
 
         {activeView === 'planning' && (
-          <MasonryColumns>
-            {/* A ordem é a da leitura: quanto entra, quanto sai, como dividir,
-                no que gastar, quanto aportar, quanto já está guardado. */}
-            <IncomePanel />
-            <CostManager />
-            <BudgetModelPicker />
-            <WantsManager />
-            <InvestmentPlan />
-            <EmergencyFund onManage={() => setActiveView('investments')} />
-          </MasonryColumns>
+          <>
+            <SalaryClosingPlan />
+            <MasonryColumns>
+              {/* A ordem é a da leitura: quanto entra, quanto sai, como dividir,
+                  no que gastar, quanto aportar, quanto já está guardado. */}
+              <IncomePanel />
+              <CostManager />
+              <BudgetModelPicker />
+              <WantsManager />
+              <InvestmentPlan />
+              <EmergencyFund onManage={() => setActiveView('investments')} />
+            </MasonryColumns>
+          </>
         )}
 
         {activeView === 'investments' && <InvestmentsManager />}

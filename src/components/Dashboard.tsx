@@ -268,7 +268,7 @@ export function Dashboard({
         <div className="flex flex-col justify-between rounded-xl border border-dark-border bg-dark-card px-5 py-5">
           <div>
             <span className="text-[11px] font-medium uppercase tracking-wider text-dark-text-muted">
-              Disponível no ciclo de {formatMonthLong(financialCycle.cashMonth)}
+              Folga final do ciclo de {formatMonthLong(financialCycle.cashMonth)}
             </span>
             <strong
               className={`mt-1 block text-4xl font-bold leading-tight tracking-tight tabular-nums ${
@@ -280,7 +280,7 @@ export function Dashboard({
           </div>
           <p className="mt-4 text-xs leading-relaxed text-dark-text-muted">
             {formatCurrency(financialCycle.income)} recebidos − {formatCurrency(financialCycle.commitmentsDueNow)}{' '}
-            de compromissos atuais − {formatCurrency(financialCycle.reservedForNextInvoice)} reservados para a próxima fatura.
+            de fatura/contas/desejos fora do cartão/aporte − {formatCurrency(financialCycle.reservedForNextInvoice)} reservados para a próxima fatura.
             {totalCostsShared > 0 && (
               <>
                 {' '}
@@ -289,12 +289,13 @@ export function Dashboard({
             )}
           </p>
           <p className="mt-2 border-t border-dark-border-subtle pt-2 text-xs leading-relaxed text-dark-text-muted">
-            A fatura paga agora é de gastos de {formatMonthLong(financialCycle.spendingMonth)}. O que sobra para usar em{' '}
-            {formatMonthLong(financialCycle.cashMonth)} é{' '}
+            A fatura paga agora é de gastos de {formatMonthLong(financialCycle.spendingMonth)}, mas
+            pertence ao caixa de {formatMonthLong(financialCycle.cashMonth)}. Depois de pagar,
+            aportar, separar desejos fora do cartão e reservar a próxima fatura, a folga é{' '}
             <strong className={financialCycle.shortfall === 0 ? 'text-dark-text' : 'text-rose-400'}>
               {formatCurrency(financialCycle.safeToSpend)}
             </strong>
-            , depois de reservar compras já feitas no cartão.
+            .
           </p>
         </div>
 
