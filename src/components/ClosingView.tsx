@@ -17,6 +17,7 @@ import {
 import { ActualsPanel } from './ActualsPanel'
 import { CashFlowPanel } from './CashFlowPanel'
 import { CycleAlerts } from './CycleAlerts'
+import { CycleGuide } from './CycleGuide'
 import {
   ConfirmButton,
   Panel,
@@ -143,6 +144,7 @@ export function ClosingView({
     actuals,
     cards,
     cardCycleAccounting,
+    investmentActuals,
     scenarios,
     closeCurrentMonth,
   } = useFinancasStore()
@@ -211,6 +213,18 @@ export function ClosingView({
     cardCycleAccounting.invoiceThisCycle.paid ||
     (cardCycleAccounting.invoiceThisCycle.amountKnown && invoiceActual <= 0.005)
 
+  const investmentHint = [
+    `folha ${formatCurrency(investmentActuals.payroll)}`,
+    `reserva ${formatCurrency(investmentActuals.reserveNet)}`,
+    `posições ${formatCurrency(investmentActuals.holdingsNet)}`,
+    `metas ${formatCurrency(investmentActuals.goalsNet)}`,
+    metrics.employerInvestmentContributions > 0
+      ? `empresa ${formatCurrency(metrics.employerInvestmentContributions)} fora da sua taxa`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
   return (
     <div className="space-y-4">
       <Panel>
@@ -264,6 +278,8 @@ export function ClosingView({
         </div>
       </Panel>
 
+      <CycleGuide />
+
       {!cardCycleAccounting.invoiceThisCycle.amountKnown && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.07] px-4 py-3 text-sm leading-relaxed text-amber-100/90">
           <strong className="font-semibold text-amber-200">Fatura anterior já girada.</strong>{' '}
@@ -297,7 +313,7 @@ export function ClosingView({
         </div>
         <p className="mt-4 text-xs leading-relaxed text-dark-text-muted">
           {shortfall > 0.005
-            ? `Faltam ${formatCurrency(shortfall)} para cobrir a fatura deste ciclo, as contas e o aporte.`
+            ? `Faltam ${formatCurrency(shortfall)} para cobrir a fatura deste ciclo, as contas e o aporte planejado.`
             : `Depois das obrigações do ciclo, este valor pode ir para desejos ou reforço de aporte.`}
         </p>
         <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
@@ -322,7 +338,7 @@ export function ClosingView({
           />
           <StepChip
             icon={<PiggyBank size={13} />}
-            label="Aporte direto"
+            label="Aporte direto planejado"
             value={formatCurrency(financialCycle.directInvestment)}
           />
         </div>
@@ -365,11 +381,11 @@ export function ClosingView({
           />
           <WorkflowStep
             done={actuals.summary.informedCount > 0}
-            title="3. Informar realizados"
+            title="3. Informar custos realizados"
             detail={
               actuals.summary.informedCount > 0
                 ? `${actuals.summary.informedCount} custo(s) com valor pago informado.`
-                : 'Opcional, mas melhora o histórico — use a tabela abaixo.'
+                : 'Opcional durante o mês, mas importante antes do fechamento — use a tabela abaixo.'
             }
           />
           <WorkflowStep
@@ -396,7 +412,7 @@ export function ClosingView({
             detail={
               isCurrentMonthClosed
                 ? `${formatMonthLong(currentMonth)} já fechado — refechar não avança de novo.`
-                : 'Grava o snapshot do mês vivido e avança para o próximo ciclo.'
+                : `Grava custos, compras no cartão e investimentos realizados em ${formatMonthLong(activeCycle.month)} e avança para o próximo ciclo.`
             }
             action={
               isCurrentMonthClosed ? (
@@ -496,7 +512,7 @@ export function ClosingView({
         <PanelHeader
           title="Plano × realizado"
           icon={<ArrowRight size={16} />}
-          description={`Competência de ${formatMonthLong(activeCycle.month)}: compras feitas agora contam no orçamento deste mês, mesmo sendo pagas na fatura de ${formatMonthLong(cardCycleAccounting.spendingThisCycle.dueMonth)}.`}
+          description={`Competência de ${formatMonthLong(activeCycle.month)}: compras e aportes feitos agora contam no realizado deste mês, mesmo quando o pagamento do cartão só acontece no mês seguinte.`}
         />
 
         <div className="mt-3">
@@ -524,20 +540,26 @@ export function ClosingView({
             }
           />
           <ComparisonRow
-            label="Aporte direto"
-            planned={metrics.directInvestmentTarget}
-            actual={metrics.directInvestmentTarget}
-            hint="meta do ciclo (sem realizado separado ainda)"
-            deltaHint="meta"
+            label="Investimentos"
+            planned={metrics.totalPlannedInvestment}
+            actual={investmentActuals.total}
+            hint={`${investmentHint}. Aportes/retiradas são líquidos; saldo inicial e valorização de mercado não contam como aporte.`}
           />
         </div>
 
         <p className="mt-3 border-t border-dark-border-subtle pt-3 text-xs leading-relaxed text-dark-text-muted">
+          O bloco “Liberado” acima continua usando o <strong className="text-dark-text">aporte planejado</strong>{' '}
+          para orientar o caixa durante o mês. No fechamento, o histórico grava{' '}
+          <strong className="text-dark-text">{formatCurrency(investmentActuals.total)} efetivamente investidos</strong>{' '}
+          neste ciclo e uma taxa realizada de {investmentActuals.savingsRate.toFixed(1)}%.
+        </p>
+
+        <p className="mt-2 border-t border-dark-border-subtle pt-3 text-xs leading-relaxed text-dark-text-muted">
           Liberado = {formatCurrency(financialCycle.income)} − fatura que vence neste ciclo{' '}
           {cardCycleAccounting.invoiceThisCycle.amountKnown
             ? formatCurrency(financialCycle.invoiceToPay)
             : 'valor não recuperado'}{' '}
-          − custos {formatCurrency(financialCycle.costsOnAccount)} − aporte{' '}
+          − custos {formatCurrency(financialCycle.costsOnAccount)} − aporte planejado{' '}
           {formatCurrency(financialCycle.directInvestment)}
           {financialCycle.extraExpense > 0.005 && (
             <> − saídas do ano {formatCurrency(financialCycle.extraExpense)}</>
