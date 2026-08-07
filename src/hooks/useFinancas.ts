@@ -12,6 +12,7 @@ import { calculateScenario } from '../lib/scenario'
 import { calculateCashFlow } from '../lib/cashflow'
 import { calculateFinancialCycle } from '../lib/financialCycle'
 import { calculateCardCycleAccounting } from '../lib/cardCycleAccounting'
+import { calculateMonthlyInvestmentActuals } from '../lib/investmentActuals'
 import { calculateAssetsSummary } from '../lib/assets'
 import { projectNetWorth } from '../lib/forecast'
 import { maybeCreateAutoBackup } from '../lib/backup'
@@ -95,6 +96,32 @@ export function useFinancas() {
     () => calculateScenario(activeScenario, emergencyFund, realizedByArea, history.averageCosts),
     [activeScenario, emergencyFund, realizedByArea, history.averageCosts],
   )
+
+  /**
+   * Fechamento de investimentos é realizado, não plano. A previdência descontada
+   * em folha é investimento efetivo quando a folha roda; o restante vem dos
+   * livros-razão de reserva, posições e metas. Marcação a mercado não entra.
+   */
+  const investmentActuals = useMemo(() => {
+    const ledger = calculateMonthlyInvestmentActuals({
+      month: activeCycle.month,
+      emergencyFund,
+      holdings: investments.holdings,
+      goals: investments.goals,
+    })
+    const payroll = metrics.investmentDeductions
+    const total = payroll + ledger.directNet
+    const savingsRate = metrics.availableForBudget > 0 ? (total / metrics.availableForBudget) * 100 : 0
+
+    return { ...ledger, payroll, total, savingsRate }
+  }, [
+    activeCycle.month,
+    emergencyFund,
+    investments.goals,
+    investments.holdings,
+    metrics.availableForBudget,
+    metrics.investmentDeductions,
+  ])
 
   const scenarioSummaries = useMemo<ScenarioSummary[]>(
     () =>
@@ -229,8 +256,8 @@ export function useFinancas() {
 
   /**
    * Congela o ciclo ativo com os números de agora e avança para o próximo.
-   * Os custos entram pelo realizado onde ele foi informado — é o que faz o
-   * custo médio do histórico ser um fato e não a média dos planos.
+   * Custos, cartão e investimentos entram pelo realizado; o plano continua
+   * existindo separadamente para comparação.
    */
   const closeCurrentMonth = useCallback(
     (month = activeCycle.month, note?: string) => {
@@ -249,8 +276,10 @@ export function useFinancas() {
       }
 
       const costs = actuals.summary.effectiveCosts
+      // A folha já saiu de `paycheckInAccount`; daqui só sai o que foi realmente
+      // movimentado da conta para reserva/posições/metas durante o mês.
       const balance =
-        metrics.paycheckInAccount - costs - metrics.totalWantsAmount - metrics.directInvestmentTarget
+        metrics.paycheckInAccount - costs - metrics.totalWantsAmount - investmentActuals.directNet
 
       history.closeMonth({
         month,
@@ -261,9 +290,9 @@ export function useFinancas() {
         costs,
         costsPlanned: actuals.summary.plannedCosts,
         wants: metrics.totalWantsAmount,
-        invested: metrics.totalPlannedInvestment,
+        invested: investmentActuals.total,
         balance,
-        savingsRate: metrics.savingsRate,
+        savingsRate: investmentActuals.savingsRate,
         costsByCategory,
         // `grossAssets` guarda o financeiro, como sempre guardou; os bens vão
         // no campo próprio, e é a soma dos dois que forma o líquido.
@@ -296,6 +325,7 @@ export function useFinancas() {
       cashFlow.leftover,
       emergencyFund,
       history,
+      investmentActuals,
       investments.summary,
       metrics,
     ],
@@ -309,6 +339,7 @@ export function useFinancas() {
     assets,
     debts,
     investments,
+    investmentActuals,
     history,
     forecast,
     actuals,
