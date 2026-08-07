@@ -9,10 +9,11 @@ import {
   SegmentedBar,
   StatTile,
 } from './ui'
-import { formatCurrency, formatMonths } from '../lib/format'
+import { formatCurrency, formatMonthLong, formatMonths } from '../lib/format'
 import { useFinancasStore } from '../context/financasStore'
 import type { ScenarioMetrics } from '../hooks/useFinancas'
-import type { BudgetArea, CashFlowSummary, CreditCardSummary, DebtsSummary } from '../types'
+import type { FinancialCycleSummary } from '../lib/financialCycle'
+import type { BudgetArea, CreditCardSummary, DebtsSummary } from '../types'
 import {
   BUDGET_AREAS,
   BUDGET_AREA_COLORS,
@@ -32,7 +33,7 @@ interface Alert {
 function buildAlerts(
   metrics: ScenarioMetrics,
   creditCardSummary: CreditCardSummary,
-  cashFlow: CashFlowSummary,
+  financialCycle: FinancialCycleSummary,
   debtsSummary: DebtsSummary,
 ): Alert[] {
   const alerts: Alert[] = []
@@ -40,20 +41,12 @@ function buildAlerts(
     metrics
   const modelTotal = selectedModel.necessidades + selectedModel.desejos + selectedModel.investimentos
 
-  if (cashFlow.leftover < -0.005) {
+  if (financialCycle.shortfall > 0.005) {
     alerts.push({
       id: 'cash-negative',
-      title: 'O caixa do mês não fecha',
-      detail: `Faltam ${formatCurrency(-cashFlow.leftover)} para pagar a fatura que vence, o que sai da conta e o aporte. Esta é a conta do extrato, não do orçamento.`,
+      title: 'O ciclo financeiro não fecha',
+      detail: `Faltam ${formatCurrency(financialCycle.shortfall)} para pagar os compromissos atuais e reservar a próxima fatura.`,
       severity: 'critical',
-    })
-  }
-  if (cashFlow.plannedOnCard > 0 && cashFlow.cardPlanGap > 0.005) {
-    alerts.push({
-      id: 'card-over-plan',
-      title: 'A fatura passou do que o plano previa',
-      detail: `Você planejou ${formatCurrency(cashFlow.plannedOnCard)} no cartão e a fatura está em ${formatCurrency(cashFlow.invoiceToPay)} — ${formatCurrency(cashFlow.cardPlanGap)} sem lugar no orçamento.`,
-      severity: 'warning',
     })
   }
   if (balanceAfterPlan < -0.005) {
@@ -182,7 +175,7 @@ export function Dashboard({
   const store = useFinancasStore()
   const metrics = store.metrics
   const creditCardSummary = store.cards.summary
-  const cashFlow = store.cashFlow
+  const financialCycle = store.financialCycle
   const { emergencyFund, summary: investmentsSummary } = store.investments
   const { scenarioSummaries } = store
   const activeScenarioId = store.scenarios.activeScenarioId
@@ -190,16 +183,12 @@ export function Dashboard({
 
   const {
     availableForBudget,
-    paycheckInAccount,
     totalCosts,
     totalCostsShared,
-    totalWantsAmount,
     totalPlannedInvestment,
-    directInvestmentTarget,
     investmentDeductions,
     employerInvestmentContributions,
     savingsRate,
-    balanceAfterPlan,
     budgetComparison,
     investmentAllocation,
     costsByCategory,
@@ -232,7 +221,7 @@ export function Dashboard({
     )
   }
 
-  const alerts = buildAlerts(metrics, creditCardSummary, cashFlow, store.debts.summary)
+  const alerts = buildAlerts(metrics, creditCardSummary, financialCycle, store.debts.summary)
   const costRows = Array.from(costsByCategory.entries())
     .map(([category, value]) => ({ category, value }))
     .sort((a, b) => b.value - a.value)
@@ -279,20 +268,19 @@ export function Dashboard({
         <div className="flex flex-col justify-between rounded-xl border border-dark-border bg-dark-card px-5 py-5">
           <div>
             <span className="text-[11px] font-medium uppercase tracking-wider text-dark-text-muted">
-              Livre no mês, com o plano executado
+              Disponível no ciclo de {formatMonthLong(financialCycle.cashMonth)}
             </span>
             <strong
               className={`mt-1 block text-4xl font-bold leading-tight tracking-tight tabular-nums ${
-                balanceAfterPlan >= 0 ? 'text-dark-text' : 'text-rose-400'
+                financialCycle.shortfall === 0 ? 'text-dark-text' : 'text-rose-400'
               }`}
             >
-              {formatCurrency(balanceAfterPlan)}
+              {formatCurrency(financialCycle.safeToSpend)}
             </strong>
           </div>
           <p className="mt-4 text-xs leading-relaxed text-dark-text-muted">
-            {formatCurrency(paycheckInAccount)} na conta − {formatCurrency(totalCosts)} de custos −{' '}
-            {formatCurrency(totalWantsAmount)} de desejos − {formatCurrency(directInvestmentTarget)}{' '}
-            de aporte direto.
+            {formatCurrency(financialCycle.income)} recebidos − {formatCurrency(financialCycle.commitmentsDueNow)}{' '}
+            de compromissos atuais − {formatCurrency(financialCycle.reservedForNextInvoice)} reservados para a próxima fatura.
             {totalCostsShared > 0 && (
               <>
                 {' '}
@@ -301,11 +289,12 @@ export function Dashboard({
             )}
           </p>
           <p className="mt-2 border-t border-dark-border-subtle pt-2 text-xs leading-relaxed text-dark-text-muted">
-            No extrato deste mês sobram{' '}
-            <strong className={cashFlow.leftover >= 0 ? 'text-dark-text' : 'text-rose-400'}>
-              {formatCurrency(cashFlow.leftover)}
+            A fatura paga agora é de gastos de {formatMonthLong(financialCycle.spendingMonth)}. O que sobra para usar em{' '}
+            {formatMonthLong(financialCycle.cashMonth)} é{' '}
+            <strong className={financialCycle.shortfall === 0 ? 'text-dark-text' : 'text-rose-400'}>
+              {formatCurrency(financialCycle.safeToSpend)}
             </strong>
-            : lá quem sai é a fatura que vence agora, que é o gasto do ciclo passado.
+            , depois de reservar compras já feitas no cartão.
           </p>
         </div>
 
@@ -522,7 +511,7 @@ export function Dashboard({
           </div>
           <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
             <div>
-              <dt className="text-[11px] text-dark-text-muted">Fatura atual</dt>
+              <dt className="text-[11px] text-dark-text-muted">A pagar agora</dt>
               <dd className="mt-0.5 font-semibold tabular-nums text-dark-text">
                 {formatCurrency(creditCardSummary.currentTotal)}
               </dd>
@@ -534,7 +523,7 @@ export function Dashboard({
               </dd>
             </div>
             <div>
-              <dt className="text-[11px] text-dark-text-muted">Próxima fatura</dt>
+              <dt className="text-[11px] text-dark-text-muted">Em formação</dt>
               <dd className="mt-0.5 font-semibold tabular-nums text-dark-text">
                 {formatCurrency(creditCardSummary.nextTotal)}
               </dd>

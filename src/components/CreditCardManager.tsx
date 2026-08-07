@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import {
   ArrowUpDown,
-  Calendar,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -19,18 +18,17 @@ import {
   X,
   Zap,
 } from 'lucide-react'
-import { CardAccountsPanel } from './CardAccountsPanel'
 import { CurrencyInput } from './CurrencyInput'
 import {
-  ConfirmButton,
   Meter,
   Panel,
   PanelHeader,
+  PrimaryButton,
   SecondaryButton,
   SegmentedControl,
   StatTile,
 } from './ui'
-import { formatCurrency, inputClass } from '../lib/format'
+import { formatCurrency, formatMonthLong, inputClass } from '../lib/format'
 import { normalizeText } from '../lib/shared'
 import {
   buildRemainingAmount,
@@ -38,7 +36,7 @@ import {
   parseSpreadsheet,
   stripInstallmentToken,
 } from '../lib/cardImport'
-import { useCardsStore, useMetrics } from '../context/financasStore'
+import { useCardsStore, useFinancasStore, useMetrics } from '../context/financasStore'
 import type { BudgetArea, CreditCardCycle, CreditCardEntry } from '../types'
 import { BUDGET_AREAS, BUDGET_AREA_COLORS, BUDGET_AREA_SHORT_LABELS } from '../types/constants'
 
@@ -110,6 +108,7 @@ export function CreditCardManager() {
     setSettings,
   } = useCardsStore()
   const { availableForBudget, budgetComparison, plannedOnCard } = useMetrics()
+  const { financialCycle } = useFinancasStore()
 
   const [view, setView] = useState<View>('current')
 
@@ -118,6 +117,8 @@ export function CreditCardManager() {
   const [purchaseDate, setPurchaseDate] = useState(todayShort)
   const [cardName, setCardName] = useState('Itaú')
   const [amount, setAmount] = useState(0)
+  const [amountTotalInput, setAmountTotalInput] = useState(0)
+  const [amountInputMode, setAmountInputMode] = useState<'installment' | 'total'>('installment')
   const [personalAmount, setPersonalAmount] = useState(0)
   const [remainingAmount, setRemainingAmount] = useState(0)
   const [ownerNote, setOwnerNote] = useState('')
@@ -135,6 +136,7 @@ export function CreditCardManager() {
 
   const [anticipateId, setAnticipateId] = useState<string | null>(null)
   const [anticipateCount, setAnticipateCount] = useState(1)
+  const [showPaySummary, setShowPaySummary] = useState(false)
 
   // Exclusão com desfazer: guarda o último lançamento removido por alguns segundos.
   const [pendingUndo, setPendingUndo] = useState<CreditCardEntry | null>(null)
@@ -170,6 +172,22 @@ export function CreditCardManager() {
         return dir * (a[sort.key] || '').localeCompare(b[sort.key] || '', 'pt-BR')
       })
     : filteredEntries
+  const filteredTotals = filteredEntries.reduce(
+    (totals, entry) => {
+      totals.amount += entry.amount
+      totals.personal += entry.personalAmount
+      totals.thirdParty += Math.max(0, entry.amount - entry.personalAmount)
+      return totals
+    },
+    { amount: 0, personal: 0, thirdParty: 0 },
+  )
+  const parsedInstallmentsFromName = parseInstallments(description)
+  const newInstallmentTotalValue = newIsRecurring
+    ? 0
+    : Number(newInstallmentTotal) || parsedInstallmentsFromName.installmentTotal || 0
+  const newPurchaseTotal =
+    newInstallmentTotalValue > 1 ? amount * newInstallmentTotalValue : amount
+  const amountInputValue = amountInputMode === 'total' ? amountTotalInput : amount
 
   const toggleSort = (key: SortKey) =>
     setSort((prev) => {
@@ -224,6 +242,34 @@ export function CreditCardManager() {
     setAmount(val)
   }
 
+  const handleAmountInputChange = (val: number) => {
+    if (amountInputMode === 'total') {
+      setAmountTotalInput(val)
+      handleAmountChange(newInstallmentTotalValue > 1 ? val / newInstallmentTotalValue : val)
+      return
+    }
+    handleAmountChange(val)
+    setAmountTotalInput(newInstallmentTotalValue > 1 ? val * newInstallmentTotalValue : val)
+  }
+
+  const handleAmountModeChange = (mode: 'installment' | 'total') => {
+    setAmountInputMode(mode)
+    if (mode === 'total') {
+      setAmountTotalInput(newInstallmentTotalValue > 1 ? amount * newInstallmentTotalValue : amount)
+    }
+  }
+
+  const handleNewInstallmentTotalChange = (raw: string) => {
+    const next = raw.replace(/\D/g, '')
+    const nextTotal = Number(next) || parsedInstallmentsFromName.installmentTotal || 0
+    setNewInstallmentTotal(next)
+    if (amountInputMode === 'total') {
+      handleAmountChange(nextTotal > 1 ? amountTotalInput / nextTotal : amountTotalInput)
+    } else {
+      setAmountTotalInput(nextTotal > 1 ? amount * nextTotal : amount)
+    }
+  }
+
   const handleAdd = () => {
     if (!description.trim() || amount === 0) return
     const parsedFromName = parseInstallments(description)
@@ -260,6 +306,8 @@ export function CreditCardManager() {
     setDescription('')
     // Data, cartão e área são mantidos: em geral várias compras seguidas os compartilham.
     setAmount(0)
+    setAmountTotalInput(0)
+    setAmountInputMode('installment')
     setPersonalAmount(0)
     setRemainingAmount(0)
     setOwnerNote('')
@@ -297,6 +345,11 @@ export function CreditCardManager() {
     anticipateInstallments(anticipatingEntry.id, Math.min(Math.max(1, anticipateCount), anticipateMax))
     setAnticipateId(null)
     setAnticipateCount(1)
+  }
+
+  const handlePayInvoice = () => {
+    payInvoice()
+    setShowPaySummary(false)
   }
 
   const renderSortHeader = (
@@ -338,7 +391,7 @@ export function CreditCardManager() {
     <div className="space-y-4">
       <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
-          label="Fatura atual"
+          label={`Fatura a pagar em ${formatMonthLong(financialCycle.cashMonth)}`}
           value={formatCurrency(summary.currentTotal)}
           detail={
             summary.currentPrepaidTotal > 0
@@ -369,13 +422,10 @@ export function CreditCardManager() {
         />
       </div>
 
-      <CardAccountsPanel />
-
       <Panel>
         <PanelHeader
           title="Seu teto de gasto"
-          icon={<Calendar size={16} />}
-          description="“Fatura atual” é o ciclo que está fechando: as compras deste mês, que você paga com o salário do mês que vem. Ao pagar, use “Pagar fatura” para virar o ciclo."
+          description={`Esta fatura reúne gastos de ${formatMonthLong(financialCycle.spendingMonth)} e é paga no caixa de ${formatMonthLong(financialCycle.cashMonth)}. A aba seguinte mostra a fatura que está se formando.`}
           className="mb-4"
         />
         <div className="grid gap-4 lg:grid-cols-2">
@@ -417,17 +467,17 @@ export function CreditCardManager() {
           value={view}
           onChange={setView}
           options={[
-            { value: 'current' as View, label: 'Atual' },
-            { value: 'next' as View, label: 'Próxima' },
+            { value: 'current' as View, label: `Pagar em ${formatMonthLong(financialCycle.cashMonth)}` },
+            { value: 'next' as View, label: `Em formação · ${formatMonthLong(financialCycle.nextSpendingMonth)}` },
             { value: 'import' as View, label: 'Importar' },
           ]}
         />
 
         {view === 'current' && (
-          <ConfirmButton onConfirm={payInvoice} confirmLabel="Virar a fatura" tone="primary">
+          <PrimaryButton onClick={() => setShowPaySummary(true)}>
             <CheckCircle2 size={15} />
             Pagar fatura
-          </ConfirmButton>
+          </PrimaryButton>
         )}
         {view === 'next' && (
           <span className="flex items-center gap-1.5 text-xs text-dark-text-muted">
@@ -436,6 +486,44 @@ export function CreditCardManager() {
           </span>
         )}
       </div>
+
+      {showPaySummary && view === 'current' && (
+        <Panel className="border-primary-500/30 bg-primary-500/[0.04]">
+          <PanelHeader
+            title="Resumo antes de pagar"
+            icon={<CheckCircle2 size={16} />}
+            description={`Esta é a fatura de gastos de ${formatMonthLong(financialCycle.spendingMonth)}. Pagá-la movimenta o caixa de ${formatMonthLong(financialCycle.cashMonth)} e inicia o próximo ciclo do cartão; isso não fecha o mês do Histórico.`}
+          />
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+            <StatTile label="Total da fatura" value={formatCurrency(summary.currentTotal)} />
+            <StatTile label="Minha parte" value={formatCurrency(summary.currentPersonalTotal)} />
+            <StatTile label="Não é meu" value={formatCurrency(summary.currentThirdPartyTotal)} />
+            <StatTile
+              label="Lançamentos"
+              value={String(summary.currentEntriesCount)}
+              detail={
+                summary.currentPrepaidTotal > 0
+                  ? `${formatCurrency(summary.currentPrepaidTotal)} já pagos fora do total`
+                  : undefined
+              }
+            />
+            <StatTile label="Em formação" value={formatCurrency(summary.nextTotal)} />
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <PrimaryButton onClick={handlePayInvoice}>
+              <CheckCircle2 size={15} />
+              Pagar e iniciar próximo ciclo
+            </PrimaryButton>
+            <button
+              type="button"
+              onClick={() => setShowPaySummary(false)}
+              className="rounded-lg px-3 py-2 text-sm text-dark-text-muted transition-colors hover:text-dark-text"
+            >
+              Cancelar
+            </button>
+          </div>
+        </Panel>
+      )}
 
       {view !== 'import' ? (
         <Panel padded={false} className="overflow-hidden">
@@ -594,7 +682,7 @@ export function CreditCardManager() {
                       <span className="text-xs text-dark-text-muted/60">/</span>
                       <input
                         value={newInstallmentTotal}
-                        onChange={(e) => setNewInstallmentTotal(e.target.value.replace(/\D/g, ''))}
+                        onChange={(e) => handleNewInstallmentTotalChange(e.target.value)}
                         placeholder="x"
                         inputMode="numeric"
                         aria-label="Total de parcelas"
@@ -632,11 +720,44 @@ export function CreditCardManager() {
                   ))}
                 </datalist>
                 <AreaCell value={newArea} onChange={setNewArea} />
-                <CurrencyInput
-                  value={amount}
-                  onChange={handleAmountChange}
-                  className="!border-dark-border/60 !bg-dark-input !py-1.5 !pl-7 !pr-2.5 text-sm transition-all"
-                />
+                <div>
+                  <CurrencyInput
+                    value={amountInputValue}
+                    onChange={handleAmountInputChange}
+                    className="!border-dark-border/60 !bg-dark-input !py-1.5 !pl-7 !pr-2.5 text-sm transition-all"
+                  />
+                  <div className="-mt-0.5 flex items-center justify-between px-1 text-[10px] text-dark-text-muted">
+                    <span>
+                      {amountInputMode === 'total'
+                        ? `parcela: ${formatCurrency(amount)}`
+                        : newInstallmentTotalValue > 1
+                          ? `total: ${formatCurrency(newPurchaseTotal)}`
+                          : 'valor da fatura'}
+                    </span>
+                    <span className="inline-flex rounded border border-dark-border/60 bg-dark-input">
+                      <button
+                        type="button"
+                        onClick={() => handleAmountModeChange('installment')}
+                        className={`px-1.5 py-0.5 ${
+                          amountInputMode === 'installment'
+                            ? 'text-dark-text'
+                            : 'text-dark-text-muted'
+                        }`}
+                      >
+                        Parc.
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAmountModeChange('total')}
+                        className={`border-l border-dark-border/60 px-1.5 py-0.5 ${
+                          amountInputMode === 'total' ? 'text-dark-text' : 'text-dark-text-muted'
+                        }`}
+                      >
+                        Total
+                      </button>
+                    </span>
+                  </div>
+                </div>
                 <CurrencyInput
                   value={personalAmount}
                   onChange={setPersonalAmount}
@@ -834,9 +955,14 @@ export function CreditCardManager() {
 
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-dark-border-subtle px-4 py-3 text-xs text-dark-text-muted">
             <span>
-              {visibleCycle === 'current'
-                ? `${summary.currentEntriesCount} lançamentos cadastrados`
-                : `${summary.nextEntriesCount} lançamentos previstos`}
+              {filteredEntries.length} de{' '}
+              {visibleCycle === 'current' ? summary.currentEntriesCount : summary.nextEntriesCount}{' '}
+              lançamentos · total do filtro:{' '}
+              <strong className="font-semibold tabular-nums text-dark-text">
+                {formatCurrency(filteredTotals.amount)}
+              </strong>{' '}
+              · meu: {formatCurrency(filteredTotals.personal)} · não meu:{' '}
+              {formatCurrency(filteredTotals.thirdParty)}
             </span>
             {visibleCycle === 'current' && summary.currentPrepaidTotal > 0 && (
               <span className="flex items-center gap-1.5 text-primary-400">
@@ -879,8 +1005,8 @@ export function CreditCardManager() {
                 onChange={(event) => setImportCycle(event.target.value as CreditCardCycle)}
                 className={inputClass}
               >
-                <option value="current">Fatura atual</option>
-                <option value="next">Próxima fatura</option>
+                <option value="current">Fatura a pagar agora</option>
+                <option value="next">Fatura em formação</option>
               </select>
             </label>
             <label className="flex h-[46px] min-w-[200px] flex-1 cursor-pointer items-center gap-2 rounded-lg border border-dark-border bg-dark-input px-3 text-sm text-dark-text-secondary transition-colors hover:text-dark-text">
@@ -922,6 +1048,9 @@ export function CreditCardManager() {
                     </strong>
                     <span className="text-[11px] tabular-nums text-dark-text-muted">
                       meu: {formatCurrency(card.personalAmount)}
+                    </span>
+                    <span className="block text-[11px] tabular-nums text-dark-text-muted">
+                      não meu: {formatCurrency(card.thirdPartyAmount)}
                     </span>
                   </span>
                 </div>
@@ -986,7 +1115,7 @@ export function CreditCardManager() {
           <PanelHeader title="Resumo do futuro" />
           <dl className="mt-3 space-y-1.5 text-sm">
             {[
-              { label: 'Próxima fatura', value: summary.nextTotal },
+              { label: 'Em formação', value: summary.nextTotal },
               { label: 'Meu próximo', value: summary.nextPersonalTotal },
               { label: 'Parcelas restantes', value: summary.remainingInstallmentsTotal },
               { label: 'Minhas parcelas restantes', value: summary.remainingPersonalInstallmentsTotal },

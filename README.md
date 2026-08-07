@@ -14,7 +14,7 @@ Planejamento financeiro pessoal: orçamento do mês, patrimônio, cartões e o h
 | **Visão geral** | Saldo livre do mês, caixa do mês (extrato), metas por caixa (planejado × realizado no cartão), custos por categoria, alertas e comparação de cenários |
 | **Planejamento** | Renda e descontos em folha, custos fixos (com rateio e forma de pagamento), modelo de orçamento, desejos, plano de aportes e reserva |
 | **Patrimônio** | Ativos e passivos: posições por classe, rentabilidade anualizada, reserva, metas com prazo, bens (imóvel, veículo) e dívidas (saldo, juros, prazo, amortizar × investir) |
-| **Cartões** | Fatura atual e próxima, cartões com fechamento e vencimento próprios, parcelas e assinaturas automáticas, importação por colagem do Sheets |
+| **Cartões** | Fatura a pagar e fatura em formação, parcelas e assinaturas automáticas, importação por colagem do Sheets |
 | **Futuro** | 13º, bônus, IPVA e afins como ocorrências datadas; projeção do dinheiro por padrão, do balanço inteiro (bens, dívidas, líquido) sob demanda, em valores nominais ou de hoje |
 | **Histórico** | Realizado do mês, fechamento, evolução do patrimônio, custo médio real e correção de meses passados |
 
@@ -35,7 +35,7 @@ Planejamento financeiro pessoal: orçamento do mês, patrimônio, cartões e o h
 - **Realizado do mês** — o que de fato foi pago em débito e boleto, item por item. Sem ele o "custo médio real" do histórico é só a média dos planos, e a meta da reserva de emergência herda o mesmo otimismo. Valor informado manda; onde não houver, vale o planejado.
 - **Valores de hoje** — a projeção pode ser lida descontada da inflação. Em três ou cinco anos a diferença entre nominal e real é grande o bastante para mudar a decisão.
 - **Rentabilidade anualizada** — TIR sobre as datas dos aportes, para que quem aportou ontem e quem aportou há três anos não apareçam iguais. Histórico curto demais mostra `—`.
-- **Fechamento de mês** — congela o mês: custos realizados, fatura por área, ativos, dívidas e sobra em caixa. Fechou errado num mês passado? Corrija o registro em vez de refechar — refechar substituiria tudo pelos números de hoje.
+- **Fechamento de mês** — registra os gastos e o plano do mês de uso. Pagar uma fatura anterior movimenta o caixa do ciclo atual, mas não fecha automaticamente o mês do Histórico. Fechou errado num mês passado? Corrija o registro em vez de refechar — refechar substituiria tudo pelos números de hoje.
 
 ## Como rodar
 

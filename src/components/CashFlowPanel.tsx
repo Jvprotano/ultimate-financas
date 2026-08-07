@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, Wallet } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, Wallet } from 'lucide-react'
 import { Panel, PanelHeader, SegmentedBar, type Segment } from './ui'
 import { formatCurrency, formatMonthLong } from '../lib/format'
 import { useFinancasStore } from '../context/financasStore'
@@ -46,7 +46,7 @@ function FlowRow({
 }
 
 export function CashFlowPanel() {
-  const { cashFlow, cards, forecast } = useFinancasStore()
+  const { cashFlow, cards, financialCycle, forecast } = useFinancasStore()
   const {
     paycheck,
     extraIncome,
@@ -56,9 +56,6 @@ export function CashFlowPanel() {
     wantsOnAccount,
     directInvestment,
     extraExpense,
-    plannedOnCard,
-    cardPlanGap,
-    leftover,
   } = cashFlow
 
   const incomeEvents = forecast.monthOccurrences.filter((item) => item.event.kind === 'income')
@@ -80,26 +77,37 @@ export function CashFlowPanel() {
     { id: 'wants', label: 'Desejos em conta', value: wantsOnAccount, color: CHART_PALETTE.yellow },
     { id: 'invest', label: 'Aporte direto', value: directInvestment, color: CHART_PALETTE.aqua },
     { id: 'extra', label: 'Saídas do ano', value: extraExpense, color: CHART_PALETTE.red },
-    { id: 'left', label: 'Sobra', value: Math.max(0, leftover), color: CHART_PALETTE.muted },
+    {
+      id: 'reserve',
+      label: 'Reserva da próxima fatura',
+      value: financialCycle.reservedForNextInvoice,
+      color: CHART_PALETTE.violet,
+    },
+    {
+      id: 'left',
+      label: 'Livre',
+      value: financialCycle.safeToSpend,
+      color: CHART_PALETTE.muted,
+    },
   ]
 
   return (
     <Panel>
       <PanelHeader
-        title={`Caixa de ${formatMonthLong(forecast.currentMonth)}`}
+        title={`Ciclo financeiro de ${formatMonthLong(financialCycle.cashMonth)}`}
         icon={<Wallet size={16} />}
-        description="O que entra e sai da conta agora. O orçamento mede o mês em que você gastou; aqui é o mês em que o dinheiro se move."
+        description={`O dinheiro recebido no fim de ${formatMonthLong(financialCycle.spendingMonth)} financia ${formatMonthLong(financialCycle.cashMonth)}. A fatura abaixo é de gastos de ${formatMonthLong(financialCycle.spendingMonth)}.`}
         actions={
           <span className="text-right">
             <span className="block text-[11px] uppercase tracking-wider text-dark-text-muted">
-              Sobra em caixa
+              Livre depois das reservas
             </span>
             <strong
               className={`block text-lg font-semibold tabular-nums ${
-                leftover >= 0 ? 'text-dark-text' : 'text-rose-400'
+                financialCycle.shortfall === 0 ? 'text-dark-text' : 'text-rose-400'
               }`}
             >
-              {formatCurrency(leftover)}
+              {formatCurrency(financialCycle.safeToSpend)}
             </strong>
           </span>
         }
@@ -122,10 +130,10 @@ export function CashFlowPanel() {
           />
         )}
         <FlowRow
-          label={invoices.length > 1 ? 'Faturas do cartão (sua parte)' : 'Fatura do cartão (sua parte)'}
+          label={invoices.length > 1 ? 'Faturas anteriores' : 'Fatura anterior'}
           value={invoiceToPay}
           direction="out"
-          hint={invoiceHint}
+          hint={`${invoiceHint} · gastos de ${formatMonthLong(financialCycle.spendingMonth)}`}
         />
         {costsOnAccount > 0 && (
           <FlowRow
@@ -146,6 +154,14 @@ export function CashFlowPanel() {
             hint="o que você transfere para investir, além da folha"
           />
         )}
+        {financialCycle.reservedForNextInvoice > 0 && (
+          <FlowRow
+            label="Reserva da próxima fatura"
+            value={financialCycle.reservedForNextInvoice}
+            direction="out"
+            hint={`compras de ${formatMonthLong(financialCycle.nextSpendingMonth)} já feitas no cartão`}
+          />
+        )}
         {extraExpense > 0 && (
           <FlowRow
             label="Saídas do ano"
@@ -156,30 +172,11 @@ export function CashFlowPanel() {
         )}
       </div>
 
-      {plannedOnCard > 0 && (
-        <p
-          className={`mt-3 flex items-start gap-2 rounded-lg border px-3 py-2 text-[11px] leading-relaxed ${
-            cardPlanGap > 0.005
-              ? 'border-amber-500/25 bg-amber-500/[0.07] text-amber-200'
-              : 'border-dark-border bg-dark-surface text-dark-text-muted'
-          }`}
-        >
-          {cardPlanGap > 0.005 && <AlertTriangle size={13} className="mt-px shrink-0" />}
-          <span>
-            Seu plano prevê <strong>{formatCurrency(plannedOnCard)}</strong> passando no cartão e a
-            fatura registra <strong>{formatCurrency(invoiceToPay)}</strong>.
-            {cardPlanGap > 0.005
-              ? ` São ${formatCurrency(cardPlanGap)} acima do planejado — a diferença é gasto que ainda não tem lugar no orçamento.`
-              : ' A fatura está dentro do plano.'}
-          </span>
-        </p>
-      )}
-
-      {invoiceToPay > 0 && leftover < 0 && (
+      {financialCycle.shortfall > 0 && (
         <p className="mt-2 text-[11px] leading-relaxed text-rose-300">
-          O salário deste mês não cobre a fatura que vence mais o resto. Como a fatura é o gasto do
-          mês passado, a saída costuma ser cortar o cartão agora — o efeito só aparece no caixa do
-          mês seguinte.
+          Faltam {formatCurrency(financialCycle.shortfall)} para cobrir os compromissos atuais e
+          deixar reservada a próxima fatura. Reduza desejos ou o aporte antes de assumir novas
+          compras no cartão.
         </p>
       )}
     </Panel>

@@ -92,6 +92,22 @@ describe('calculateCreditCardSummary', () => {
     )
     expect(summary.totalsByCard.map((card) => card.cardName)).toEqual(['Itaú', 'XP'])
   })
+
+  it('totais por cartão mostram também o que não é meu', () => {
+    const summary = calculateCreditCardSummary(
+      [
+        entry({ id: 'a', cardName: 'Itaú', amount: 300, personalAmount: 100 }),
+        entry({ id: 'b', cardName: 'Itaú', amount: 120, personalAmount: 120 }),
+      ],
+      settings,
+    )
+    expect(summary.totalsByCard[0]).toMatchObject({
+      cardName: 'Itaú',
+      totalAmount: 420,
+      personalAmount: 220,
+      thirdPartyAmount: 200,
+    })
+  })
 })
 
 describe('syncGeneratedNextEntries', () => {

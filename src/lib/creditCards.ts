@@ -238,8 +238,14 @@ export function calculateCreditCardSummary(
     0,
   )
 
-  const byCard = new Map<string, { totalAmount: number; personalAmount: number }>()
-  const byOwner = new Map<string, { totalAmount: number; personalAmount: number }>()
+  const byCard = new Map<
+    string,
+    { totalAmount: number; personalAmount: number; thirdPartyAmount: number }
+  >()
+  const byOwner = new Map<
+    string,
+    { totalAmount: number; personalAmount: number; thirdPartyAmount: number }
+  >()
   // Uma compra antecipada já saiu do bolso neste mês: continua contando como
   // gasto realizado da área, mesmo fora do total devido da fatura.
   const personalByArea: Record<BudgetArea, number> = {
@@ -255,19 +261,29 @@ export function calculateCreditCardSummary(
   }
 
   for (const entry of currentDueEntries) {
-    const existing = byCard.get(entry.cardName) ?? { totalAmount: 0, personalAmount: 0 }
+    const thirdPartyAmount = Math.max(0, entry.amount - entry.personalAmount)
+    const existing = byCard.get(entry.cardName) ?? {
+      totalAmount: 0,
+      personalAmount: 0,
+      thirdPartyAmount: 0,
+    }
     byCard.set(entry.cardName, {
       totalAmount: existing.totalAmount + entry.amount,
       personalAmount: existing.personalAmount + entry.personalAmount,
+      thirdPartyAmount: existing.thirdPartyAmount + thirdPartyAmount,
     })
 
-    const thirdPartyAmount = Math.max(0, entry.amount - entry.personalAmount)
     if (thirdPartyAmount > 0) {
       const owner = entry.ownerName || entry.ownerNote || 'Outro'
-      const ownerExisting = byOwner.get(owner) ?? { totalAmount: 0, personalAmount: 0 }
+      const ownerExisting = byOwner.get(owner) ?? {
+        totalAmount: 0,
+        personalAmount: 0,
+        thirdPartyAmount: 0,
+      }
       byOwner.set(owner, {
         totalAmount: ownerExisting.totalAmount + thirdPartyAmount,
         personalAmount: ownerExisting.personalAmount,
+        thirdPartyAmount: ownerExisting.thirdPartyAmount + thirdPartyAmount,
       })
     }
   }

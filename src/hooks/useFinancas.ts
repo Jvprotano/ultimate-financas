@@ -9,6 +9,7 @@ import { useForecast } from './useForecast'
 import { useActuals } from './useActuals'
 import { calculateScenario } from '../lib/scenario'
 import { calculateCashFlow } from '../lib/cashflow'
+import { calculateFinancialCycle } from '../lib/financialCycle'
 import { calculateAssetsSummary } from '../lib/assets'
 import { projectNetWorth } from '../lib/forecast'
 import { maybeCreateAutoBackup } from '../lib/backup'
@@ -100,6 +101,21 @@ export function useFinancas() {
         occurrences: forecast.monthOccurrences,
       }),
     [metrics, cards.summary.currentPersonalTotal, forecast.monthOccurrences],
+  )
+
+  const financialCycle = useMemo(
+    () =>
+      calculateFinancialCycle({
+        cashMonth: forecast.currentMonth,
+        income: cashFlow.totalIn,
+        invoiceToPay: cashFlow.invoiceToPay,
+        costsOnAccount: cashFlow.costsOnAccount,
+        wantsOnAccount: cashFlow.wantsOnAccount,
+        directInvestment: cashFlow.directInvestment,
+        extraExpense: cashFlow.extraExpense,
+        nextInvoicePersonal: cards.summary.nextPersonalTotal,
+      }),
+    [cards.summary.nextPersonalTotal, cashFlow, forecast.currentMonth],
   )
 
   // Aporte recorrente da projeção: o do plano, salvo se você fixar outro. A
@@ -243,6 +259,7 @@ export function useFinancas() {
     actuals,
     metrics,
     cashFlow,
+    financialCycle,
     projection,
     monthlyContribution,
     scenarioSummaries,

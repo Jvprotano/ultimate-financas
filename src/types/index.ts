@@ -558,6 +558,7 @@ export interface CardTotal {
   cardName: string
   totalAmount: number
   personalAmount: number
+  thirdPartyAmount: number
 }
 
 export interface CreditCardSummary {

@@ -149,9 +149,9 @@ export function HistoryView() {
 
       <Panel>
         <PanelHeader
-          title={`Fechar ${formatMonthLong(currentMonth)}`}
+          title={`Fechar o planejamento de ${formatMonthLong(currentMonth)}`}
           icon={<CalendarCheck size={16} />}
-          description="Congela os números de hoje como o resultado do mês: o plano, o realizado na fatura e a sobra em caixa. É o que alimenta os gráficos e as médias."
+          description="Registra o que aconteceu neste mês de uso: custos, desejos, investimentos e gastos no cartão. Pagar uma fatura anterior movimenta o caixa, mas não fecha este mês automaticamente."
           actions={
             isCurrentMonthClosed ? (
               <ConfirmButton onConfirm={handleClose} confirmLabel="Substituir" tone="primary">
