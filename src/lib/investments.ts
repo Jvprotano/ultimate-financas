@@ -14,6 +14,40 @@ const DAY_MS = 24 * 60 * 60 * 1000
 /** Abaixo disso, anualizar transforma ruído de dias em "retorno" de três dígitos. */
 const MIN_DAYS_FOR_ANNUALIZED = 60
 
+/**
+ * Finalidade da posição. A classe responde "no que está aplicado"; a finalidade
+ * responde "para que esse dinheiro existe". Isso permite que um CDB seja Renda
+ * Fixa e, ao mesmo tempo, Reserva de emergência sem misturá-lo com a carteira.
+ */
+export type InvestmentPurpose = 'portfolio' | 'emergency_fund'
+
+export type FinancialHolding = InvestmentHolding & {
+  purpose?: InvestmentPurpose
+  /** Referência/rentabilidade contratada: ex. 100% CDI, Selic, IPCA + 6%. */
+  benchmark?: string
+  /** Prazo de resgate informado pelo usuário: ex. D+0, D+1. */
+  liquidity?: string
+}
+
+export type FinancialHoldingSummary = HoldingSummary & {
+  purpose?: InvestmentPurpose
+  benchmark?: string
+  liquidity?: string
+}
+
+export type ExtendedInvestmentsSummary = InvestmentsSummary & {
+  /** Posições cuja finalidade é a reserva, fora da carteira de rebalanceamento. */
+  reserveHoldings: FinancialHoldingSummary[]
+  reserveInvested: number
+  reserveGain: number
+  /** Valor de mercado apenas da carteira de médio/longo prazo. */
+  portfolioMarketValue: number
+}
+
+export function holdingPurpose(holding: FinancialHolding): InvestmentPurpose {
+  return holding.purpose === 'emergency_fund' ? 'emergency_fund' : 'portfolio'
+}
+
 // ---------------------------------------------------------------------------
 // Rentabilidade anualizada (TIR sobre fluxos de caixa irregulares)
 // ---------------------------------------------------------------------------
@@ -79,10 +113,8 @@ export function annualizedReturn(transactions: LedgerEntry[], marketValue: numbe
 // ---------------------------------------------------------------------------
 
 /**
- * A reserva é um livro-razão: o saldo é sempre a soma das transações. Saldos
- * antigos (que só tinham `current`) são migrados de forma não destrutiva para
- * uma única transação "Saldo inicial" — com id/data determinísticos para a
- * normalização ser estável entre renders.
+ * A reserva antiga é mantida apenas como formato de migração. Depois da
+ * migração, o saldo passa a ser a soma das posições `emergency_fund`.
  */
 export function normalizeEmergencyFund(
   raw: Partial<EmergencyFundState> | undefined,
@@ -100,7 +132,7 @@ export function normalizeEmergencyFund(
   return { current: Math.max(0, ledgerBalance(transactions)), targetMonths, transactions }
 }
 
-export function normalizeHolding(raw: Partial<InvestmentHolding> | undefined): InvestmentHolding {
+export function normalizeHolding(raw: Partial<FinancialHolding> | undefined): FinancialHolding {
   return {
     id: raw?.id || uid(),
     name: raw?.name?.trim() || 'Posição',
@@ -108,6 +140,9 @@ export function normalizeHolding(raw: Partial<InvestmentHolding> | undefined): I
     institution: raw?.institution?.trim() || undefined,
     marketValue: Math.max(0, finiteNumber(raw?.marketValue)),
     transactions: normalizeLedger(raw?.transactions),
+    purpose: raw?.purpose === 'emergency_fund' ? 'emergency_fund' : 'portfolio',
+    benchmark: raw?.benchmark?.trim() || undefined,
+    liquidity: raw?.liquidity?.trim() || undefined,
   }
 }
 
@@ -136,14 +171,14 @@ export interface BalanceSheetInput {
 }
 
 export function calculateInvestmentsSummary(
-  holdings: InvestmentHolding[],
+  holdings: FinancialHolding[],
   classes: InvestmentAssetClass[],
-  reserveBalance = 0,
+  legacyReserveBalance = 0,
   goalsBalance = 0,
   liabilities = 0,
   balanceSheet: BalanceSheetInput = {},
-): InvestmentsSummary {
-  const holdingSummaries: HoldingSummary[] = holdings.map((holding) => {
+): ExtendedInvestmentsSummary {
+  const holdingSummaries: FinancialHoldingSummary[] = holdings.map((holding) => {
     const invested = ledgerBalance(holding.transactions)
     const gain = holding.marketValue - invested
     return {
@@ -155,27 +190,47 @@ export function calculateInvestmentsSummary(
     }
   })
 
-  const totalMarketValue = holdingSummaries.reduce((sum, h) => sum + h.marketValue, 0)
-  const totalInvested = holdingSummaries.reduce((sum, h) => sum + h.invested, 0)
+  const reserveHoldings = holdingSummaries.filter(
+    (holding) => holdingPurpose(holding) === 'emergency_fund',
+  )
+  const portfolioHoldings = holdingSummaries.filter(
+    (holding) => holdingPurpose(holding) === 'portfolio',
+  )
+
+  // `legacyReserveBalance` só existe durante a primeira renderização de uma base
+  // antiga. Assim que a migração cria uma posição de reserva, ele deixa de somar.
+  const reserveMarketValue = reserveHoldings.reduce((sum, h) => sum + h.marketValue, 0)
+  const reserveBalance = reserveHoldings.length > 0 ? reserveMarketValue : legacyReserveBalance
+  const reserveInvested = reserveHoldings.reduce((sum, h) => sum + h.invested, 0)
+  const reserveGain = reserveHoldings.reduce((sum, h) => sum + h.gain, 0)
+
+  // Estes totais continuam significando a carteira de médio/longo prazo. A
+  // reserva é um ativo financeiro, mas não participa do rebalanceamento dela.
+  const totalMarketValue = portfolioHoldings.reduce((sum, h) => sum + h.marketValue, 0)
+  const totalInvested = portfolioHoldings.reduce((sum, h) => sum + h.invested, 0)
   const totalGain = totalMarketValue - totalInvested
+
   // Reserva e metas são dinheiro seu. Em `goalsBalance` entra só o livro-razão
-  // das metas — o que uma meta de patrimônio engloba já está em
-  // `totalMarketValue`/`reserveBalance`.
+  // das metas — o que uma meta de patrimônio engloba já está contado.
   const financialAssets = totalMarketValue + reserveBalance + goalsBalance
 
   const physicalAssets = Math.max(0, balanceSheet.physicalAssets ?? 0)
   // Garantida nunca passa do total: o saldo do financiamento é o mesmo saldo.
-  const securedLiabilities = Math.min(liabilities, Math.max(0, balanceSheet.securedLiabilities ?? 0))
+  const securedLiabilities = Math.min(
+    liabilities,
+    Math.max(0, balanceSheet.securedLiabilities ?? 0),
+  )
   const unsecuredLiabilities = liabilities - securedLiabilities
 
   const grossAssets = financialAssets + physicalAssets
   const netWorth = grossAssets - liabilities
-  // O número que responde "quanto dinheiro eu terei": a casa não paga a conta
+  // O número que responde "quanto dinheiro eu tenho": a casa não paga a conta
   // do mês e o financiamento dela já é custo fixo — os dois saem daqui.
   const financialNetWorth = financialAssets - unsecuredLiabilities
 
-  // Classes com posições (na ordem cadastrada) seguidas de eventuais órfãs.
-  const orphanClassIds = holdingSummaries
+  // Classes de carteira: posições de reserva têm classe real, mas não entram na
+  // alocação/rebalanceamento de longo prazo. Elas aparecem dentro da seção Reserva.
+  const orphanClassIds = portfolioHoldings
     .map((h) => h.assetClassId)
     .filter((id) => !classes.some((c) => c.id === id))
   const orderedClasses: InvestmentAssetClass[] = [
@@ -189,7 +244,7 @@ export function calculateInvestmentsSummary(
 
   const classSummaries: AssetClassSummary[] = orderedClasses
     .map((assetClass) => {
-      const classHoldings = holdingSummaries.filter((h) => h.assetClassId === assetClass.id)
+      const classHoldings = portfolioHoldings.filter((h) => h.assetClassId === assetClass.id)
       const marketValue = classHoldings.reduce((sum, h) => sum + h.marketValue, 0)
       const invested = classHoldings.reduce((sum, h) => sum + h.invested, 0)
       const gain = marketValue - invested
@@ -201,9 +256,8 @@ export function calculateInvestmentsSummary(
         invested,
         gain,
         gainPct: invested > 0 ? (gain / invested) * 100 : 0,
-        // A alocação é medida sobre o patrimônio *financeiro*: um imóvel não se
-        // rebalanceia, e dividir pelo líquido (que pode ser pequeno ou
-        // negativo) daria fatias sem sentido.
+        // Mantém a leitura de composição do patrimônio financeiro; a reserva é
+        // mostrada como fatia própria na barra e não some silenciosamente.
         allocationPct: financialAssets > 0 ? (marketValue / financialAssets) * 100 : 0,
         holdings: classHoldings,
       }
@@ -226,5 +280,9 @@ export function calculateInvestmentsSummary(
     reserveBalance,
     goalsBalance,
     classes: classSummaries,
+    reserveHoldings,
+    reserveInvested,
+    reserveGain,
+    portfolioMarketValue: totalMarketValue,
   }
 }
