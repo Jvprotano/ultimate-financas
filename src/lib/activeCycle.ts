@@ -28,8 +28,10 @@ export function clampDay(value: unknown, fallback: number): number {
 }
 
 /**
- * Primeira carga: o salário do fim do mês anterior financia o mês civil atual.
- * Depois disso o valor persistido manda — nunca auto-corrige pelo calendário.
+ * Fallback sem dados de cartão: salário do fim do mês anterior financia o mês
+ * civil atual. Em `useActiveCycle`, a 1ª carga prefere o vencimento do cartão
+ * quando ele já existe no storage (migração de prod). Depois o valor persistido
+ * manda — nunca auto-corrige pelo calendário.
  */
 export function defaultActiveCycle(now = new Date()): ActiveCycle {
   return {
@@ -48,6 +50,21 @@ export function normalizeActiveCycle(
     month: isMonthKey(raw?.month) ? raw.month : fallback.month,
     salaryHintDay: clampDay(raw?.salaryHintDay, fallback.salaryHintDay),
     cardDueHintDay: clampDay(raw?.cardDueHintDay, fallback.cardDueHintDay),
+  }
+}
+
+/**
+ * Seed da 1ª carga a partir do vencimento já inferido do cartão (ex.: "05/09"
+ * → ciclo setembro). Evita nascer em agosto civil com fatura de setembro.
+ */
+export function seedCycleFromCardDueMonth(
+  currentDueMonth: string | undefined,
+  cardDueHintDay?: number,
+): Partial<ActiveCycle> | null {
+  if (!isMonthKey(currentDueMonth)) return null
+  return {
+    month: currentDueMonth,
+    ...(cardDueHintDay !== undefined ? { cardDueHintDay: clampDay(cardDueHintDay, 5) } : {}),
   }
 }
 

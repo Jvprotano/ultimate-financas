@@ -7,6 +7,7 @@ import {
   defaultActiveCycle,
   expectedCardDueMonth,
   normalizeActiveCycle,
+  seedCycleFromCardDueMonth,
   shiftCycleMonth,
 } from './activeCycle'
 
@@ -38,5 +39,14 @@ describe('activeCycle', () => {
     expect(cardDueDivergesFromCycle('2026-09', '2026-08')).toBe(true)
     expect(cardDueDivergesFromCycle('2026-08', '2026-08')).toBe(false)
     expect(cardDueDivergesFromCycle(undefined, '2026-08')).toBe(false)
+  })
+
+  it('na 1ª carga prefere o vencimento do cartão ao mês civil', () => {
+    expect(seedCycleFromCardDueMonth('2026-09', 5)).toEqual({
+      month: '2026-09',
+      cardDueHintDay: 5,
+    })
+    expect(seedCycleFromCardDueMonth(undefined)).toBeNull()
+    expect(seedCycleFromCardDueMonth('nope')).toBeNull()
   })
 })

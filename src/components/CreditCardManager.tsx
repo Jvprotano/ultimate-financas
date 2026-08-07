@@ -422,11 +422,17 @@ export function CreditCardManager() {
           <div className="min-w-0 text-sm leading-relaxed text-amber-100/90">
             <strong className="font-semibold text-amber-200">Vencimento desalinhado do ciclo.</strong>{' '}
             Fatura marcada para {formatMonthLong(currentDueMonth)}; ciclo ativo{' '}
-            {formatMonthLong(activeCycle.month)}. Pagar a fatura não fecha o ciclo.
+            {formatMonthLong(activeCycle.month)}. Pagar a fatura não fecha o ciclo. Prefira ajustar
+            o ciclo ao vencimento na primeira configuração.
           </div>
-          <SecondaryButton onClick={handleAlignDueMonth}>
-            Alinhar vencimento ao ciclo
-          </SecondaryButton>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <PrimaryButton onClick={() => activeCycle.setCycleMonth(currentDueMonth)}>
+              Usar ciclo de {formatMonthLong(currentDueMonth)}
+            </PrimaryButton>
+            <SecondaryButton onClick={handleAlignDueMonth}>
+              Só alinhar o rótulo
+            </SecondaryButton>
+          </div>
         </div>
       )}
 

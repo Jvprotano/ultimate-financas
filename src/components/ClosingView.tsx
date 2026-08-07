@@ -284,12 +284,17 @@ export function ClosingView({
           <div className="min-w-0 text-sm leading-relaxed text-amber-100/90">
             <strong className="font-semibold text-amber-200">Vencimento do cartão desalinhado.</strong>{' '}
             A fatura está marcada para {formatMonthLong(currentDueMonth)}, mas o ciclo ativo é{' '}
-            {formatMonthLong(activeCycle.month)}. O caixa já conta a fatura neste ciclo — alinhe só
-            se quiser sincronizar o rótulo.
+            {formatMonthLong(activeCycle.month)}. Na primeira configuração, o caminho seguro é
+            trazer o ciclo para o vencimento — não o contrário.
           </div>
-          <SecondaryButton onClick={handleAlignDueMonth}>
-            Alinhar vencimento ao ciclo
-          </SecondaryButton>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <PrimaryButton onClick={() => activeCycle.setCycleMonth(currentDueMonth)}>
+              Usar ciclo de {formatMonthLong(currentDueMonth)}
+            </PrimaryButton>
+            <SecondaryButton onClick={handleAlignDueMonth}>
+              Só alinhar o rótulo
+            </SecondaryButton>
+          </div>
         </div>
       )}
 
