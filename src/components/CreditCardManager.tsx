@@ -37,8 +37,6 @@ import {
   stripInstallmentToken,
 } from '../lib/cardImport'
 import { useCardsStore, useFinancasStore, useMetrics } from '../context/financasStore'
-import { expectedCardDueMonth } from '../lib/activeCycle'
-import { parsePaymentDay } from '../lib/creditCards'
 import type { BudgetArea, CreditCardCycle, CreditCardEntry } from '../types'
 import { BUDGET_AREAS, BUDGET_AREA_COLORS, BUDGET_AREA_SHORT_LABELS } from '../types/constants'
 
@@ -110,15 +108,23 @@ export function CreditCardManager() {
     setSettings,
   } = useCardsStore()
   const { availableForBudget, budgetComparison, plannedOnCard } = useMetrics()
-  const { financialCycle, activeCycle } = useFinancasStore()
-  const currentDueMonth = settings.currentDueMonth ?? financialCycle.cashMonth
+  const { activeCycle, cardCycleAccounting } = useFinancasStore()
+  const currentDueMonth = settings.currentDueMonth ?? activeCycle.month
   const nextDueMonth = addMonths(currentDueMonth, 1)
-  // O que está na fatura “atual” do cartão segue o ciclo do cartão (avança ao
-  // pagar). O ciclo ativo do app é outra fonte — só diz em qual caixa isso conta.
   const currentSpendingMonth = addMonths(currentDueMonth, -1)
   const nextSpendingMonth = addMonths(nextDueMonth, -1)
-  const dueDiverges = Boolean(
-    settings.currentDueMonth && settings.currentDueMonth !== activeCycle.month,
+  const closingDueMonth = addMonths(activeCycle.month, 1)
+  const afterClosingPaymentDueMonth = addMonths(activeCycle.month, 2)
+  // Agosto + fatura de Setembro é o estado normal. Se a fatura de Setembro já
+  // foi paga antes de fechar Agosto, Outubro + ciclo Agosto também é esperado.
+  const dueLooksUnexpected = Boolean(
+    settings.currentDueMonth &&
+      currentDueMonth !== activeCycle.month &&
+      currentDueMonth !== closingDueMonth &&
+      !(
+        currentDueMonth === afterClosingPaymentDueMonth &&
+        cardCycleAccounting.spendingThisCycle.paid
+      ),
   )
 
   const [view, setView] = useState<View>('current')
@@ -404,35 +410,15 @@ export function CreditCardManager() {
   const moneyCellClass =
     '!border-transparent !bg-transparent !py-1 !pl-6 !pr-2 text-sm transition-all hover:!bg-white/5 focus:!border-dark-border focus:!bg-dark-input'
 
-  const handleAlignDueMonth = () => {
-    const dueDay = parsePaymentDay(settings.paymentDate, 5)
-    const month = expectedCardDueMonth(activeCycle.month)
-    const [, monthPart] = month.split('-')
-    setSettings({
-      ...settings,
-      currentDueMonth: month,
-      paymentDate: `${String(dueDay).padStart(2, '0')}/${monthPart ?? '01'}`,
-    })
-  }
-
   return (
     <div className="space-y-4">
-      {dueDiverges && (
-        <div className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/[0.07] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0 text-sm leading-relaxed text-amber-100/90">
-            <strong className="font-semibold text-amber-200">Vencimento desalinhado do ciclo.</strong>{' '}
-            Fatura marcada para {formatMonthLong(currentDueMonth)}; ciclo ativo{' '}
-            {formatMonthLong(activeCycle.month)}. Pagar a fatura não fecha o ciclo. Prefira ajustar
-            o ciclo ao vencimento na primeira configuração.
-          </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
-            <PrimaryButton onClick={() => activeCycle.setCycleMonth(currentDueMonth)}>
-              Usar ciclo de {formatMonthLong(currentDueMonth)}
-            </PrimaryButton>
-            <SecondaryButton onClick={handleAlignDueMonth}>
-              Só alinhar o rótulo
-            </SecondaryButton>
-          </div>
+      {dueLooksUnexpected && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.07] px-4 py-3 text-sm leading-relaxed text-amber-100/90">
+          <strong className="font-semibold text-amber-200">Confira o calendário do cartão.</strong>{' '}
+          A fatura atual vence em {formatMonthLong(currentDueMonth)} enquanto o ciclo ativo é{' '}
+          {formatMonthLong(activeCycle.month)}. Não altere o ciclo apenas para igualar o vencimento:
+          isso pode significar que mais de uma fatura foi girada. Confira os lançamentos e o último
+          pagamento antes de continuar.
         </div>
       )}
 
@@ -472,7 +458,7 @@ export function CreditCardManager() {
       <Panel>
         <PanelHeader
           title="Seu teto de gasto"
-          description={`Esta fatura reúne gastos de ${formatMonthLong(currentSpendingMonth)} e conta no caixa do ciclo ${formatMonthLong(financialCycle.cashMonth)} (vence ~${formatMonthLong(currentDueMonth)}). A aba seguinte é o cartão de ${formatMonthLong(nextSpendingMonth)}.`}
+          description={`Fatura atual: lançamentos atribuídos a ${formatMonthLong(currentSpendingMonth)}, com vencimento em ${formatMonthLong(currentDueMonth)}. O ciclo ativo é ${formatMonthLong(activeCycle.month)} e não precisa ser alinhado ao vencimento. A aba seguinte prepara ${formatMonthLong(nextSpendingMonth)}, com vencimento em ${formatMonthLong(nextDueMonth)}.`}
           className="mb-4"
         />
         <div className="grid gap-4 lg:grid-cols-2">
@@ -523,7 +509,7 @@ export function CreditCardManager() {
         {view === 'current' && (
           <PrimaryButton onClick={() => setShowPaySummary(true)}>
             <CheckCircle2 size={15} />
-            Pagar fatura (próxima fatura)
+            Pagar fatura de {formatMonthLong(currentDueMonth)}
           </PrimaryButton>
         )}
         {view === 'next' && (
@@ -539,7 +525,7 @@ export function CreditCardManager() {
           <PanelHeader
             title="Resumo antes de pagar"
             icon={<CheckCircle2 size={16} />}
-            description={`Fatura de gastos de ${formatMonthLong(currentSpendingMonth)}, com vencimento ~${formatMonthLong(currentDueMonth)}. Sai do caixa do ciclo ativo ${formatMonthLong(financialCycle.cashMonth)}. Isto só gira a fatura do cartão — o ciclo do app fecha na aba Ciclo.`}
+            description={`Fatura com competência principal de ${formatMonthLong(currentSpendingMonth)} e vencimento em ${formatMonthLong(currentDueMonth)}. Marcar como paga preserva a competência dos lançamentos e gira o cartão. Se esta é a fatura formada pelo ciclo que você está encerrando, também é possível pagar junto pela revisão da aba Ciclo.`}
           />
           <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
             <StatTile label="Total da fatura" value={formatCurrency(summary.currentTotal)} />
@@ -1155,12 +1141,12 @@ export function CreditCardManager() {
 
         <Panel>
           <PanelHeader
-            title="Área do orçamento"
-            description="A área não cria um gasto novo: ela diz de qual caixa do plano a compra saiu. Academia marcada como necessidade é o custo fixo que você já cadastrou, agora aparecendo realizado."
+            title={`Área do orçamento · ${formatMonthLong(activeCycle.month)}`}
+            description="Este bloco segue o ciclo ativo por competência, mesmo se você já pagou a fatura e o cartão girou. A área não cria um gasto novo: ela mostra de qual caixa do plano o gasto do mês saiu."
           />
           <div className="mt-3 space-y-1.5">
             {BUDGET_AREAS.map((area) => {
-              const realized = summary.personalByArea[area]
+              const realized = cardCycleAccounting.spendingThisCycle.personalByArea[area]
               const planned = budgetComparison[area].actual
               return (
                 <div key={area} className="rounded-lg bg-dark-surface px-3 py-2 text-sm">
@@ -1185,20 +1171,22 @@ export function CreditCardManager() {
                 </div>
               )
             })}
-            {summary.unclassifiedPersonal > 0 && (
+            {cardCycleAccounting.spendingThisCycle.unclassifiedPersonal > 0 && (
               <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.07] px-3 py-2 text-sm">
                 <span className="font-medium text-amber-300">Sem área definida</span>
                 <strong className="tabular-nums text-amber-300">
-                  {formatCurrency(summary.unclassifiedPersonal)}
+                  {formatCurrency(cardCycleAccounting.spendingThisCycle.unclassifiedPersonal)}
                 </strong>
               </div>
             )}
           </div>
           {plannedOnCard > 0 && (
             <p className="mt-3 border-t border-dark-border-subtle pt-3 text-[11px] leading-relaxed text-dark-text-muted">
-              Do seu planejamento, {formatCurrency(plannedOnCard)} deveriam passar por aqui (o que
-              você marcou como “no cartão” em custos e desejos). A fatura pessoal está em{' '}
-              {formatCurrency(summary.currentPersonalTotal)}.
+              Do planejamento de {formatMonthLong(activeCycle.month)}, {formatCurrency(plannedOnCard)}{' '}
+              deveriam passar pelo cartão. O gasto pessoal atribuído a este ciclo está em{' '}
+              {formatCurrency(cardCycleAccounting.spendingThisCycle.spentPersonalTotal)}; a parte
+              ainda devida da fatura formada por ele é{' '}
+              {formatCurrency(cardCycleAccounting.spendingThisCycle.duePersonalTotal)}.
             </p>
           )}
         </Panel>
