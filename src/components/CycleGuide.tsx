@@ -1,5 +1,5 @@
 import { AlertTriangle, CalendarDays, CreditCard, ReceiptText } from 'lucide-react'
-import { formatMonthLong } from '../lib/format'
+import { formatCurrency, formatMonthLong } from '../lib/format'
 import { useFinancasStore } from '../context/financasStore'
 
 function currentMonthKey(now = new Date()) {
@@ -10,22 +10,13 @@ function formatToday(now = new Date()) {
   return now.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
-/**
- * Guia operacional do ciclo. Competência continua seguindo o mês vivido; o
- * fechamento é uma ação explícita e pode ser feito junto do pagamento da fatura
- * formada por esse mês, sem confundir o mês do gasto com o mês do vencimento.
- */
+/** Guia operacional do ciclo orientado à fatura usada no fechamento mensal. */
 export function CycleGuide() {
   const { activeCycle, actuals, cards, cardCycleAccounting } = useFinancasStore()
   const now = new Date()
   const calendarMonth = currentMonthKey(now)
   const isFutureCycle = activeCycle.month > calendarMonth
   const isPastCycle = activeCycle.month < calendarMonth
-  const previousMonth = (() => {
-    const [year, month] = activeCycle.month.split('-').map(Number)
-    const date = new Date(year, month - 2, 1)
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-  })()
 
   const missingActuals = actuals.summary.rows
     .filter((row) => row.actual === null)
@@ -37,6 +28,10 @@ export function CycleGuide() {
         .join(' · ')
     : 'Cadastre o dia de fechamento e de vencimento de cada cartão.'
 
+  const closingInvoice = cardCycleAccounting.invoiceFormedByCycle
+  const listedPersonal = cardCycleAccounting.spendingThisCycle.spentPersonalTotal
+  const prepaidPersonal = Math.max(0, listedPersonal - closingInvoice.personalTotal)
+
   return (
     <div className="space-y-2.5">
       {(isFutureCycle || isPastCycle) && (
@@ -46,8 +41,8 @@ export function CycleGuide() {
             <strong className="font-semibold text-amber-200">Confira o ciclo ativo.</strong>{' '}
             Hoje é {formatToday(now)} e o mês civil é {formatMonthLong(calendarMonth)}, mas o ciclo
             ativo está em {formatMonthLong(activeCycle.month)}. Isso pode ser intencional por poucos
-            dias enquanto você termina a revisão do mês anterior, mas o vencimento da fatura aberta
-            sozinho nunca é motivo para trocar o ciclo.
+            dias enquanto você termina o fechamento anterior. O mês de vencimento da fatura, por
+            si só, nunca é motivo para alterar o ciclo.
           </div>
         </div>
       )}
@@ -58,14 +53,15 @@ export function CycleGuide() {
             <h3 className="text-sm font-semibold text-dark-text">Como funciona este ciclo?</h3>
             <p className="mt-1 max-w-3xl text-xs leading-relaxed text-dark-text-muted">
               <strong className="text-dark-text">Ciclo {formatMonthLong(activeCycle.month)}</strong>{' '}
-              reúne a competência do mês que você está vivendo. O salário recebido no fim de{' '}
-              {formatMonthLong(previousMonth)} financia este mês. O ciclo só avança quando você usa
-              a ação <strong className="text-dark-text">Fechar ciclo</strong> — nunca só porque o
-              cartão fechou, venceu ou foi pago.
+              é o mês que você ainda está vivendo ou encerrando. No cartão, a referência é a fatura
+              usada para fechar esse ciclo. Por isso uma fatura que vence em{' '}
+              <strong className="text-dark-text">{formatMonthLong(closingInvoice.dueMonth)}</strong>{' '}
+              pode ser a fatura do fechamento de {formatMonthLong(activeCycle.month)} sem qualquer
+              desalinhamento.
             </p>
           </div>
           <span className="rounded-lg border border-dark-border bg-dark-card px-3 py-1.5 text-xs font-medium text-dark-text-secondary">
-            Regra: gasto no mês vivido; avanço só no fechamento
+            Regra: bucket da fatura fecha o ciclo
           </span>
         </div>
 
@@ -76,11 +72,10 @@ export function CycleGuide() {
               Quais custos entram?
             </div>
             <p className="mt-1.5 text-xs leading-relaxed text-dark-text-muted">
-              Contas em débito/boleto entram no ciclo do{' '}
-              <strong className="text-dark-text">mês em que vencem</strong>. Energia que vence em
-              agosto é custo de agosto, mesmo que o consumo seja de julho. Verbas mensais sem
-              vencimento — supermercado/vale, combustível, lazer — entram no mês em que são{' '}
-              <strong className="text-dark-text">usadas</strong>.
+              Contas em débito, PIX ou boleto seguem o mês em que vencem. Verbas contínuas como
+              supermercado/vale, combustível e lazer seguem o mês em que são usadas. Antes de
+              fechar, atualize esses realizados; o que ficar vazio será mostrado na revisão antes
+              de usar o valor planejado.
             </p>
           </div>
 
@@ -90,11 +85,10 @@ export function CycleGuide() {
               E o cartão?
             </div>
             <p className="mt-1.5 text-xs leading-relaxed text-dark-text-muted">
-              Você <strong className="text-dark-text">não fecha a fatura manualmente</strong> no
-              FinTano; o banco fecha na data cadastrada: {cardCalendar}. Depois, confira/importa a
-              fatura. Compras atribuídas a {formatMonthLong(activeCycle.month)} continuam sendo
-              competência desse ciclo mesmo quando vencem em{' '}
-              {formatMonthLong(cardCycleAccounting.spendingThisCycle.dueMonth)}.
+              O banco fecha a fatura conforme o calendário cadastrado: {cardCalendar}. No FinTano,
+              tudo que está no bucket dessa fatura permanece no mesmo ciclo, mesmo que a data
+              original de uma compra seja do fim do mês anterior. A data da compra não é usada para
+              repartir novamente a fatura.
             </p>
           </div>
 
@@ -104,27 +98,40 @@ export function CycleGuide() {
               Quando virar?
             </div>
             <p className="mt-1.5 text-xs leading-relaxed text-dark-text-muted">
-              Quando o mês estiver encerrado para você — normalmente depois do fechamento bancário
-              da fatura e de atualizar os últimos gastos — clique em{' '}
-              <strong className="text-dark-text">Revisar fechamento</strong>. Você poderá fechar só
-              o ciclo ou <strong className="text-dark-text">fechar e pagar a fatura formada por ele</strong>{' '}
-              na mesma ação. Se isso ocorrer no dia 1º seguinte, mantenha o ciclo anterior ativo até
-              terminar a revisão e então avance.
+              Depois do fechamento bancário e da conferência dos últimos custos, abra{' '}
+              <strong className="text-dark-text">Revisar fechamento</strong>. Para sua rotina, o
+              caminho normal é <strong className="text-dark-text">Fechar ciclo + pagar fatura</strong>.
+              Essa ação grava o Histórico, paga a fatura e só então avança o ciclo.
             </p>
           </div>
         </div>
 
         <div className="mt-3 rounded-lg border border-primary-500/20 bg-primary-500/[0.05] px-3 py-2.5 text-xs leading-relaxed text-dark-text-secondary">
-          <strong className="text-primary-200">Dois números do cartão:</strong> “gasto no cartão” é
-          o realizado por competência do ciclo e inclui valores antecipados; “fatura a pagar” é só
-          o que ainda é devido no vencimento. Eles podem ser diferentes sem haver erro.
+          <strong className="text-primary-200">Cartão deste fechamento:</strong>{' '}
+          {closingInvoice.amountKnown ? (
+            <>
+              sua parte é <strong className="text-dark-text">{formatCurrency(closingInvoice.personalTotal)}</strong>
+              {closingInvoice.total !== null && (
+                <>
+                  {' '}e o total da fatura é{' '}
+                  <strong className="text-dark-text">{formatCurrency(closingInvoice.total)}</strong>
+                </>
+              )}
+              {prepaidPersonal > 0.005 && (
+                <>. {formatCurrency(prepaidPersonal)} pessoais já foram antecipados e estão fora do valor a pagar</>
+              )}
+              .
+            </>
+          ) : (
+            <>o valor ainda não pôde ser reconstruído; confira a aba Cartões antes do fechamento.</>
+          )}
         </div>
 
         <div className="mt-2.5 rounded-lg border border-dark-border-subtle bg-dark-card px-3 py-2.5 text-xs leading-relaxed text-dark-text-muted">
           <strong className="text-dark-text">Antes de fechar:</strong>{' '}
           {missingActuals.length > 0
             ? `há ${missingActuals.length} custo(s) sem realizado informado: ${missingActuals.join(', ')}. A revisão mostrará cada um e, se você prosseguir sem preencher, o valor planejado será congelado como realizado.`
-            : 'todos os custos têm realizado informado. A revisão ainda mostrará custos, cartão, fatura e investimentos antes da confirmação.'}
+            : 'todos os custos têm realizado informado. A revisão ainda mostrará custos, sua parte da fatura, total da fatura e investimentos antes da confirmação.'}
         </div>
       </div>
     </div>
