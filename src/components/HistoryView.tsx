@@ -43,7 +43,7 @@ function SnapshotEditor({ point, onClose }: { point: HistoryPoint; onClose: () =
       key: 'securedLiabilities',
     },
     {
-      label: 'Gasto no cartão (competência)',
+      label: 'Fatura do ciclo (minha parte)',
       value: point.cardPersonalTotal,
       key: 'cardPersonalTotal',
     },
@@ -75,8 +75,8 @@ function SnapshotEditor({ point, onClose }: { point: HistoryPoint; onClose: () =
         </div>
         <p className="mt-2.5 text-[11px] leading-relaxed text-dark-text-muted">
           A taxa de poupança e o patrimônio líquido são recalculados a partir do que você editar.
-          “Gasto no cartão” é competência do mês e pode diferir do valor da fatura paga quando há
-          antecipações. Financeiro: {formatCurrency(point.financialNetWorth)} · líquido total:{' '}
+          “Fatura do ciclo” é a sua parte efetivamente paga na fatura usada para encerrar o mês.
+          Valores antecipados já retirados da fatura não são somados novamente. Financeiro: {formatCurrency(point.financialNetWorth)} · líquido total:{' '}
           {formatCurrency(point.grossAssets + point.physicalAssets - point.liabilities)}.
         </p>
         <div className="mt-2.5 flex gap-2">
@@ -160,7 +160,7 @@ export function HistoryView() {
           value={formatCurrency(stats.averageCosts)}
           detail={
             stats.averageCardPersonal > 0
-              ? `+ ${formatCurrency(stats.averageCardPersonal)}/mês de gasto no cartão`
+              ? `+ ${formatCurrency(stats.averageCardPersonal)}/mês de fatura pessoal`
               : 'média dos meses fechados'
           }
         />
@@ -213,9 +213,9 @@ export function HistoryView() {
                 <th className="px-4 py-2.5 text-right font-medium">Investido</th>
                 <th
                   className="px-4 py-2.5 text-right font-medium"
-                  title="Gasto pessoal atribuído por competência ao mês; pode diferir da fatura paga"
+                  title="Sua parte da fatura usada para encerrar o ciclo"
                 >
-                  Gasto cartão
+                  Fatura
                 </th>
                 <th className="px-4 py-2.5 text-right font-medium">Poupança</th>
                 <th className="px-4 py-2.5 text-right font-medium">
@@ -267,7 +267,7 @@ export function HistoryView() {
                     </td>
                     <td
                       className="px-4 py-2.5 text-right tabular-nums text-dark-text-secondary"
-                      title="Competência do mês; inclui valores antecipados e pode diferir da fatura ainda devida"
+                      title="Sua parte efetivamente devida na fatura que encerrou o ciclo"
                     >
                       {point.cardPersonalTotal > 0 ? formatCurrency(point.cardPersonalTotal) : '—'}
                     </td>

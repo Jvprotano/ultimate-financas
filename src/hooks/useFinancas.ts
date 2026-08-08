@@ -71,7 +71,9 @@ export function useFinancas() {
         entries: cards.entries,
         currentDueMonth: cards.settings.currentDueMonth ?? activeCycle.month,
         activeCycleMonth: activeCycle.month,
+        currentTotal: cards.summary.currentTotal,
         currentPersonalTotal: cards.summary.currentPersonalTotal,
+        nextTotal: cards.summary.nextTotal,
         nextPersonalTotal: cards.summary.nextPersonalTotal,
         paidInvoices: cards.paidInvoices,
       }),
@@ -81,7 +83,9 @@ export function useFinancas() {
       cards.paidInvoices,
       cards.settings.currentDueMonth,
       cards.summary.currentPersonalTotal,
+      cards.summary.currentTotal,
       cards.summary.nextPersonalTotal,
+      cards.summary.nextTotal,
     ],
   )
   const realizedByArea = cardCycleAccounting.spendingThisCycle.personalByArea
@@ -286,9 +290,9 @@ export function useFinancas() {
         securedLiabilities: investments.summary.securedLiabilities,
         netWorth: investments.summary.netWorth,
         emergencyFund: emergencyFund.current,
-        // Histórico é competência: inclui antecipados porque eles consumiram o
-        // orçamento do mês. O valor efetivamente devido aparece no fechamento.
-        cardPersonalTotal: cardCycleAccounting.spendingThisCycle.spentPersonalTotal,
+        // Para o ciclo operacional, Cartão = a minha parte da fatura usada para
+        // encerrar o mês. Antecipados já removidos da fatura não são somados de novo.
+        cardPersonalTotal: cardCycleAccounting.invoiceFormedByCycle.personalTotal,
         cardByArea,
         cashLeftover: cashFlow.leftover,
         note,
@@ -303,8 +307,8 @@ export function useFinancas() {
       activeScenario.id,
       activeScenario.name,
       actuals.summary,
+      cardCycleAccounting.invoiceFormedByCycle.personalTotal,
       cardCycleAccounting.spendingThisCycle.personalByArea,
-      cardCycleAccounting.spendingThisCycle.spentPersonalTotal,
       cashFlow.leftover,
       emergencyFund,
       history,
