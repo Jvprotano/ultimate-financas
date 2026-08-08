@@ -1,6 +1,6 @@
-# Ultimate Finanças
+# FinTano
 
-Planejamento financeiro pessoal: orçamento do mês, patrimônio, cartões e o histórico do que realmente aconteceu — tudo em uma única tela, 100% no navegador.
+Planejamento financeiro pessoal: orçamento do mês, patrimônio, cartões e o histórico do que realmente aconteceu — tudo em uma única aplicação, 100% no navegador.
 
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
@@ -11,31 +11,36 @@ Planejamento financeiro pessoal: orçamento do mês, patrimônio, cartões e o h
 
 | Aba | O que faz |
 | --- | --- |
-| **Visão geral** | Saldo livre do mês, caixa do mês (extrato), metas por caixa (planejado × realizado no cartão), custos por categoria, alertas e comparação de cenários |
-| **Planejamento** | Renda e descontos em folha, custos fixos (com rateio e forma de pagamento), modelo de orçamento, desejos, plano de aportes e reserva |
-| **Patrimônio** | Ativos e passivos: posições por classe, rentabilidade anualizada, reserva, metas com prazo, bens (imóvel, veículo) e dívidas (saldo, juros, prazo, amortizar × investir) |
+| **Ciclo** | Hub do mês vivido: salário que financia o ciclo, caixa, fatura que vence, compras do mês, realizados e fechamento |
+| **Planejar** | Renda e descontos em folha, custos fixos (com rateio e forma de pagamento), modelo de orçamento, desejos e plano de aportes |
 | **Cartões** | Fatura a pagar e fatura em formação, parcelas e assinaturas automáticas, importação por colagem do Sheets |
-| **Futuro** | 13º, bônus, IPVA e afins como ocorrências datadas; projeção do dinheiro por padrão, do balanço inteiro (bens, dívidas, líquido) sob demanda, em valores nominais ou de hoje |
-| **Histórico** | Realizado do mês, fechamento, evolução do patrimônio, custo médio real e correção de meses passados |
+| **Patrimônio** | Ativos e passivos: reserva por aplicações, carteira por classe, rentabilidade anualizada, metas, bens e dívidas |
+| **Histórico** | Realizado do ciclo, evolução do patrimônio, custo médio real e correção de meses passados |
+| **Futuro** | 13º, bônus, IPVA e afins como ocorrências datadas; projeção do dinheiro e do balanço em valores nominais ou de hoje |
 
 ## Conceitos
 
-- **Competência × caixa** — o orçamento mede o mês em que você *gastou*; o painel de caixa mede o mês em que o dinheiro *se move*. Um jantar de julho é desejo de julho, mas só sai da conta quando a fatura vence em agosto. São duas leituras do mesmo dinheiro — nunca uma soma.
-- **Forma de pagamento** — cada custo fixo e cada desejo é "conta" ou "cartão". É o que permite ao caixa do mês descontar a fatura em vez de descontar os gastos, e comparar o que o plano previa no cartão com o que a fatura registrou.
-- **Base do orçamento** — a renda que vira meta. Benefícios (VA, plano de saúde) saem porque não são dinheiro livre; previdência descontada em folha continua contando, porque é investimento seu.
-- **Custo pessoal** — contas divididas com outra pessoa entram no orçamento só pela sua parte; o valor cheio fica visível para você saber o tamanho real da conta.
-- **Área do orçamento no cartão** — cada compra pode ser marcada como necessidade, desejo ou investimento. Não cria gasto novo: diz de qual caixa do plano a compra saiu. O traço nas barras de meta mostra o realizado.
-- **Patrimônio financeiro × líquido total** — o financeiro é investimentos + reserva + metas, menos dívida *sem contrapartida*. É ele que responde "quanto dinheiro eu vou ter", e por isso é o número em destaque. O líquido total soma os bens e desconta tudo que você deve: responde "quanto eu valho". As fatias de alocação são sempre sobre o financeiro — um imóvel não se rebalanceia.
-- **Bens** — a casa, o carro. Não pagam a conta do mês e ficam fora da alocação, mas existem no balanço. Cada bem tem valor de mercado, valorização esperada e, opcionalmente, o aluguel equivalente.
-- **Dívida garantida × sem contrapartida** — um financiamento ligado a um bem não é a mesma coisa que um rotativo. A garantida fica fora da taxa média ponderada, do ranking da mais cara e da conta "amortizar ou investir": ela não pede essa decisão, pede a comparação com aluguel. Sem o bem cadastrado, o app soma o saldo devedor sem somar o que ele comprou — e o patrimônio líquido aparece muito abaixo do real (há um alerta para isso).
-- **A parcela não é toda despesa** — só o juro é. A amortização é dinheiro trocando de bolso, da conta para dentro do imóvel. Por isso a comparação "ser dono ou alugar" usa juros − valorização, não a parcela cheia; e a projeção faz o bem crescer enquanto o saldo devedor cai, em vez de deixar a amortização evaporar.
-- **Dívidas** — saldo devedor mantido por você (juros e seguros nunca saem de uma soma de pagamentos), com taxa, parcela e prazo. Amortizar R$ 1.000 e aportar R$ 1.000 movem o mesmo número; o app compara as duas taxas lado a lado. A parcela continua sendo o custo fixo do orçamento — a dívida não a cobra de novo.
-- **Meta de poupança × meta de patrimônio** — a primeira junta dinheiro próprio num livro-razão e soma ao patrimônio; a segunda apenas *engloba* saldos que já existem (reserva, investimentos, outras metas, bens, e dívidas com sinal negativo) e por isso não duplica nada.
-- **Eventos esperados** — entradas e saídas que caem fora do mês a mês, com mês, recorrência e a fatia que você guarda. Alimentam o caixa do mês e a projeção.
-- **Realizado do mês** — o que de fato foi pago em débito e boleto, item por item. Sem ele o "custo médio real" do histórico é só a média dos planos, e a meta da reserva de emergência herda o mesmo otimismo. Valor informado manda; onde não houver, vale o planejado.
-- **Valores de hoje** — a projeção pode ser lida descontada da inflação. Em três ou cinco anos a diferença entre nominal e real é grande o bastante para mudar a decisão.
-- **Rentabilidade anualizada** — TIR sobre as datas dos aportes, para que quem aportou ontem e quem aportou há três anos não apareçam iguais. Histórico curto demais mostra `—`.
-- **Fechamento de mês** — registra os gastos e o plano do mês de uso. Pagar uma fatura anterior movimenta o caixa do ciclo atual, mas não fecha automaticamente o mês do Histórico. Fechou errado num mês passado? Corrija o registro em vez de refechar — refechar substituiria tudo pelos números de hoje.
+- **Ciclo financeiro** — o ciclo é o mês que está sendo vivido. Para quem recebe no último dia útil, o salário do fim de julho financia Agosto; fechamento/pagamento do cartão não muda o ciclo.
+- **Competência × caixa** — o orçamento mede o mês em que você *gastou*; o painel de caixa mede o mês em que o dinheiro *se move*. Uma compra de agosto é gasto de agosto, mesmo que a fatura seja paga em setembro. São duas leituras do mesmo dinheiro — nunca uma soma.
+- **Forma de pagamento** — cada custo fixo e cada desejo é "conta" ou "cartão". É o que permite ao caixa descontar a fatura em vez de descontar as compras novamente.
+- **Base do orçamento** — a renda que vira meta. Benefícios saem porque não são dinheiro livre; previdência descontada em folha continua contando, porque é investimento seu.
+- **Custo pessoal** — contas divididas entram no orçamento só pela sua parte; o valor cheio permanece visível para conferência.
+- **Área do orçamento no cartão** — cada compra pode ser marcada como necessidade, desejo ou investimento. Isso classifica o realizado sem criar gasto novo.
+- **Reserva: classe × finalidade** — a reserva de emergência é um ativo financeiro investido, mas sua finalidade é segurança/liquidez. Cada aplicação da reserva tem produto, instituição, classe de ativo, referência (ex. 100% CDI), liquidez, saldo e livro-razão. Ela conta no patrimônio e nos aportes realizados, mas fica fora do rebalanceamento da carteira de longo prazo.
+- **Carteira de investimentos** — posições com finalidade de carteira são agrupadas por classe e usadas para acompanhar alocação e rentabilidade. Reserva e metas permanecem separadas pela finalidade.
+- **Patrimônio financeiro × líquido total** — o financeiro é carteira + reserva + metas, menos dívida *sem contrapartida*. O líquido total soma também os bens e desconta tudo que você deve.
+- **Bens** — casa, carro e outros ativos físicos ficam fora do rebalanceamento, mas entram no balanço. Cada bem tem valor de mercado, valorização esperada e, opcionalmente, aluguel equivalente.
+- **Dívida garantida × sem contrapartida** — financiamento ligado a um bem não é a mesma coisa que rotativo ou empréstimo sem garantia. A garantida possui o bem do outro lado do balanço.
+- **A parcela não é toda despesa** — em um financiamento, só o juro é despesa; amortização aumenta seu equity no bem.
+- **Meta de poupança × meta de patrimônio** — a primeira guarda dinheiro próprio em livro-razão; a segunda pode apenas englobar saldos existentes sem duplicá-los.
+- **Investimento planejado × realizado** — o plano diz quanto deveria ser investido; o fechamento soma o que realmente foi aportado em folha, reserva, posições e metas, líquido de retiradas. Marcação a mercado não é aporte.
+- **Eventos esperados** — entradas e saídas fora do mês a mês, com mês, recorrência e a fatia que você guarda. Alimentam caixa e projeção.
+- **Realizado do mês** — o que de fato foi pago/usado no ciclo. Onde não houver realizado informado, o plano funciona como fallback.
+- **Valores de hoje** — a projeção pode ser lida descontada da inflação.
+- **Rentabilidade anualizada** — TIR sobre as datas dos aportes e o valor de mercado atual; histórico curto demais mostra `—`.
+- **Fechamento do ciclo** — registra o mês vivido e avança para o próximo. Pagar uma fatura não fecha o ciclo automaticamente.
+
+Veja também [`docs/ciclo-financeiro.md`](docs/ciclo-financeiro.md) para a regra temporal completa de salário, vencimentos, cartão e fechamento.
 
 ## Como rodar
 
@@ -49,11 +54,7 @@ npm run test:watch
 npm run preview
 ```
 
-Os testes vivem ao lado do código, em `src/lib/*.test.ts`. Cobrem o que quebra em silêncio:
-TIR anualizada, prazo e juros de dívida, dívida garantida × sem contrapartida, equity e a
-comparação ser dono × alugar, projeção com amortização, valorização e inflação, rateio de custos,
-inclusões de meta (o caso de contar duas vezes), geração de parcelas e assinaturas, e o
-calendário de fechamento dos cartões.
+Os testes vivem ao lado do código, em `src/lib/*.test.ts`. Eles cobrem os principais cálculos puros: ciclo/faturas, investimentos realizados, posições da reserva, TIR anualizada, dívidas, bens, metas, projeção, rateio de custos e migrações.
 
 ## Atalhos de teclado
 
@@ -65,7 +66,8 @@ calendário de fechamento dos cartões.
 src/
   lib/               # cálculo puro, sem React
     scenario.ts      # orçamento do mês, normalização e migração v2→v3
-    investments.ts   # ativos, alocação, TIR anualizada, balanço financeiro × total
+    investments.ts   # carteira, reserva por posições, TIR e balanço
+    investmentActuals.ts # aportes líquidos realizados no ciclo
     assets.ts        # bens: equity, valorização, ser dono × alugar
     debts.ts         # saldo, juros, prazo, amortizar × investir, garantia
     goals.ts         # metas: livro-razão próprio × saldos englobados
@@ -73,6 +75,7 @@ src/
     cashflow.ts      # o mês no extrato: entra, vence, sobra
     actuals.ts       # realizado do mês, item por item
     creditCards.ts   # faturas, parcelas, assinaturas, ciclo de cada cartão
+    cardCycleAccounting.ts # competência do cartão × caixa da fatura
     cardImport.ts    # leitura de planilha colada
     history.ts       # snapshots mensais e estatísticas
     backup.ts        # exportação, importação e cópias automáticas
@@ -81,16 +84,18 @@ src/
   hooks/             # estado por domínio
     useScenarios.ts  useCreditCards.ts  useInvestments.ts  useDebts.ts
     useAssets.ts     useHistory.ts      useForecast.ts     useActuals.ts
-    useFinancas.ts   # compõe os oito e calcula o que cruza domínios
+    useFinancas.ts   # compõe os domínios e calcula o que cruza entre eles
     useLocalStorage.ts  useKeyboardShortcuts.ts
   context/           # FinancasProvider + hooks de leitura
   components/        # ui.tsx é o design system; um arquivo por módulo
-  types/             # modelo de dados e constantes (paleta, categorias, modelos)
+  types/             # modelo de dados e constantes
 ```
 
-## Persistência
+## Persistência e compatibilidade
 
-Tudo vive no `localStorage` deste navegador — nenhum dado sai da máquina. Chaves em `uf_*`; as cópias automáticas semanais ficam em `ufbk_*` (fora do backup, para não crescerem sozinhas). Exporte um backup pelo menu `⋮` para guardar uma cópia, ou restaure uma das cópias automáticas por lá.
+Tudo vive no `localStorage` deste navegador — nenhum dado sai da máquina. As chaves continuam em `uf_*` mesmo após o rename para FinTano para não perder dados existentes; as cópias automáticas semanais ficam em `ufbk_*`.
+
+Backups novos são identificados como `fintano` e usam o nome `fintano-backup-AAAA-MM-DD.json`. Backups antigos do Ultimate Finanças continuam importáveis. A migração da reserva antiga cria uma posição de reserva com o mesmo saldo/livro-razão sem duplicar patrimônio.
 
 ## Licença
 

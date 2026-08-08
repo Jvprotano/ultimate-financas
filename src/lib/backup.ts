@@ -3,6 +3,9 @@
 // As cópias automáticas usam o prefixo `ufbk_` justamente para NÃO casarem com
 // `uf_`: senão cada backup entraria no backup seguinte e o storage cresceria
 // sozinho até estourar a cota.
+//
+// O prefixo `uf_` é mantido mesmo após o rename para FinTano: trocar as chaves
+// apagaria, na prática, os dados existentes de quem já usa o app.
 // ---------------------------------------------------------------------------
 
 export const APP_STORAGE_PREFIX = 'uf_'
@@ -48,8 +51,8 @@ export function clearAppStorage() {
 
 export function buildBackupPayload(): BackupPayload {
   return {
-    app: 'ultimate-financas',
-    version: 3,
+    app: 'fintano',
+    version: 4,
     exportedAt: new Date().toISOString(),
     localStorage: getAppStorageEntries(),
   }
@@ -63,13 +66,18 @@ export function downloadBackup() {
   const link = document.createElement('a')
 
   link.href = url
-  link.download = `ultimate-financas-backup-${new Date().toISOString().slice(0, 10)}.json`
+  link.download = `fintano-backup-${new Date().toISOString().slice(0, 10)}.json`
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
 }
 
+/**
+ * A importação é deliberadamente tolerante ao campo `app`: backups antigos
+ * identificados como `ultimate-financas` continuam válidos porque a fonte da
+ * verdade são as chaves `uf_`.
+ */
 export function readBackupEntries(payload: BackupPayload): [string, string][] {
   const storage = payload.localStorage
   if (!storage) return []

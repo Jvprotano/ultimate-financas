@@ -115,7 +115,6 @@ function AppMenu({
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  // A lista é lida ao abrir: o backup automático é gravado no mount do app.
   const autoBackups = useMemo(() => (open ? listAutoBackups() : []), [open])
 
   useEffect(() => {
@@ -241,7 +240,6 @@ function ShortcutsOverlay({ onClose }: { onClose: () => void }) {
   )
 }
 
-/** Colunas que se equilibram sozinhas — evita a coluna curta e o vazio embaixo. */
 function MasonryColumns({ children }: { children: ReactNode }) {
   return (
     <div className="columns-1 gap-4 xl:columns-2 [&>*]:mb-4 [&>*]:break-inside-avoid">
@@ -265,7 +263,6 @@ function AppShell() {
       Escape: () => setShowShortcuts(false),
       '/': () => {
         setActiveView('cards')
-        // A aba pode estar montando agora; o foco espera o próximo frame.
         requestAnimationFrame(() => {
           document.querySelector<HTMLInputElement>('[data-card-search]')?.focus()
         })
@@ -283,17 +280,17 @@ function AppShell() {
     try {
       const payload = JSON.parse(await file.text()) as BackupPayload
       const entries = readBackupEntries(payload)
-      if (!entries.length) throw new Error('No Ultimate Finanças keys found')
+      if (!entries.length) throw new Error('No FinTano keys found')
 
       const confirmed = window.confirm(
-        `Importar backup com ${entries.length} registros locais? Seus dados atuais do Ultimate Finanças serão substituídos.`,
+        `Importar backup com ${entries.length} registros locais? Seus dados atuais do FinTano serão substituídos.`,
       )
       if (!confirmed) return
 
       restoreEntries(entries)
       window.location.reload()
     } catch {
-      window.alert('Arquivo de backup inválido para o Ultimate Finanças.')
+      window.alert('Arquivo de backup inválido para o FinTano.')
     }
   }
 
@@ -316,7 +313,7 @@ function AppShell() {
       <header className="sticky top-0 z-40 border-b border-dark-border-subtle bg-dark-bg/90 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
           <h1 className="hidden shrink-0 truncate text-[15px] font-semibold tracking-tight text-dark-text sm:block">
-            Ultimate Finanças
+            FinTano
           </h1>
 
           <TabBar activeView={activeView} setActiveView={setActiveView} className="hidden md:grid" />
@@ -361,7 +358,6 @@ function AppShell() {
 
         {activeView === 'planning' && (
           <MasonryColumns>
-            {/* Renda → custos → modelo → desejos → aporte. Reserva vive em Patrimônio. */}
             <IncomePanel />
             <CostManager />
             <BudgetModelPicker />

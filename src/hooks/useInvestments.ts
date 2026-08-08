@@ -5,15 +5,17 @@ import type {
   FinancialGoal,
   GoalInclusion,
   InvestmentAssetClass,
-  InvestmentHolding,
   LedgerEntry,
 } from '../types'
 import { DEFAULT_INVESTMENT_CLASSES, GOAL_PRESET_COLORS } from '../types/constants'
 import {
   calculateInvestmentsSummary,
+  holdingPurpose,
   normalizeAssetClass,
   normalizeEmergencyFund,
   normalizeHolding,
+  type FinancialHolding,
+  type InvestmentPurpose,
 } from '../lib/investments'
 import { normalizeGoal, summarizeGoals, type GoalContext } from '../lib/goals'
 import { finiteNumber, ledgerBalance, nowIso, readJson, uid } from '../lib/shared'
@@ -31,9 +33,9 @@ const DEFAULT_EMERGENCY_FUND: EmergencyFundState = {
 }
 
 /**
- * A reserva virou módulo global. Na primeira carga, herda o saldo que vivia
- * dentro dos cenários (preferindo o ativo, ou o primeiro com dados), de forma
- * não destrutiva.
+ * Carrega o formato antigo da reserva. Ele continua existindo para que backups
+ * anteriores sejam migrados sem perda; depois, `current/transactions` são
+ * esvaziados e o saldo passa a viver nas posições `emergency_fund`.
  */
 function loadInitialEmergencyFund(): EmergencyFundState {
   const stored = readJson<Partial<EmergencyFundState> | null>(EMERGENCY_FUND_STORAGE_KEY, null)
@@ -56,9 +58,7 @@ function loadInitialEmergencyFund(): EmergencyFundState {
     const source =
       active && hasFundData(active.emergencyFund)
         ? active
-        : (scenarios.find((scenario) => hasFundData(scenario.emergencyFund)) ??
-          active ??
-          scenarios[0])
+        : (scenarios.find((scenario) => hasFundData(scenario.emergencyFund)) ?? active ?? scenarios[0])
     return normalizeEmergencyFund(
       source?.emergencyFund,
       `${source?.id ?? 'ef'}-seed`,
@@ -89,8 +89,8 @@ function loadInitialClasses(): InvestmentAssetClass[] {
   return DEFAULT_INVESTMENT_CLASSES
 }
 
-function loadInitialHoldings(): InvestmentHolding[] {
-  const stored = readJson<InvestmentHolding[] | null>(HOLDINGS_STORAGE_KEY, null)
+function loadInitialHoldings(): FinancialHolding[] {
+  const stored = readJson<FinancialHolding[] | null>(HOLDINGS_STORAGE_KEY, null)
   return Array.isArray(stored) ? stored.map(normalizeHolding) : []
 }
 
@@ -99,7 +99,10 @@ function applyLedgerMove(transactions: LedgerEntry[], amount: number, note?: str
   const balance = ledgerBalance(transactions)
   const delta = amount < 0 ? -Math.min(-amount, balance) : amount
   if (delta === 0) return null
-  return [...transactions, { id: uid(), amount: delta, date: nowIso(), note: note?.trim() || undefined }]
+  return [
+    ...transactions,
+    { id: uid(), amount: delta, date: nowIso(), note: note?.trim() || undefined },
+  ]
 }
 
 /**
@@ -115,18 +118,12 @@ export function useInvestments(
     EMERGENCY_FUND_STORAGE_KEY,
     loadInitialEmergencyFund,
   )
-  const emergencyFund = useMemo(() => normalizeEmergencyFund(storedFund), [storedFund])
+  const legacyEmergencyFund = useMemo(
+    () => normalizeEmergencyFund(storedFund),
+    [storedFund],
+  )
 
-  // A reserva migrada dos cenários vive só em memória até a primeira gravação.
-  // Persiste-a no store global logo no mount, antes que uma edição de cenário
-  // apague o campo `emergencyFund` antigo e a origem da migração se perca.
-  useEffect(() => {
-    if (window.localStorage.getItem(EMERGENCY_FUND_STORAGE_KEY) === null) {
-      setStoredFund((prev) => normalizeEmergencyFund(prev))
-    }
-  }, [setStoredFund])
-
-  const [storedHoldings, setHoldings] = useLocalStorage<InvestmentHolding[]>(
+  const [storedHoldings, setHoldings] = useLocalStorage<FinancialHolding[]>(
     HOLDINGS_STORAGE_KEY,
     loadInitialHoldings,
   )
@@ -153,6 +150,60 @@ export function useInvestments(
     [storedGoals],
   )
 
+  const reserveHoldings = useMemo(
+    () => holdings.filter((holding) => holdingPurpose(holding) === 'emergency_fund'),
+    [holdings],
+  )
+  const portfolioHoldings = useMemo(
+    () => holdings.filter((holding) => holdingPurpose(holding) === 'portfolio'),
+    [holdings],
+  )
+
+  /**
+   * Migração v1 -> posições:
+   * - uma base antiga tinha um único bucket com saldo/transações;
+   * - criamos uma posição de Renda Fixa com a mesma trilha, sem inventar
+   *   instituição, produto, benchmark ou liquidez;
+   * - depois esvaziamos apenas o bucket antigo, preservando `targetMonths`.
+   *
+   * Enquanto o effect ainda não rodou, os cálculos usam o saldo legado como
+   * fallback. Quando a posição aparece, o fallback deixa de somar — sem frame de
+   * patrimônio duplicado.
+   */
+  useEffect(() => {
+    if (reserveHoldings.length > 0 || legacyEmergencyFund.current <= 0) return
+
+    setHoldings((prev) => {
+      const normalized = Array.isArray(prev) ? prev.map(normalizeHolding) : []
+      if (normalized.some((holding) => holdingPurpose(holding) === 'emergency_fund')) {
+        return normalized
+      }
+      return [
+        ...normalized,
+        normalizeHolding({
+          id: uid(),
+          name: 'Reserva migrada',
+          assetClassId: 'renda-fixa',
+          purpose: 'emergency_fund',
+          marketValue: legacyEmergencyFund.current,
+          transactions: legacyEmergencyFund.transactions,
+        }),
+      ]
+    })
+
+    setStoredFund((prev) => {
+      const normalized = normalizeEmergencyFund(prev)
+      return { current: 0, targetMonths: normalized.targetMonths, transactions: [] }
+    })
+  }, [legacyEmergencyFund, reserveHoldings.length, setHoldings, setStoredFund])
+
+  // A reserva migrada dos cenários vive só em memória até a primeira gravação.
+  useEffect(() => {
+    if (window.localStorage.getItem(EMERGENCY_FUND_STORAGE_KEY) === null) {
+      setStoredFund((prev) => normalizeEmergencyFund(prev))
+    }
+  }, [setStoredFund])
+
   // Só o livro-razão das metas soma ao patrimônio. O que uma meta *engloba* já
   // está contado na reserva ou nas posições — somar de novo duplicaria.
   const goalOwnBalances = useMemo(() => {
@@ -165,41 +216,6 @@ export function useInvestments(
     [goalOwnBalances],
   )
 
-  // Reserva de emergência ----------------------------------------------------
-
-  const addEmergencyFundTransaction = useCallback(
-    (amount: number, note?: string) => {
-      setStoredFund((prev) => {
-        const fund = normalizeEmergencyFund(prev)
-        const transactions = applyLedgerMove(fund.transactions, amount, note)
-        if (!transactions) return fund
-        return { ...fund, transactions, current: ledgerBalance(transactions) }
-      })
-    },
-    [setStoredFund],
-  )
-
-  const removeEmergencyFundTransaction = useCallback(
-    (id: string) => {
-      setStoredFund((prev) => {
-        const fund = normalizeEmergencyFund(prev)
-        const transactions = fund.transactions.filter((tx) => tx.id !== id)
-        return { ...fund, transactions, current: Math.max(0, ledgerBalance(transactions)) }
-      })
-    },
-    [setStoredFund],
-  )
-
-  const setEmergencyFundTargetMonths = useCallback(
-    (months: number) => {
-      setStoredFund((prev) => ({
-        ...normalizeEmergencyFund(prev),
-        targetMonths: Math.max(1, Math.round(months)),
-      }))
-    },
-    [setStoredFund],
-  )
-
   // Posições -----------------------------------------------------------------
 
   const addHolding = useCallback(
@@ -209,20 +225,33 @@ export function useInvestments(
       institution?: string
       initialAmount?: number
       note?: string
+      purpose?: InvestmentPurpose
+      benchmark?: string
+      liquidity?: string
     }) => {
       const now = nowIso()
       const initial = Math.max(0, finiteNumber(input.initialAmount))
       setHoldings((prev) => [
-        ...prev,
+        ...(Array.isArray(prev) ? prev : []),
         normalizeHolding({
           id: uid(),
           name: input.name,
           assetClassId: input.assetClassId,
           institution: input.institution,
+          purpose: input.purpose ?? 'portfolio',
+          benchmark: input.benchmark,
+          liquidity: input.liquidity,
           marketValue: initial,
           transactions:
             initial > 0
-              ? [{ id: uid(), amount: initial, date: now, note: input.note?.trim() || 'Aporte inicial' }]
+              ? [
+                  {
+                    id: uid(),
+                    amount: initial,
+                    date: now,
+                    note: input.note?.trim() || 'Aporte inicial',
+                  },
+                ]
               : [],
         }),
       ])
@@ -233,11 +262,22 @@ export function useInvestments(
   const updateHolding = useCallback(
     (
       id: string,
-      patch: Partial<Pick<InvestmentHolding, 'name' | 'assetClassId' | 'institution' | 'marketValue'>>,
+      patch: Partial<
+        Pick<
+          FinancialHolding,
+          | 'name'
+          | 'assetClassId'
+          | 'institution'
+          | 'marketValue'
+          | 'purpose'
+          | 'benchmark'
+          | 'liquidity'
+        >
+      >,
     ) => {
       setHoldings((prev) =>
-        prev.map((holding) =>
-          holding.id === id ? normalizeHolding({ ...holding, ...patch }) : holding,
+        (Array.isArray(prev) ? prev : []).map((holding) =>
+          holding.id === id ? normalizeHolding({ ...holding, ...patch }) : normalizeHolding(holding),
         ),
       )
     },
@@ -245,7 +285,7 @@ export function useInvestments(
   )
 
   const removeHolding = useCallback(
-    (id: string) => setHoldings((prev) => prev.filter((holding) => holding.id !== id)),
+    (id: string) => setHoldings((prev) => (Array.isArray(prev) ? prev : []).filter((h) => h.id !== id)),
     [setHoldings],
   )
 
@@ -253,7 +293,8 @@ export function useInvestments(
   const addHoldingTransaction = useCallback(
     (holdingId: string, amount: number, note?: string) => {
       setHoldings((prev) =>
-        prev.map((holding) => {
+        (Array.isArray(prev) ? prev : []).map((raw) => {
+          const holding = normalizeHolding(raw)
           if (holding.id !== holdingId) return holding
           const delta = amount < 0 ? -Math.min(-amount, holding.marketValue) : amount
           if (delta === 0) return holding
@@ -274,11 +315,11 @@ export function useInvestments(
   const removeHoldingTransaction = useCallback(
     (holdingId: string, transactionId: string) => {
       setHoldings((prev) =>
-        prev.map((holding) => {
+        (Array.isArray(prev) ? prev : []).map((raw) => {
+          const holding = normalizeHolding(raw)
           if (holding.id !== holdingId) return holding
           const removed = holding.transactions.find((tx) => tx.id === transactionId)
           if (!removed) return holding
-          // Reverte o efeito da transação sobre o valor de mercado.
           return {
             ...holding,
             transactions: holding.transactions.filter((tx) => tx.id !== transactionId),
@@ -294,12 +335,91 @@ export function useInvestments(
   const setMarketValue = useCallback(
     (holdingId: string, value: number) => {
       setHoldings((prev) =>
-        prev.map((holding) =>
-          holding.id === holdingId ? { ...holding, marketValue: Math.max(0, value) } : holding,
-        ),
+        (Array.isArray(prev) ? prev : []).map((raw) => {
+          const holding = normalizeHolding(raw)
+          return holding.id === holdingId
+            ? { ...holding, marketValue: Math.max(0, value) }
+            : holding
+        }),
       )
     },
     [setHoldings],
+  )
+
+  // Reserva de emergência ----------------------------------------------------
+
+  const reserveBalance =
+    reserveHoldings.length > 0
+      ? reserveHoldings.reduce((sum, holding) => sum + holding.marketValue, 0)
+      : legacyEmergencyFund.current
+
+  const emergencyFund = useMemo<EmergencyFundState>(
+    () => ({
+      current: reserveBalance,
+      targetMonths: legacyEmergencyFund.targetMonths,
+      transactions:
+        reserveHoldings.length > 0
+          ? reserveHoldings.flatMap((holding) => holding.transactions)
+          : legacyEmergencyFund.transactions,
+    }),
+    [legacyEmergencyFund.targetMonths, legacyEmergencyFund.transactions, reserveBalance, reserveHoldings],
+  )
+
+  const setEmergencyFundTargetMonths = useCallback(
+    (months: number) => {
+      setStoredFund((prev) => {
+        const normalized = normalizeEmergencyFund(prev)
+        return {
+          current: 0,
+          targetMonths: Math.max(1, Math.round(months)),
+          transactions: [],
+          ...(reserveHoldings.length === 0 && normalized.current > 0
+            ? { current: normalized.current, transactions: normalized.transactions }
+            : {}),
+        }
+      })
+    },
+    [reserveHoldings.length, setStoredFund],
+  )
+
+  /**
+   * Compatibilidade com componentes/integrações antigas: se já há posição de
+   * reserva, a movimentação vai para a primeira; se ainda não houve migração,
+   * continua no bucket legado e será migrada logo depois.
+   */
+  const addEmergencyFundTransaction = useCallback(
+    (amount: number, note?: string) => {
+      const firstReserve = reserveHoldings[0]
+      if (firstReserve) {
+        addHoldingTransaction(firstReserve.id, amount, note)
+        return
+      }
+      setStoredFund((prev) => {
+        const fund = normalizeEmergencyFund(prev)
+        const transactions = applyLedgerMove(fund.transactions, amount, note)
+        if (!transactions) return fund
+        return { ...fund, transactions, current: ledgerBalance(transactions) }
+      })
+    },
+    [addHoldingTransaction, reserveHoldings, setStoredFund],
+  )
+
+  const removeEmergencyFundTransaction = useCallback(
+    (id: string) => {
+      const reserve = reserveHoldings.find((holding) =>
+        holding.transactions.some((transaction) => transaction.id === id),
+      )
+      if (reserve) {
+        removeHoldingTransaction(reserve.id, id)
+        return
+      }
+      setStoredFund((prev) => {
+        const fund = normalizeEmergencyFund(prev)
+        const transactions = fund.transactions.filter((tx) => tx.id !== id)
+        return { ...fund, transactions, current: Math.max(0, ledgerBalance(transactions)) }
+      })
+    },
+    [removeHoldingTransaction, reserveHoldings, setStoredFund],
   )
 
   // Classes ------------------------------------------------------------------
@@ -331,7 +451,8 @@ export function useInvestments(
 
   const removeClass = useCallback(
     (id: string) => {
-      // Só remove classes vazias, para não deixar posições órfãs.
+      // Reserva também usa classe real; uma classe só pode sair se nenhuma
+      // posição — de qualquer finalidade — depender dela.
       if (holdings.some((holding) => holding.assetClassId === id)) return
       setClasses((prev) =>
         (Array.isArray(prev) ? prev : DEFAULT_INVESTMENT_CLASSES).filter((item) => item.id !== id),
@@ -363,7 +484,10 @@ export function useInvestments(
             targetMonth: input.targetMonth,
             color: GOAL_PRESET_COLORS[prev.length % GOAL_PRESET_COLORS.length],
             createdAt: nowIso(),
-            transactions: initial > 0 ? [{ id: uid(), amount: initial, date: nowIso(), note: 'Saldo inicial' }] : [],
+            transactions:
+              initial > 0
+                ? [{ id: uid(), amount: initial, date: nowIso(), note: 'Saldo inicial' }]
+                : [],
             includes: input.includes,
           },
           prev.length,
@@ -373,7 +497,6 @@ export function useInvestments(
     [setGoals],
   )
 
-  /** Liga/desliga uma fonte englobada pela meta. */
   const toggleGoalInclusion = useCallback(
     (id: string, inclusion: GoalInclusion) => {
       setGoals((prev) =>
@@ -398,7 +521,9 @@ export function useInvestments(
       patch: Partial<Pick<FinancialGoal, 'name' | 'targetAmount' | 'targetMonth' | 'includes'>>,
     ) => {
       setGoals((prev) =>
-        prev.map((goal, index) => (goal.id === id ? normalizeGoal({ ...goal, ...patch }, index) : goal)),
+        prev.map((goal, index) =>
+          goal.id === id ? normalizeGoal({ ...goal, ...patch }, index) : goal,
+        ),
       )
     },
     [setGoals],
@@ -444,13 +569,12 @@ export function useInvestments(
     [setGoals],
   )
 
-  const reserveBalance = emergencyFund.current
   const summary = useMemo(
     () =>
       calculateInvestmentsSummary(
         holdings,
         investmentClasses,
-        reserveBalance,
+        reserveHoldings.length > 0 ? 0 : legacyEmergencyFund.current,
         goalsBalance,
         liabilities,
         { securedLiabilities, physicalAssets },
@@ -458,7 +582,8 @@ export function useInvestments(
     [
       holdings,
       investmentClasses,
-      reserveBalance,
+      reserveHoldings.length,
+      legacyEmergencyFund.current,
       goalsBalance,
       liabilities,
       securedLiabilities,
@@ -469,7 +594,7 @@ export function useInvestments(
   // As metas leem os saldos já consolidados — por isso vêm depois do resumo.
   const goalContext = useMemo<GoalContext>(
     () => ({
-      reserveBalance,
+      reserveBalance: summary.reserveBalance,
       investmentsBalance: summary.totalMarketValue,
       classBalances: summary.classes.map((item) => ({
         id: item.id,
@@ -481,7 +606,7 @@ export function useInvestments(
       debtBalance: liabilities,
     }),
     [
-      reserveBalance,
+      summary.reserveBalance,
       summary.totalMarketValue,
       summary.classes,
       goalOwnBalances,
@@ -493,6 +618,8 @@ export function useInvestments(
 
   return {
     emergencyFund,
+    reserveHoldings,
+    portfolioHoldings,
     addEmergencyFundTransaction,
     removeEmergencyFundTransaction,
     setEmergencyFundTargetMonths,
