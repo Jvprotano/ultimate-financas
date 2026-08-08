@@ -24,20 +24,7 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Repair one-shot patch expectation
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('scripts/apply_invoice_cycle_close_fix.py')
-          text = path.read_text()
-          old = "detail={closingInvoiceAlreadyPaid ? 'já marcada como paga' : 'valor ainda devido'}"
-          new = "detail={closingInvoiceAlreadyPaid ? 'já marcada como paga' : 'fatura completa'}"
-          if old not in text:
-              raise SystemExit('expected one-shot script marker not found')
-          path.write_text(text.replace(old, new, 1))
-          PY
-
-      - name: Apply targeted patch
+      - name: Apply final cleanup
         run: python scripts/apply_invoice_cycle_close_fix.py
 
       - name: Install dependencies
@@ -49,10 +36,13 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Commit patched sources
+      - name: Remove temporary patch tooling
+        run: rm -f scripts/apply_invoice_cycle_close_fix.py .github/workflows/apply-invoice-cycle-fix.yml
+
+      - name: Commit validated sources
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src
-          git commit -m "Fix invoice-driven cycle closing [invoice-cycle-applied]"
+          git add -A
+          git commit -m "Finalize invoice-driven cycle closing [invoice-cycle-applied]"
           git push
