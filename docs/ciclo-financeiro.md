@@ -1,6 +1,6 @@
 # Ciclo financeiro: regra operacional
 
-O ciclo do FinTano representa a **competência do mês que está sendo vivido**. O calendário do cartão é separado: uma compra de Agosto pode formar uma fatura que vence em Setembro sem transformar o ciclo ativo em Setembro.
+O ciclo do FinTano representa a **competência do mês que está sendo vivido**. O calendário do cartão é separado: uma compra de Agosto pode estar em uma fatura que vence em Setembro sem transformar o ciclo ativo em Setembro.
 
 ## Regra curta
 
@@ -12,22 +12,33 @@ Exemplo: salário recebido no último dia útil de julho financia o **Ciclo Agos
 
 Agosto pode continuar ativo até o usuário terminar a revisão do mês, inclusive no começo de Setembro. O vencimento da fatura aberta, sozinho, nunca deve alterar o ciclo.
 
-## Dois relógios do cartão
+## Três números diferentes no cartão
 
-Cartão possui duas leituras que não devem ser misturadas:
+Para não misturar competência e caixa, o FinTano precisa distinguir:
 
-- **gasto por competência:** compras/parcelas atribuídas ao mês que está sendo fechado;
-- **fatura a pagar:** o valor ainda devido no vencimento da fatura.
+- **gasto por competência:** compras, parcelas e recorrências atribuídas ao mês que está sendo fechado;
+- **parte dessa competência ainda devida:** exclui itens da competência que já foram pagos antecipadamente;
+- **fatura completa a pagar:** todo o valor pessoal ainda devido naquela fatura, mesmo se a fatura contiver lançamentos de mais de uma competência.
 
-Uma compra antecipadamente paga continua sendo gasto da competência, mas deixa de compor a fatura ainda devida. Por isso os dois números podem ser diferentes sem haver erro.
+Uma compra antecipadamente paga continua sendo gasto da competência, mas deixa de compor a fatura ainda devida. E uma compra avulsa feita no fim de Julho depois do fechamento anterior pode cair na fatura de Setembro sem virar gasto de Agosto.
 
-No backup de produção analisado em Agosto de 2026:
+### O que o backup real mostrou
 
-- gasto pessoal atribuído ao cartão: **R$ 2.690,36**;
-- ainda devido na fatura: **R$ 2.511,64**;
-- diferença já paga antecipadamente: **R$ 178,72**.
+A fatura aberta com vencimento em Setembro tinha:
 
-Assim, o Histórico deve chamar R$ 2.690,36 de **gasto no cartão**, e não de “fatura”.
+- **R$ 2.690,36** de lançamentos pessoais listados, contando também os já antecipados;
+- **R$ 2.511,64** como parte pessoal efetivamente ainda devida na fatura;
+- **R$ 178,72** já pagos antecipadamente no total da fatura.
+
+Mas **R$ 2.690,36 não é o gasto de Agosto**. A fatura contém compras avulsas datadas de Julho que chegaram a essa fatura, além de parcelas/recorrências de Agosto.
+
+Usando a competência correta na migração do backup:
+
+- competência **Julho** dentro dessa fatura: **R$ 937,28** em lançamentos pessoais, dos quais **R$ 843,55** ainda devidos e **R$ 93,73** antecipados;
+- competência **Agosto** dentro dessa fatura: **R$ 1.753,08** em lançamentos pessoais, dos quais **R$ 1.668,09** ainda devidos e **R$ 84,99** antecipados;
+- fatura completa de Setembro ainda devida: **R$ 2.511,64**.
+
+Portanto, ao fechar Agosto, o Histórico deve gravar **R$ 1.753,08 como “Gasto cartão”**, enquanto a revisão de fechamento deve mostrar **R$ 2.511,64 como “Fatura a pagar em Setembro”**.
 
 ## O que NÃO vira o ciclo
 
@@ -55,12 +66,12 @@ O recebimento pode ocorrer antes do último dia civil. Isso não muda antecipada
 
 ## Quando fechar o ciclo
 
-A rotina operacional recomendada é ligar o fechamento do ciclo à revisão final do mês e, quando fizer sentido, ao pagamento da fatura formada por ele.
+A rotina operacional recomendada é ligar o fechamento do ciclo à revisão final do mês e, quando fizer sentido, ao pagamento da fatura aberta formada até aquele fechamento.
 
 Antes de fechar:
 
 1. aguarde o banco fechar a fatura do fim do mês;
-2. confira/importa os lançamentos do cartão;
+2. confira/importe os lançamentos do cartão;
 3. atualize custos variáveis como supermercado/vale e combustível;
 4. confira os aportes efetivamente realizados;
 5. abra **Revisar fechamento** na aba Ciclo.
@@ -69,7 +80,7 @@ A revisão mostra:
 
 - custos efetivos do ciclo;
 - gasto no cartão por competência;
-- valor ainda devido da fatura formada pelo ciclo;
+- valor completo ainda devido da fatura a pagar;
 - investimentos realizados;
 - todos os custos sem realizado informado.
 
@@ -78,7 +89,7 @@ Para cada custo não preenchido, o FinTano informa que usará o valor planejado.
 No final da revisão existem duas ações:
 
 - **Fechar apenas o ciclo** — congela o histórico e avança o ciclo, sem mexer no cartão;
-- **Fechar ciclo + pagar fatura** — congela o mesmo histórico, marca a fatura formada pelo ciclo como paga, gira o cartão para a próxima e avança o ciclo.
+- **Fechar ciclo + pagar fatura** — congela o mesmo histórico, marca a fatura completa como paga, gira o cartão para a próxima e avança o ciclo.
 
 Para a rotina atual, a segunda opção tende a ser o fluxo normal.
 
@@ -86,15 +97,16 @@ Para a rotina atual, a segunda opção tende a ser o fluxo normal.
 
 Exemplo de Agosto:
 
-- compras/parcelas atribuídas a Agosto = competência Agosto;
-- elas formam a fatura que vence em Setembro;
-- essa fatura é caixa de Setembro, financiada pelo salário recebido no fim de Agosto;
+- gasto atribuído a Agosto = competência Agosto;
+- a fatura que está sendo fechada no fim de Agosto vence em Setembro;
+- essa fatura pode conter também compras avulsas de Julho realizadas depois do fechamento anterior;
+- a fatura completa é caixa de Setembro, financiada pelo salário recebido no fim de Agosto;
 - no fim de Agosto ou começo de Setembro, o usuário pode escolher **Fechar Agosto + pagar a fatura de Setembro** na mesma operação.
 
 A ação conjunta é operacional. Contabilmente, o FinTano continua sabendo que:
 
-- o gasto pertence a Agosto;
-- o pagamento da fatura pertence ao caixa de Setembro.
+- apenas a competência de Agosto entra no “Gasto cartão” do Histórico de Agosto;
+- o pagamento da fatura completa pertence ao caixa de Setembro.
 
 Depois da ação conjunta, o ciclo ativo passa a Setembro e a fatura paga de Setembro continua registrada como saída do caixa de Setembro.
 
@@ -116,7 +128,7 @@ O resultado de Agosto deve ser idêntico nestes dois fluxos:
 
 Para garantir isso, cada lançamento passa a preservar explicitamente seu **mês de competência** e, no pagamento, o FinTano salva um snapshot da composição da fatura antes de girar `current → next`.
 
-Assim, pagar antes não apaga nem desloca o gasto de Agosto.
+Assim, pagar antes não apaga nem desloca o gasto de Agosto e também não perde o valor da fatura completa paga.
 
 ## Quando “fechar o cartão”
 
@@ -132,11 +144,11 @@ Fluxo:
 
 Com cartões que fecham em 29/30 e vencem no começo do mês seguinte:
 
-- durante Agosto → competência Agosto;
+- durante Agosto → registrar a competência de Agosto normalmente;
 - 29–30/08 → banco fecha a fatura de Setembro;
 - fim de Agosto → salário de Setembro entra;
 - fim de Agosto / começo de Setembro → revisão final de Agosto;
-- opção normal: fechar Agosto + pagar a fatura de Setembro;
+- opção normal: fechar Agosto + pagar a fatura completa de Setembro;
 - resultado: ciclo passa a Setembro, cartão passa à fatura de Outubro e o caixa de Setembro sabe que sua fatura já foi paga.
 
 ## Quais contas entram em cada ciclo
@@ -165,12 +177,14 @@ Exemplos:
 
 ### Cartão de crédito
 
-Exemplo:
+Para lançamentos novos, o mês de competência é persistido no lançamento e não muda quando a fatura gira.
 
-- compra/parcela atribuída a Agosto → realizado de Agosto;
-- forma a fatura que fecha no fim de Agosto;
-- vence em Setembro;
-- sai do caixa de Setembro.
+Exemplos:
+
+- compra avulsa em 10/08 → competência Agosto, mesmo que vença em Setembro;
+- parcela mensal cobrada em Agosto de uma compra feita meses antes → competência Agosto para o orçamento mensal;
+- assinatura cobrada no ciclo de Agosto → competência Agosto;
+- compra avulsa em 31/07 que cai apenas na fatura de Setembro → continua competência Julho.
 
 Nunca some competência e pagamento como se fossem dois gastos diferentes.
 
@@ -196,23 +210,25 @@ Linha do tempo:
 | fim de Jul | recebe salário | dinheiro que financia Agosto |
 | início de Ago | paga contas/fatura que vencem em Agosto | caixa de Agosto |
 | durante Ago | usa vale/supermercado/combustível | realizado de Agosto |
-| durante Ago | usa cartão | competência Agosto; fatura de Setembro |
+| durante Ago | usa cartão | competência Agosto; normalmente fatura de Setembro |
 | 29–30/08 | banco fecha a fatura | ciclo continua Agosto |
 | último dia útil de Ago | recebe salário | dinheiro que financia Setembro |
 | fim Ago / início Set | revisa custos, cartão e investimentos | ainda fechando Agosto |
-| fim Ago / início Set | fecha Agosto, opcionalmente pagando a fatura de Setembro junto | avança para Setembro |
+| fim Ago / início Set | fecha Agosto, opcionalmente pagando a fatura completa de Setembro junto | avança para Setembro |
 | depois do fechamento | cartão já pago gira para Outubro | ciclo permanece Setembro |
 
 ## Migração e backups antigos
 
-Backups anteriores não tinham o mês de competência persistido em cada lançamento. Na primeira carga desta versão, o FinTano faz uma migração determinística usando a posição da fatura naquele momento:
+Backups anteriores não tinham o mês de competência persistido em cada lançamento. Na primeira carga desta versão, o FinTano faz uma migração conservadora:
 
-- lançamento em `current` → competência do mês anterior ao vencimento atual;
-- lançamento em `next` → competência do mês do vencimento atual.
+- parcelas, assinaturas e lançamentos gerados automaticamente seguem a competência mensal da fatura, porque a data exibida pode ser a data original da compra;
+- compras avulsas cuja `purchaseDate` pertence ao mês esperado da fatura ficam nesse mês;
+- compras avulsas cuja `purchaseDate` pertence ao mês imediatamente anterior permanecem no mês da compra — isso cobre o caso típico de uma compra feita depois do fechamento e lançada só na fatura seguinte;
+- quando não é possível inferir com segurança, usa-se a competência mensal da fatura como fallback.
 
-A partir daí a competência fica salva e não muda quando a fatura gira.
+Depois da primeira migração, o `spendingMonth` fica persistido e não muda quando a fatura gira.
 
-Pagamentos novos também passam a ser guardados em um histórico de snapshots (`uf_credit_card_paid_invoices_v2`). O snapshot legado único continua sendo lido para compatibilidade, mas versões antigas que já giraram uma fatura sem guardar sua composição podem não permitir reconstruir perfeitamente um mês passado.
+Pagamentos novos também passam a ser guardados em um histórico de snapshots (`uf_credit_card_paid_invoices_v2`). O snapshot guarda o valor completo da fatura e a composição por competência. O snapshot legado único continua sendo lido para compatibilidade, mas versões antigas que já giraram uma fatura sem guardar sua composição podem não permitir reconstruir perfeitamente um mês passado.
 
 ## Diagnóstico do backup de produção de 07/08/2026
 
@@ -221,8 +237,14 @@ O backup mostrava:
 - ciclo ativo indevidamente em Setembro;
 - fatura atual com vencimento em Setembro;
 - realizados de Agosto já parcialmente cadastrados;
-- Supermercado e Combustível de Agosto ainda incompletos.
+- Supermercado e Combustível de Agosto ainda incompletos;
+- compras avulsas de Julho ainda presentes na fatura aberta de Setembro.
 
 O ajuste operacional correto é manter **Agosto** como ciclo enquanto Agosto estiver sendo consumido. A fatura de Setembro pode permanecer aberta normalmente.
 
-O novo fluxo elimina o antigo botão que induzia a alinhar o ciclo ao vencimento e transforma o fechamento em uma revisão explícita, podendo incluir o pagamento da fatura formada pelo mês.
+Ao importar esse backup na nova versão e voltar o ciclo para Agosto, a revisão deve distinguir explicitamente:
+
+- **Gasto cartão de Agosto: R$ 1.753,08**;
+- **Fatura completa a pagar em Setembro: R$ 2.511,64**.
+
+O novo fluxo elimina o antigo botão que induzia a alinhar o ciclo ao vencimento e transforma o fechamento em uma revisão explícita, podendo incluir o pagamento da fatura completa.
