@@ -151,18 +151,28 @@ export function ClosingView({
   const { currentMonth, isCurrentMonthClosed } = history
   const [note, setNote] = useState('')
   const [allocatedFlash, setAllocatedFlash] = useState(false)
+  const [showCloseReview, setShowCloseReview] = useState(false)
 
   const accountCostRows = actuals.summary.rows.filter((row) => row.cost.paidWith !== 'card')
   const plannedCostsOnAccount = accountCostRows.reduce((sum, row) => sum + row.planned, 0)
   const actualCostsOnAccount = accountCostRows.reduce((sum, row) => sum + row.effective, 0)
+  const missingActualRows = actuals.summary.rows.filter((row) => row.actual === null)
 
   const plannedOnCard = cashFlow.plannedOnCard
   const cardSpendingActual = cardCycleAccounting.spendingThisCycle.spentPersonalTotal
+  const closingInvoiceDue = cardCycleAccounting.spendingThisCycle.duePersonalTotal
   const invoiceActual = cardCycleAccounting.invoiceThisCycle.personalTotal
   const cardDelta = plannedOnCard - cardSpendingActual
   const salaryMonth = cycleSalaryMonth(activeCycle.month)
   const previousSpendingMonth = cycleSpendingMonth(activeCycle.month)
   const currentDueMonth = cards.settings.currentDueMonth ?? activeCycle.month
+  const prepaidInCycle = Math.max(0, cardSpendingActual - closingInvoiceDue)
+
+  const canPayClosingInvoiceTogether =
+    cardCycleAccounting.spendingThisCycle.amountKnown &&
+    !cardCycleAccounting.spendingThisCycle.paid &&
+    currentDueMonth === cardCycleAccounting.spendingThisCycle.dueMonth
+  const closingInvoiceAlreadyPaid = cardCycleAccounting.spendingThisCycle.paid
 
   const accountWantItems = scenarios.activeScenario.wants
     .filter(
@@ -180,7 +190,18 @@ export function ClosingView({
   const allocations = allocateWantsToPool(accountWantItems, pool)
   const canApplyAllocation = allocationChangesPlan(accountWantItems, allocations)
 
-  const handleClose = () => {
+  const finishClose = (payInvoice: boolean) => {
+    // O resumo já usa `effective`: faltantes = planejado. Persistimos os faltantes
+    // antes de fechar para que o backup deixe explícito o valor congelado.
+    actuals.fillFromPlan(currentMonth)
+    closeCurrentMonth(currentMonth, note)
+    if (payInvoice && canPayClosingInvoiceTogether) cards.payInvoice()
+    setNote('')
+    setShowCloseReview(false)
+  }
+
+  const handleReclose = () => {
+    actuals.fillFromPlan(currentMonth)
     closeCurrentMonth(currentMonth, note)
     setNote('')
   }
@@ -194,9 +215,7 @@ export function ClosingView({
   if (metrics.availableForBudget <= 0) {
     return (
       <div className="flex flex-col items-center rounded-xl border border-dark-border bg-dark-card px-6 py-16 text-center">
-        <h2 className="text-xl font-semibold tracking-tight text-dark-text">
-          Comece pelo salário
-        </h2>
+        <h2 className="text-xl font-semibold tracking-tight text-dark-text">Comece pelo salário</h2>
         <p className="mt-2 max-w-md text-sm leading-relaxed text-dark-text-muted">
           Informe a renda e os custos em Planejar. O hub do ciclo monta o liberado para alocar, a
           fatura e o fechamento.
@@ -208,10 +227,6 @@ export function ClosingView({
       </div>
     )
   }
-
-  const invoiceStepDone =
-    cardCycleAccounting.invoiceThisCycle.paid ||
-    (cardCycleAccounting.invoiceThisCycle.amountKnown && invoiceActual <= 0.005)
 
   const investmentHint = [
     `folha ${formatCurrency(investmentActuals.payroll)}`,
@@ -234,9 +249,9 @@ export function ClosingView({
           description={
             <>
               Salário do fim de {formatMonthLong(salaryMonth)} financia{' '}
-              {formatMonthLong(activeCycle.month)}. A fatura que vence neste ciclo traz compras de{' '}
-              {formatMonthLong(previousSpendingMonth)}; compras feitas agora entram na fatura de{' '}
-              {formatMonthLong(cardCycleAccounting.spendingThisCycle.dueMonth)}.
+              {formatMonthLong(activeCycle.month)}. Compras/parcelas atribuídas a este mês formam a
+              fatura de {formatMonthLong(cardCycleAccounting.spendingThisCycle.dueMonth)}. No
+              fechamento você pode encerrar apenas o ciclo ou encerrar e pagar essa fatura junto.
             </>
           }
           actions={
@@ -266,13 +281,13 @@ export function ClosingView({
             ~dia {activeCycle.cycle.salaryHintDay} de {formatMonthLong(salaryMonth)}
           </div>
           <div className="rounded-lg bg-dark-surface/50 px-3 py-2">
-            <span className="block font-medium text-dark-text">Fatura paga neste ciclo</span>
+            <span className="block font-medium text-dark-text">Fatura no caixa deste ciclo</span>
             vence em {formatMonthLong(activeCycle.month)} · compras de{' '}
             {formatMonthLong(previousSpendingMonth)}
           </div>
           <div className="rounded-lg bg-dark-surface/50 px-3 py-2">
-            <span className="block font-medium text-dark-text">Compras no cartão agora</span>
-            gastos de {formatMonthLong(activeCycle.month)} · vencem em{' '}
+            <span className="block font-medium text-dark-text">Fatura que fecha este ciclo</span>
+            gastos de {formatMonthLong(activeCycle.month)} · vence em{' '}
             {formatMonthLong(cardCycleAccounting.spendingThisCycle.dueMonth)}
           </div>
         </div>
@@ -282,12 +297,11 @@ export function ClosingView({
 
       {!cardCycleAccounting.invoiceThisCycle.amountKnown && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.07] px-4 py-3 text-sm leading-relaxed text-amber-100/90">
-          <strong className="font-semibold text-amber-200">Fatura anterior já girada.</strong>{' '}
-          O cartão já está na fatura de {formatMonthLong(currentDueMonth)}, enquanto o ciclo ativo é{' '}
-          {formatMonthLong(activeCycle.month)}. Isso é esperado se a fatura de{' '}
-          {formatMonthLong(activeCycle.month)} foi paga antes desta atualização. O valor pago não
-          existia em snapshot nas versões anteriores, então ele não pode ser reconstruído
-          automaticamente; não avance o ciclo só para alinhar o rótulo.
+          <strong className="font-semibold text-amber-200">Fatura antiga sem snapshot.</strong>{' '}
+          O cartão já avançou para {formatMonthLong(currentDueMonth)} e uma versão anterior não
+          preservou o valor da fatura que venceu em {formatMonthLong(activeCycle.month)}. Isso não
+          é motivo para alterar o ciclo ativo; o novo formato passa a preservar os pagamentos
+          seguintes.
         </div>
       )}
 
@@ -313,8 +327,8 @@ export function ClosingView({
         </div>
         <p className="mt-4 text-xs leading-relaxed text-dark-text-muted">
           {shortfall > 0.005
-            ? `Faltam ${formatCurrency(shortfall)} para cobrir a fatura deste ciclo, as contas e o aporte planejado.`
-            : `Depois das obrigações do ciclo, este valor pode ir para desejos ou reforço de aporte.`}
+            ? `Faltam ${formatCurrency(shortfall)} para cobrir a fatura que vence neste ciclo, as contas e o aporte planejado.`
+            : 'Depois das obrigações do ciclo, este valor pode ir para desejos ou reforço de aporte.'}
         </p>
         <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
           <StepChip
@@ -350,42 +364,42 @@ export function ClosingView({
         <PanelHeader
           title="Fluxo do ciclo"
           icon={<ListChecks size={16} />}
-          description="Pagar uma fatura gira o cartão para o próximo vencimento, mas o ciclo financeiro continua no mês que este salário está financiando."
+          description="Durante o mês você registra o realizado. No fim, a revisão congela os números e pode pagar a fatura formada pelo próprio ciclo na mesma ação."
         />
         <div className="mt-3 space-y-2">
           <WorkflowStep
             done={financialCycle.income > 0.005}
             title="1. Receber"
-            detail={`${formatCurrency(financialCycle.income)} no caixa deste ciclo.`}
+            detail={`${formatCurrency(financialCycle.income)} disponíveis para financiar ${formatMonthLong(activeCycle.month)}.`}
           />
           <WorkflowStep
-            done={invoiceStepDone}
-            title="2. Pagar fatura que vence neste ciclo"
+            done={missingActualRows.length === 0}
+            title="2. Atualizar custos realizados"
             detail={
-              cardCycleAccounting.invoiceThisCycle.paid
-                ? `${formatCurrency(invoiceActual)} pagos neste ciclo. A fatura aberta agora vence em ${formatMonthLong(currentDueMonth)}.`
-                : !cardCycleAccounting.invoiceThisCycle.amountKnown
-                  ? `O cartão já avançou para ${formatMonthLong(currentDueMonth)}; a versão anterior não preservou o valor da fatura paga neste ciclo.`
-                  : invoiceActual > 0.005
-                    ? `${formatCurrency(invoiceActual)} de compras de ${formatMonthLong(previousSpendingMonth)} — sai do salário deste ciclo.`
-                    : 'Sem valor devido nesta fatura.'
+              missingActualRows.length === 0
+                ? 'Todos os custos têm valor realizado informado.'
+                : `${missingActualRows.length} custo(s) ainda sem realizado. No fechamento, cada um usará o valor planejado e isso será persistido.`
+            }
+          />
+          <WorkflowStep
+            done={
+              cardCycleAccounting.spendingThisCycle.amountKnown &&
+              cardCycleAccounting.spendingThisCycle.unclassifiedPersonal <= 0.005
+            }
+            title="3. Conferir cartão do mês"
+            detail={
+              cardCycleAccounting.spendingThisCycle.amountKnown
+                ? `${formatCurrency(cardSpendingActual)} de gasto por competência; ${formatCurrency(closingInvoiceDue)} ainda compõem a fatura que vence em ${formatMonthLong(cardCycleAccounting.spendingThisCycle.dueMonth)}.${prepaidInCycle > 0.005 ? ` ${formatCurrency(prepaidInCycle)} já foram pagos antecipadamente.` : ''}`
+                : 'Não foi possível reconstruir com segurança o detalhe desta competência; confira Cartões antes de fechar.'
             }
             action={
-              !invoiceStepDone && cardCycleAccounting.invoiceThisCycle.amountKnown ? (
+              !cardCycleAccounting.spendingThisCycle.amountKnown ||
+              cardCycleAccounting.spendingThisCycle.unclassifiedPersonal > 0.005 ? (
                 <SecondaryButton onClick={onGoToCards}>
                   <CreditCard size={14} />
                   Ir para Cartões
                 </SecondaryButton>
               ) : undefined
-            }
-          />
-          <WorkflowStep
-            done={actuals.summary.informedCount > 0}
-            title="3. Informar custos realizados"
-            detail={
-              actuals.summary.informedCount > 0
-                ? `${actuals.summary.informedCount} custo(s) com valor pago informado.`
-                : 'Opcional durante o mês, mas importante antes do fechamento — use a tabela abaixo.'
             }
           />
           <WorkflowStep
@@ -408,33 +422,153 @@ export function ClosingView({
           />
           <WorkflowStep
             done={isCurrentMonthClosed}
-            title="5. Fechar ciclo"
+            title="5. Revisar e fechar ciclo"
             detail={
               isCurrentMonthClosed
-                ? `${formatMonthLong(currentMonth)} já fechado — refechar não avança de novo.`
-                : `Grava custos, compras no cartão e investimentos realizados em ${formatMonthLong(activeCycle.month)} e avança para o próximo ciclo.`
+                ? `${formatMonthLong(currentMonth)} já fechado — refechar substitui o snapshot sem avançar de novo.`
+                : `Abra a revisão final de ${formatMonthLong(activeCycle.month)} antes de congelar o histórico e avançar.`
             }
             action={
               isCurrentMonthClosed ? (
-                <ConfirmButton onConfirm={handleClose} confirmLabel="Substituir" tone="primary">
+                <ConfirmButton onConfirm={handleReclose} confirmLabel="Substituir" tone="primary">
                   Refechar
                 </ConfirmButton>
               ) : (
-                <PrimaryButton onClick={handleClose}>
+                <PrimaryButton onClick={() => setShowCloseReview(true)}>
                   <CalendarCheck size={15} />
-                  Fechar o ciclo
+                  Revisar fechamento
                 </PrimaryButton>
               )
             }
           />
         </div>
 
+        {showCloseReview && !isCurrentMonthClosed && (
+          <div className="mt-4 rounded-xl border border-primary-500/30 bg-primary-500/[0.05] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-dark-text">
+                  Fechamento de {formatMonthLong(activeCycle.month)}
+                </h3>
+                <p className="mt-1 max-w-3xl text-xs leading-relaxed text-dark-text-muted">
+                  Este é o snapshot que ficará no Histórico. “Gasto no cartão” é competência do
+                  mês; “fatura a pagar” exclui itens já pagos antecipadamente e é o valor que será
+                  quitado se você escolher fechar e pagar junto.
+                </p>
+              </div>
+              {closingInvoiceAlreadyPaid && (
+                <span className="rounded-lg bg-primary-500/15 px-3 py-1.5 text-xs font-semibold text-primary-300">
+                  Fatura de {formatMonthLong(cardCycleAccounting.spendingThisCycle.dueMonth)} já paga
+                </span>
+              )}
+            </div>
+
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <StatTile
+                label="Custos do ciclo"
+                value={formatCurrency(actuals.summary.effectiveCosts)}
+                detail={
+                  missingActualRows.length
+                    ? `${missingActualRows.length} faltante(s) usarão o planejado`
+                    : 'todos com realizado informado'
+                }
+              />
+              <StatTile
+                label="Gasto no cartão"
+                value={formatCurrency(cardSpendingActual)}
+                detail={`competência de ${formatMonthLong(activeCycle.month)}${prepaidInCycle > 0.005 ? ` · inclui ${formatCurrency(prepaidInCycle)} antecipados` : ''}`}
+                tone="accent"
+              />
+              <StatTile
+                label={`Fatura a pagar em ${formatMonthLong(cardCycleAccounting.spendingThisCycle.dueMonth)}`}
+                value={
+                  cardCycleAccounting.spendingThisCycle.amountKnown
+                    ? formatCurrency(closingInvoiceDue)
+                    : '—'
+                }
+                detail={closingInvoiceAlreadyPaid ? 'já marcada como paga' : 'valor ainda devido'}
+              />
+              <StatTile
+                label="Investido no ciclo"
+                value={formatCurrency(investmentActuals.total)}
+                detail={`${investmentActuals.savingsRate.toFixed(1)}% da base`}
+                tone="positive"
+              />
+            </div>
+
+            {missingActualRows.length > 0 && (
+              <div className="mt-3 rounded-lg border border-amber-500/25 bg-amber-500/[0.07] px-3 py-3">
+                <strong className="text-sm font-semibold text-amber-200">
+                  Valores não preenchidos
+                </strong>
+                <p className="mt-1 text-xs leading-relaxed text-amber-100/80">
+                  Estes itens serão congelados pelo valor do planejamento:
+                </p>
+                <div className="mt-2 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+                  {missingActualRows.map((row) => (
+                    <div
+                      key={row.cost.id}
+                      className="flex items-center justify-between gap-3 rounded-md bg-dark-card/70 px-2.5 py-1.5 text-xs"
+                    >
+                      <span className="truncate text-dark-text-secondary">{row.cost.name}</span>
+                      <strong className="shrink-0 tabular-nums text-dark-text">
+                        {formatCurrency(row.planned)}
+                      </strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!cardCycleAccounting.spendingThisCycle.amountKnown && (
+              <div className="mt-3 rounded-lg border border-rose-500/25 bg-rose-500/[0.07] px-3 py-2.5 text-xs leading-relaxed text-rose-100/90">
+                A competência do cartão não está completa neste estado legado. Você ainda pode
+                fechar somente o ciclo, mas confira a aba Cartões antes de confiar no valor de
+                cartão gravado no Histórico.
+              </div>
+            )}
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <SecondaryButton onClick={() => finishClose(false)}>
+                Fechar apenas o ciclo
+              </SecondaryButton>
+              {canPayClosingInvoiceTogether && (
+                <PrimaryButton onClick={() => finishClose(true)}>
+                  <CheckCircle2 size={15} />
+                  Fechar ciclo + pagar fatura ({formatCurrency(closingInvoiceDue)})
+                </PrimaryButton>
+              )}
+              {closingInvoiceAlreadyPaid && (
+                <PrimaryButton onClick={() => finishClose(false)}>
+                  <CheckCircle2 size={15} />
+                  Fechar ciclo — fatura já paga
+                </PrimaryButton>
+              )}
+              {!canPayClosingInvoiceTogether &&
+                !closingInvoiceAlreadyPaid &&
+                cardCycleAccounting.spendingThisCycle.amountKnown && (
+                  <span className="text-xs leading-relaxed text-dark-text-muted">
+                    A fatura aberta atualmente vence em {formatMonthLong(currentDueMonth)}; para
+                    pagar junto, ela precisa ser a fatura de{' '}
+                    {formatMonthLong(cardCycleAccounting.spendingThisCycle.dueMonth)} formada por
+                    este ciclo.
+                  </span>
+                )}
+              <button
+                type="button"
+                onClick={() => setShowCloseReview(false)}
+                className="ml-auto rounded-lg px-3 py-2 text-sm text-dark-text-muted transition-colors hover:text-dark-text"
+              >
+                Voltar
+              </button>
+            </div>
+          </div>
+        )}
+
         {accountWantItems.length > 0 && (
           <div className="mt-4 rounded-xl border border-dark-border bg-dark-surface/40 p-3">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <span className="text-sm font-semibold text-dark-text">
-                Desejos em conta × liberado
-              </span>
+              <span className="text-sm font-semibold text-dark-text">Desejos em conta × liberado</span>
               {canApplyAllocation && (
                 <SecondaryButton onClick={handleApplyAllocation}>Aplicar rateio</SecondaryButton>
               )}
@@ -512,7 +646,7 @@ export function ClosingView({
         <PanelHeader
           title="Plano × realizado"
           icon={<ArrowRight size={16} />}
-          description={`Competência de ${formatMonthLong(activeCycle.month)}: compras e aportes feitos agora contam no realizado deste mês, mesmo quando o pagamento do cartão só acontece no mês seguinte.`}
+          description={`Competência de ${formatMonthLong(activeCycle.month)}: compras, parcelas e aportes atribuídos a este mês permanecem neste realizado mesmo que a fatura seja paga antes do fechamento.`}
         />
 
         <div className="mt-3">
@@ -524,19 +658,19 @@ export function ClosingView({
           </div>
 
           <ComparisonRow
-            label={`Compras no cartão em ${formatMonthLong(activeCycle.month)}`}
+            label={`Gasto no cartão em ${formatMonthLong(activeCycle.month)}`}
             planned={plannedOnCard}
             actual={cardSpendingActual}
-            hint={`vencem em ${formatMonthLong(cardCycleAccounting.spendingThisCycle.dueMonth)} e serão pagas com o próximo salário`}
+            hint={`fatura de ${formatMonthLong(cardCycleAccounting.spendingThisCycle.dueMonth)}: ${formatCurrency(closingInvoiceDue)} ainda devidos${prepaidInCycle > 0.005 ? ` + ${formatCurrency(prepaidInCycle)} antecipados` : ''}`}
           />
           <ComparisonRow
             label="Custos em conta"
             planned={plannedCostsOnAccount}
             actual={actualCostsOnAccount}
             hint={
-              actuals.summary.informedCount > 0
-                ? `${actuals.summary.informedCount} itens com realizado informado`
-                : 'ainda usando o plano — informe o realizado abaixo'
+              missingActualRows.length === 0
+                ? 'todos os custos com realizado informado'
+                : `${missingActualRows.length} item(ns) ainda usam o valor planejado`
             }
           />
           <ComparisonRow
@@ -548,16 +682,19 @@ export function ClosingView({
         </div>
 
         <p className="mt-3 border-t border-dark-border-subtle pt-3 text-xs leading-relaxed text-dark-text-muted">
-          O bloco “Liberado” acima continua usando o <strong className="text-dark-text">aporte planejado</strong>{' '}
-          para orientar o caixa durante o mês. No fechamento, o histórico grava{' '}
-          <strong className="text-dark-text">{formatCurrency(investmentActuals.total)} efetivamente investidos</strong>{' '}
+          O bloco “Liberado” acima continua usando o{' '}
+          <strong className="text-dark-text">aporte planejado</strong> para orientar o caixa durante
+          o mês. No fechamento, o histórico grava{' '}
+          <strong className="text-dark-text">
+            {formatCurrency(investmentActuals.total)} efetivamente investidos
+          </strong>{' '}
           neste ciclo e uma taxa realizada de {investmentActuals.savingsRate.toFixed(1)}%.
         </p>
 
         <p className="mt-2 border-t border-dark-border-subtle pt-3 text-xs leading-relaxed text-dark-text-muted">
           Liberado = {formatCurrency(financialCycle.income)} − fatura que vence neste ciclo{' '}
           {cardCycleAccounting.invoiceThisCycle.amountKnown
-            ? formatCurrency(financialCycle.invoiceToPay)
+            ? formatCurrency(invoiceActual)
             : 'valor não recuperado'}{' '}
           − custos {formatCurrency(financialCycle.costsOnAccount)} − aporte planejado{' '}
           {formatCurrency(financialCycle.directInvestment)}
@@ -568,8 +705,8 @@ export function ClosingView({
           <strong className={shortfall > 0.005 ? 'text-rose-300' : 'text-primary-300'}>
             {formatCurrency(available)}
           </strong>
-          . As compras de {formatMonthLong(activeCycle.month)} no cartão (~
-          {formatCurrency(financialCycle.reservedForNextInvoice)}) ficam para a fatura de{' '}
+          . A fatura formada por {formatMonthLong(activeCycle.month)} tem{' '}
+          {formatCurrency(closingInvoiceDue)} ainda devidos para{' '}
           {formatMonthLong(cardCycleAccounting.spendingThisCycle.dueMonth)}.
         </p>
       </Panel>
