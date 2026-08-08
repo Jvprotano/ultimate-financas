@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calculateFinancialCycle } from './financialCycle'
+import { calculateAllocationPreview, calculateFinancialCycle } from './financialCycle'
 
 describe('calculateFinancialCycle', () => {
   it('paga a fatura deste ciclo e só informa a prévia da próxima', () => {
@@ -122,5 +122,56 @@ describe('calculateFinancialCycle', () => {
     expect(cycle.discretionaryAvailable).toBe(-500)
     expect(cycle.discretionaryShortfall).toBe(500)
     expect(cycle.reservedForNextInvoice).toBe(2_500)
+  })
+})
+
+
+
+describe('calculateAllocationPreview', () => {
+  it('usa a fatura formada pelo ciclo atual para calcular o próximo mês', () => {
+    const preview = calculateAllocationPreview({
+      month: '2026-09',
+      paycheck: 8_800,
+      invoice: 2_511.64,
+      costsOnAccount: 3_000,
+      baseInvestment: 1_500,
+    })
+
+    expect(preview.month).toBe('2026-09')
+    expect(preview.invoice).toBeCloseTo(2_511.64)
+    expect(preview.availableToAllocate).toBeCloseTo(1_788.36)
+    expect(preview.pool).toBeCloseTo(1_788.36)
+    expect(preview.shortfall).toBe(0)
+  })
+
+  it('inclui eventos do próximo mês e deixa desejos fora até a alocação', () => {
+    const preview = calculateAllocationPreview({
+      month: '2026-09',
+      paycheck: 8_800,
+      invoice: 2_511.64,
+      costsOnAccount: 3_000,
+      baseInvestment: 1_500,
+      extraIncome: 300,
+      extraExpense: 100,
+    })
+
+    // 8800 + 300 - 2511.64 - 3000 - 1500 - 100
+    expect(preview.totalIncome).toBe(9_100)
+    expect(preview.committedBeforeAllocation).toBeCloseTo(7_111.64)
+    expect(preview.availableToAllocate).toBeCloseTo(1_988.36)
+  })
+
+  it('mostra shortfall quando as obrigações do próximo mês excedem as entradas', () => {
+    const preview = calculateAllocationPreview({
+      month: '2026-09',
+      paycheck: 7_000,
+      invoice: 3_000,
+      costsOnAccount: 3_000,
+      baseInvestment: 1_500,
+    })
+
+    expect(preview.availableToAllocate).toBe(-500)
+    expect(preview.pool).toBe(0)
+    expect(preview.shortfall).toBe(500)
   })
 })

@@ -170,3 +170,35 @@ Ao importar esse backup para testar:
 4. espere ver **Minha parte da fatura = R$ 2.511,64** e **Total da fatura = R$ 4.456,02**;
 5. ao fechar, o Histórico de Agosto deve registrar **Fatura = R$ 2.511,64**;
 6. ao escolher fechar + pagar, o ciclo passa a Setembro e a fatura gira normalmente.
+
+
+## Liberado para alocar
+
+A aba Ciclo não usa mais o caixa do mês que está sendo fechado como “Liberado”. O número é uma **prévia do próximo ciclo**.
+
+Ao fechar Agosto, por exemplo, o FinTano calcula o que poderá ser distribuído em Setembro:
+
+`entradas de Setembro − fatura de Setembro − custos em conta de Setembro − aporte-base − saídas extraordinárias de Setembro`
+
+O resultado fica disponível para **Desejos** (por exemplo, Comer fora e Viagens) e **aporte complementar**.
+
+Regras importantes:
+
+- a fatura abatida é `invoiceFormedByCycle`, isto é, a fatura que o ciclo atual acabou de formar;
+- no backup de Agosto/2026, a prévia de Setembro deve abater **R$ 2.511,64**, e não procurar a fatura antiga que venceu em Agosto;
+- se a fatura de Setembro for paga antes de Agosto ser fechado, o snapshot preserva os mesmos R$ 2.511,64 e o Liberado **não muda só por causa do pagamento**;
+- custos do próximo mês vêm do planejamento recorrente, não dos realizados do mês que acabou;
+- Desejos não são abatidos antes do cálculo, porque o objetivo desse número é justamente dizer quanto ainda pode ser alocado entre Desejos e aporte extra;
+- se o valor da fatura que financiará o próximo ciclo não for confiável, a UI mostra `—` em vez de exibir um Liberado enganoso.
+
+## Estrutura da aba Ciclo
+
+A aba deve permanecer operacional e curta. A ordem é:
+
+1. identificação do ciclo ativo;
+2. **Liberado para alocar no próximo mês**, com a decomposição mínima do cálculo;
+3. **Realizado do mês**, para corrigir débito/boleto e verbas variáveis;
+4. **Fechamento**, com custos, minha parte da fatura e investimento realizado;
+5. revisão final apenas quando o usuário escolher fechar.
+
+Guias extensos, alertas duplicados, fluxo em cinco passos, painel completo de caixa e comparação detalhada Plano × Realizado não ficam mais na tela principal de Ciclo.

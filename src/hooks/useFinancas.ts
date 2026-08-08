@@ -10,12 +10,13 @@ import { useForecast } from './useForecast'
 import { useActuals } from './useActuals'
 import { calculateScenario } from '../lib/scenario'
 import { calculateCashFlow } from '../lib/cashflow'
-import { calculateFinancialCycle } from '../lib/financialCycle'
+import { calculateAllocationPreview, calculateFinancialCycle } from '../lib/financialCycle'
 import { calculateCardCycleAccounting } from '../lib/cardCycleAccounting'
 import { calculateMonthlyInvestmentActuals } from '../lib/investmentActuals'
 import { calculateAssetsSummary } from '../lib/assets'
-import { projectNetWorth } from '../lib/forecast'
+import { occurrencesInMonth, projectNetWorth } from '../lib/forecast'
 import { maybeCreateAutoBackup } from '../lib/backup'
+import { addMonths } from '../lib/shared'
 import type { BudgetArea, CostCategory, ScenarioSummary } from '../types'
 import { BUDGET_AREAS } from '../types/constants'
 
@@ -179,6 +180,42 @@ export function useFinancas() {
     [activeCycle.month, cardCycleAccounting.invoiceFormedByCycle.personalTotal, cashFlow],
   )
 
+  /**
+   * O "Liberado para alocar" pertence ao próximo ciclo. Ex.: ao fechar Agosto,
+   * usa o salário que financiará Setembro e abate a fatura de Setembro formada
+   * por Agosto. O snapshot mantém esse mesmo valor mesmo se a fatura já tiver
+   * sido paga antes do fechamento.
+   */
+  const nextCycleAllocation = useMemo(() => {
+    const month = addMonths(activeCycle.month, 1)
+    const occurrences = occurrencesInMonth(forecast.events, month)
+    const extraIncome = occurrences
+      .filter((item) => item.event.kind === 'income')
+      .reduce((sum, item) => sum + item.event.amount, 0)
+    const extraExpense = occurrences
+      .filter((item) => item.event.kind === 'expense')
+      .reduce((sum, item) => sum + item.event.amount, 0)
+
+    return calculateAllocationPreview({
+      month,
+      paycheck: metrics.paycheckInAccount,
+      invoice: cardCycleAccounting.invoiceFormedByCycle.personalTotal,
+      // Próximo mês ainda não tem realizado: use o plano recorrente, não os
+      // valores efetivos do mês que está sendo encerrado.
+      costsOnAccount: metrics.costsOnAccount,
+      baseInvestment: metrics.directInvestmentTarget,
+      extraIncome,
+      extraExpense,
+    })
+  }, [
+    activeCycle.month,
+    cardCycleAccounting.invoiceFormedByCycle.personalTotal,
+    forecast.events,
+    metrics.costsOnAccount,
+    metrics.directInvestmentTarget,
+    metrics.paycheckInAccount,
+  ])
+
   const monthlyContribution = useMemo(() => {
     if (forecast.assumptions.monthlyContribution !== null) {
       return forecast.assumptions.monthlyContribution
@@ -330,6 +367,7 @@ export function useFinancas() {
     metrics,
     cashFlow,
     financialCycle,
+    nextCycleAllocation,
     projection,
     monthlyContribution,
     scenarioSummaries,
