@@ -58,12 +58,9 @@ export function useFinancas() {
   const { activeScenario } = scenarios
 
   /**
-   * Cartão tem dois relógios ao mesmo tempo:
-   * - caixa: a fatura que vence no ciclo ativo;
-   * - competência: as compras/parcelas atribuídas ao ciclo ativo.
-   *
-   * A competência fica persistida nos lançamentos e também no snapshot da
-   * fatura paga, então pagar antes ou depois do fechamento não altera o mês.
+   * O cartão mantém o calendário de vencimento separado do ciclo financeiro.
+   * A fatura que vence no mês seguinte é o bucket usado para encerrar o ciclo
+   * atual; o snapshot do pagamento preserva total e parte pessoal após o giro.
    */
   const cardCycleAccounting = useMemo(
     () =>
@@ -174,8 +171,8 @@ export function useFinancas() {
         wantsOnAccount: cashFlow.wantsOnAccount,
         directInvestment: cashFlow.directInvestment,
         extraExpense: cashFlow.extraExpense,
-        // A reserva do próximo caixa usa a fatura completa, não apenas a parte
-        // dos gastos cuja competência é o mês ativo.
+        // A reserva do próximo caixa usa a parte pessoal da fatura que encerra
+        // o ciclo ativo.
         nextInvoicePersonal: cardCycleAccounting.invoiceFormedByCycle.personalTotal,
         plannedNextInvoice: cashFlow.plannedOnCard,
       }),

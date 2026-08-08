@@ -458,7 +458,7 @@ export function CreditCardManager() {
       <Panel>
         <PanelHeader
           title="Seu teto de gasto"
-          description={`Fatura atual: lançamentos atribuídos a ${formatMonthLong(currentSpendingMonth)}, com vencimento em ${formatMonthLong(currentDueMonth)}. O ciclo ativo é ${formatMonthLong(activeCycle.month)} e não precisa ser alinhado ao vencimento. A aba seguinte prepara ${formatMonthLong(nextSpendingMonth)}, com vencimento em ${formatMonthLong(nextDueMonth)}.`}
+          description={`Fatura atual: bucket que encerra ${formatMonthLong(currentSpendingMonth)}, com vencimento em ${formatMonthLong(currentDueMonth)}. O ciclo ativo é ${formatMonthLong(activeCycle.month)} e não precisa ser alinhado ao vencimento. A data original de uma compra não redistribui este bucket. A aba seguinte prepara o fechamento de ${formatMonthLong(nextSpendingMonth)}, com vencimento em ${formatMonthLong(nextDueMonth)}.`}
           className="mb-4"
         />
         <div className="grid gap-4 lg:grid-cols-2">
@@ -525,7 +525,7 @@ export function CreditCardManager() {
           <PanelHeader
             title="Resumo antes de pagar"
             icon={<CheckCircle2 size={16} />}
-            description={`Fatura com competência principal de ${formatMonthLong(currentSpendingMonth)} e vencimento em ${formatMonthLong(currentDueMonth)}. Marcar como paga preserva a competência dos lançamentos e gira o cartão. Se esta é a fatura formada pelo ciclo que você está encerrando, também é possível pagar junto pela revisão da aba Ciclo.`}
+            description={`Fatura que encerra o bucket de ${formatMonthLong(currentSpendingMonth)} e vence em ${formatMonthLong(currentDueMonth)}. Marcar como paga salva o total e a sua parte antes de girar o cartão. Se você está encerrando esse ciclo agora, também pode pagar junto pela revisão da aba Ciclo.`}
           />
           <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
             <StatTile label="Total da fatura" value={formatCurrency(summary.currentTotal)} />
@@ -1142,7 +1142,7 @@ export function CreditCardManager() {
         <Panel>
           <PanelHeader
             title={`Área do orçamento · ${formatMonthLong(activeCycle.month)}`}
-            description="Este bloco segue o ciclo ativo por competência, mesmo se você já pagou a fatura e o cartão girou. A área não cria um gasto novo: ela mostra de qual caixa do plano o gasto do mês saiu."
+            description="Este bloco segue a fatura usada para encerrar o ciclo ativo, mesmo se ela já foi paga e o cartão girou. As áreas distribuem apenas a sua parte efetivamente devida; valores antecipados ficam fora para não serem somados duas vezes."
           />
           <div className="mt-3 space-y-1.5">
             {BUDGET_AREAS.map((area) => {
@@ -1183,10 +1183,25 @@ export function CreditCardManager() {
           {plannedOnCard > 0 && (
             <p className="mt-3 border-t border-dark-border-subtle pt-3 text-[11px] leading-relaxed text-dark-text-muted">
               Do planejamento de {formatMonthLong(activeCycle.month)}, {formatCurrency(plannedOnCard)}{' '}
-              deveriam passar pelo cartão. O gasto pessoal atribuído a este ciclo está em{' '}
-              {formatCurrency(cardCycleAccounting.spendingThisCycle.spentPersonalTotal)}; a parte
-              ainda devida da fatura formada por ele é{' '}
-              {formatCurrency(cardCycleAccounting.spendingThisCycle.duePersonalTotal)}.
+              deveriam passar pelo cartão. A sua parte da fatura que encerra este ciclo está em{' '}
+              {formatCurrency(cardCycleAccounting.invoiceFormedByCycle.personalTotal)}
+              {Math.max(
+                0,
+                cardCycleAccounting.spendingThisCycle.spentPersonalTotal -
+                  cardCycleAccounting.spendingThisCycle.duePersonalTotal,
+              ) > 0.005 && (
+                <>
+                  {' '}· antecipado fora da fatura:{' '}
+                  {formatCurrency(
+                    Math.max(
+                      0,
+                      cardCycleAccounting.spendingThisCycle.spentPersonalTotal -
+                        cardCycleAccounting.spendingThisCycle.duePersonalTotal,
+                    ),
+                  )}
+                </>
+              )}
+              .
             </p>
           )}
         </Panel>
