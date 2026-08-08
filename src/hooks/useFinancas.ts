@@ -72,6 +72,7 @@ export function useFinancas() {
         currentDueMonth: cards.settings.currentDueMonth ?? activeCycle.month,
         activeCycleMonth: activeCycle.month,
         currentPersonalTotal: cards.summary.currentPersonalTotal,
+        nextPersonalTotal: cards.summary.nextPersonalTotal,
         paidInvoices: cards.paidInvoices,
       }),
     [
@@ -80,6 +81,7 @@ export function useFinancas() {
       cards.paidInvoices,
       cards.settings.currentDueMonth,
       cards.summary.currentPersonalTotal,
+      cards.summary.nextPersonalTotal,
     ],
   )
   const realizedByArea = cardCycleAccounting.spendingThisCycle.personalByArea
@@ -168,10 +170,12 @@ export function useFinancas() {
         wantsOnAccount: cashFlow.wantsOnAccount,
         directInvestment: cashFlow.directInvestment,
         extraExpense: cashFlow.extraExpense,
-        nextInvoicePersonal: cardCycleAccounting.spendingThisCycle.duePersonalTotal,
+        // A reserva do próximo caixa usa a fatura completa, não apenas a parte
+        // dos gastos cuja competência é o mês ativo.
+        nextInvoicePersonal: cardCycleAccounting.invoiceFormedByCycle.personalTotal,
         plannedNextInvoice: cashFlow.plannedOnCard,
       }),
-    [activeCycle.month, cardCycleAccounting.spendingThisCycle.duePersonalTotal, cashFlow],
+    [activeCycle.month, cardCycleAccounting.invoiceFormedByCycle.personalTotal, cashFlow],
   )
 
   const monthlyContribution = useMemo(() => {
