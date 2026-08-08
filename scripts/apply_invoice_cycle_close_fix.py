@@ -1,5 +1,4 @@
 from pathlib import Path
-import re
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -9,160 +8,211 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
-def regex_once(text: str, pattern: str, replacement: str, label: str) -> str:
-    result, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
-    if count != 1:
-        raise RuntimeError(f"{label}: expected 1 regex match, got {count}")
-    return result
-
-
-# useCreditCards: repair any spendingMonth persisted by the previous date-based migration
-# and preserve the full invoice total in the paid snapshot.
-path = Path('src/hooks/useCreditCards.ts')
+# ClosingView: remove the old civil-month invoice framing and make the closing
+# invoice the single card reference for the monthly review/history.
+path = Path('src/components/ClosingView.tsx')
 text = path.read_text()
+text = replace_once(text, "import { CycleGuide } from './CycleGuide'\n", '', 'ClosingView CycleGuide import')
 text = replace_once(
     text,
-    "import { readJson, uid } from '../lib/shared'",
-    "import { addMonths, readJson, uid } from '../lib/shared'",
-    'useCreditCards shared import',
+    "import { cycleSalaryMonth, cycleSpendingMonth } from '../lib/activeCycle'",
+    "import { cycleSalaryMonth } from '../lib/activeCycle'",
+    'ClosingView activeCycle import',
 )
 text = replace_once(
     text,
-    "function hasStoredSpendingMonth(entry: CreditCardEntry) {\n  return /^\\d{4}-\\d{2}$/.test((entry as EntryWithSpendingMonth).spendingMonth ?? '')\n}",
-    "function expectedSpendingMonth(entry: CreditCardEntry, currentDueMonth: string) {\n  return entry.cycle === 'current' ? addMonths(currentDueMonth, -1) : currentDueMonth\n}\n\nfunction hasExpectedSpendingMonth(entry: CreditCardEntry, currentDueMonth: string) {\n  return (entry as EntryWithSpendingMonth).spendingMonth === expectedSpendingMonth(entry, currentDueMonth)\n}",
-    'useCreditCards migration helper',
+    "  const previousSpendingMonth = cycleSpendingMonth(activeCycle.month)\n",
+    '',
+    'ClosingView previous month const',
+)
+text = replace_once(text, "\n      <CycleGuide />\n\n", "\n", 'ClosingView duplicate guide')
+text = replace_once(
+    text,
+    '''        <div className="mt-3 grid gap-2 text-xs leading-relaxed text-dark-text-muted sm:grid-cols-3">
+          <div className="rounded-lg bg-dark-surface/50 px-3 py-2">
+            <span className="block font-medium text-dark-text">Salário que financia o ciclo</span>
+            ~dia {activeCycle.cycle.salaryHintDay} de {formatMonthLong(salaryMonth)}
+          </div>
+          <div className="rounded-lg bg-dark-surface/50 px-3 py-2">
+            <span className="block font-medium text-dark-text">Fatura no caixa deste ciclo</span>
+            vence em {formatMonthLong(activeCycle.month)} · compras de{' '}
+            {formatMonthLong(previousSpendingMonth)}
+          </div>
+          <div className="rounded-lg bg-dark-surface/50 px-3 py-2">
+            <span className="block font-medium text-dark-text">Fatura formada no fechamento</span>
+            vence em {formatMonthLong(cardCycleAccounting.invoiceFormedByCycle.dueMonth)} · sua parte{' '}
+            {cardCycleAccounting.invoiceFormedByCycle.amountKnown
+              ? formatCurrency(closingInvoiceDue)
+              : 'não recuperada'}
+          </div>
+        </div>''',
+    '''        <div className="mt-3 grid gap-2 text-xs leading-relaxed text-dark-text-muted sm:grid-cols-3">
+          <div className="rounded-lg bg-dark-surface/50 px-3 py-2">
+            <span className="block font-medium text-dark-text">Salário que financia o ciclo</span>
+            ~dia {activeCycle.cycle.salaryHintDay} de {formatMonthLong(salaryMonth)}
+          </div>
+          <div className="rounded-lg bg-dark-surface/50 px-3 py-2">
+            <span className="block font-medium text-dark-text">Minha parte da fatura do ciclo</span>
+            {formatCurrency(closingInvoiceDue)} · pagar em{' '}
+            {formatMonthLong(cardCycleAccounting.invoiceFormedByCycle.dueMonth)}
+          </div>
+          <div className="rounded-lg bg-dark-surface/50 px-3 py-2">
+            <span className="block font-medium text-dark-text">Total da fatura</span>
+            {closingInvoiceTotal !== null ? formatCurrency(closingInvoiceTotal) : 'não recuperado'}
+            {closingInvoiceTotal !== null && (
+              <> · terceiros {formatCurrency(Math.max(0, closingInvoiceTotal - closingInvoiceDue))}</>
+            )}
+          </div>
+        </div>''',
+    'ClosingView top cycle cards',
 )
 text = replace_once(
     text,
-    "  // Backups anteriores não tinham competência explícita em cada lançamento.\n  // Persiste a inferência uma única vez para que `current`/`next` possam girar\n  // sem alterar a qual mês aquele gasto pertence.\n  useEffect(() => {\n    if (!Array.isArray(storedEntries) || storedEntries.every(hasStoredSpendingMonth)) return\n    setEntries((prev) => normalizeEntriesForDueMonth(prev, currentDueMonth))\n  }, [currentDueMonth, setEntries, storedEntries])",
-    "  // Repara backups antigos e também a migração anterior que tentou inferir o mês\n  // pela data da compra. A fronteira correta é o bucket da fatura: current = ciclo\n  // anterior ao vencimento; next = ciclo do vencimento atual.\n  useEffect(() => {\n    if (\n      !Array.isArray(storedEntries) ||\n      storedEntries.every((entry) => hasExpectedSpendingMonth(entry, currentDueMonth))\n    ) {\n      return\n    }\n    setEntries((prev) => normalizeEntriesForDueMonth(prev, currentDueMonth))\n  }, [currentDueMonth, setEntries, storedEntries])",
-    'useCreditCards migration effect',
+    '''            {!cardCycleAccounting.spendingThisCycle.amountKnown && (
+              <div className="mt-3 rounded-lg border border-rose-500/25 bg-rose-500/[0.07] px-3 py-2.5 text-xs leading-relaxed text-rose-100/90">
+                A competência do cartão não está completa neste estado legado. Você ainda pode
+                fechar somente o ciclo, mas confira a aba Cartões antes de confiar no valor de
+                cartão gravado no Histórico.
+              </div>
+            )}''',
+    '''            {!cardCycleAccounting.spendingThisCycle.amountKnown && (
+              <div className="mt-3 rounded-lg border border-rose-500/25 bg-rose-500/[0.07] px-3 py-2.5 text-xs leading-relaxed text-rose-100/90">
+                Uma versão antiga já girou esta fatura sem preservar a composição do bucket. A
+                parte pessoal paga ainda pode existir no snapshot, mas confira a aba Cartões antes
+                de corrigir áreas do orçamento de um ciclo passado.
+              </div>
+            )}''',
+    'ClosingView legacy review warning',
 )
 text = replace_once(
     text,
-    "    const snapshot = createPaidInvoiceSnapshot({\n      entries,\n      currentDueMonth,\n      personalTotal: paidSummary.currentPersonalTotal,\n    })",
-    "    const snapshot = createPaidInvoiceSnapshot({\n      entries,\n      currentDueMonth,\n      total: paidSummary.currentTotal,\n      personalTotal: paidSummary.currentPersonalTotal,\n    })",
-    'useCreditCards paid snapshot total',
+    "            label={`Cartão em ${formatMonthLong(activeCycle.month)}: plano × gasto`}\n",
+    "            label={`Fatura pessoal em ${formatMonthLong(activeCycle.month)}: plano × realizado`}\n",
+    'ClosingView compact comparison label',
+)
+text = replace_once(
+    text,
+    "                ? `plano ${formatCurrency(plannedOnCard)} · gasto ${formatCurrency(cardSpendingActual)}`\n",
+    "                ? `plano ${formatCurrency(plannedOnCard)} · fatura ${formatCurrency(cardSpendingActual)}`\n",
+    'ClosingView compact comparison detail',
+)
+text = replace_once(
+    text,
+    "          description={`Competência de ${formatMonthLong(activeCycle.month)}: compras, parcelas e aportes atribuídos a este mês permanecem neste realizado mesmo que a fatura seja paga antes do fechamento.`}",
+    "          description={`Fechamento de ${formatMonthLong(activeCycle.month)}: no cartão, o realizado é a sua parte da fatura usada para encerrar o ciclo. Pagar antes ou junto do fechamento preserva o mesmo valor.`}",
+    'ClosingView plan realized description',
+)
+text = replace_once(
+    text,
+    '''          . A fatura completa formada neste fechamento vence em{' '}
+          {formatMonthLong(cardCycleAccounting.invoiceFormedByCycle.dueMonth)} e está em{' '}
+          {cardCycleAccounting.invoiceFormedByCycle.amountKnown
+            ? formatCurrency(closingInvoiceDue)
+            : 'valor não recuperado'}.''',
+    '''          . A sua parte da fatura que encerra este ciclo vence em{' '}
+          {formatMonthLong(cardCycleAccounting.invoiceFormedByCycle.dueMonth)} e está em{' '}
+          {cardCycleAccounting.invoiceFormedByCycle.amountKnown
+            ? formatCurrency(closingInvoiceDue)
+            : 'valor não recuperado'}.''',
+    'ClosingView footer invoice wording',
 )
 path.write_text(text)
 
 
-# useFinancas: the historical card number is the personal amount of the invoice that
-# closes the cycle, not a date-derived purchase subtotal.
+# CreditCardManager: keep “Pagar em Setembro”, but describe it as the bucket that
+# closes August rather than a date-derived competence.
+path = Path('src/components/CreditCardManager.tsx')
+text = path.read_text()
+text = replace_once(
+    text,
+    "          description={`Fatura atual: lançamentos atribuídos a ${formatMonthLong(currentSpendingMonth)}, com vencimento em ${formatMonthLong(currentDueMonth)}. O ciclo ativo é ${formatMonthLong(activeCycle.month)} e não precisa ser alinhado ao vencimento. A aba seguinte prepara ${formatMonthLong(nextSpendingMonth)}, com vencimento em ${formatMonthLong(nextDueMonth)}.`}",
+    "          description={`Fatura atual: bucket que encerra ${formatMonthLong(currentSpendingMonth)}, com vencimento em ${formatMonthLong(currentDueMonth)}. O ciclo ativo é ${formatMonthLong(activeCycle.month)} e não precisa ser alinhado ao vencimento. A data original de uma compra não redistribui este bucket. A aba seguinte prepara o fechamento de ${formatMonthLong(nextSpendingMonth)}, com vencimento em ${formatMonthLong(nextDueMonth)}.`}",
+    'CreditCardManager header description',
+)
+text = replace_once(
+    text,
+    "            description={`Fatura com competência principal de ${formatMonthLong(currentSpendingMonth)} e vencimento em ${formatMonthLong(currentDueMonth)}. Marcar como paga preserva a competência dos lançamentos e gira o cartão. Se esta é a fatura formada pelo ciclo que você está encerrando, também é possível pagar junto pela revisão da aba Ciclo.`}",
+    "            description={`Fatura que encerra o bucket de ${formatMonthLong(currentSpendingMonth)} e vence em ${formatMonthLong(currentDueMonth)}. Marcar como paga salva o total e a sua parte antes de girar o cartão. Se você está encerrando esse ciclo agora, também pode pagar junto pela revisão da aba Ciclo.`}",
+    'CreditCardManager pay description',
+)
+text = replace_once(
+    text,
+    '            description="Este bloco segue o ciclo ativo por competência, mesmo se você já pagou a fatura e o cartão girou. A área não cria um gasto novo: ela mostra de qual caixa do plano o gasto do mês saiu."',
+    '            description="Este bloco segue a fatura usada para encerrar o ciclo ativo, mesmo se ela já foi paga e o cartão girou. As áreas distribuem apenas a sua parte efetivamente devida; valores antecipados ficam fora para não serem somados duas vezes."',
+    'CreditCardManager area description',
+)
+text = replace_once(
+    text,
+    '''              Do planejamento de {formatMonthLong(activeCycle.month)}, {formatCurrency(plannedOnCard)}{' '}
+              deveriam passar pelo cartão. O gasto pessoal atribuído a este ciclo está em{' '}
+              {formatCurrency(cardCycleAccounting.spendingThisCycle.spentPersonalTotal)}; a parte
+              ainda devida da fatura formada por ele é{' '}
+              {formatCurrency(cardCycleAccounting.spendingThisCycle.duePersonalTotal)}.''',
+    '''              Do planejamento de {formatMonthLong(activeCycle.month)}, {formatCurrency(plannedOnCard)}{' '}
+              deveriam passar pelo cartão. A sua parte da fatura que encerra este ciclo está em{' '}
+              {formatCurrency(cardCycleAccounting.invoiceFormedByCycle.personalTotal)}
+              {Math.max(
+                0,
+                cardCycleAccounting.spendingThisCycle.spentPersonalTotal -
+                  cardCycleAccounting.spendingThisCycle.duePersonalTotal,
+              ) > 0.005 && (
+                <>
+                  {' '}· antecipado fora da fatura:{' '}
+                  {formatCurrency(
+                    Math.max(
+                      0,
+                      cardCycleAccounting.spendingThisCycle.spentPersonalTotal -
+                        cardCycleAccounting.spendingThisCycle.duePersonalTotal,
+                    ),
+                  )}
+                </>
+              )}
+              .''',
+    'CreditCardManager area footer',
+)
+path.write_text(text)
+
+
+# Internal comments should describe the same bucket model as the UI.
 path = Path('src/hooks/useFinancas.ts')
 text = path.read_text()
 text = replace_once(
     text,
-    "        currentPersonalTotal: cards.summary.currentPersonalTotal,\n        nextPersonalTotal: cards.summary.nextPersonalTotal,",
-    "        currentTotal: cards.summary.currentTotal,\n        currentPersonalTotal: cards.summary.currentPersonalTotal,\n        nextTotal: cards.summary.nextTotal,\n        nextPersonalTotal: cards.summary.nextPersonalTotal,",
-    'useFinancas accounting totals',
+    '''  /**
+   * Cartão tem dois relógios ao mesmo tempo:
+   * - caixa: a fatura que vence no ciclo ativo;
+   * - competência: as compras/parcelas atribuídas ao ciclo ativo.
+   *
+   * A competência fica persistida nos lançamentos e também no snapshot da
+   * fatura paga, então pagar antes ou depois do fechamento não altera o mês.
+   */''',
+    '''  /**
+   * O cartão mantém o calendário de vencimento separado do ciclo financeiro.
+   * A fatura que vence no mês seguinte é o bucket usado para encerrar o ciclo
+   * atual; o snapshot do pagamento preserva total e parte pessoal após o giro.
+   */''',
+    'useFinancas card comment',
 )
 text = replace_once(
     text,
-    "      cards.summary.currentPersonalTotal,\n      cards.summary.nextPersonalTotal,",
-    "      cards.summary.currentPersonalTotal,\n      cards.summary.currentTotal,\n      cards.summary.nextPersonalTotal,\n      cards.summary.nextTotal,",
-    'useFinancas accounting deps',
-)
-text = replace_once(
-    text,
-    "        // Histórico é competência: inclui antecipados porque eles consumiram o\n        // orçamento do mês. O valor efetivamente devido aparece no fechamento.\n        cardPersonalTotal: cardCycleAccounting.spendingThisCycle.spentPersonalTotal,",
-    "        // Para o ciclo operacional, Cartão = a minha parte da fatura usada para\n        // encerrar o mês. Antecipados já removidos da fatura não são somados de novo.\n        cardPersonalTotal: cardCycleAccounting.invoiceFormedByCycle.personalTotal,",
-    'useFinancas history card semantics',
-)
-text = replace_once(
-    text,
-    "      cardCycleAccounting.spendingThisCycle.personalByArea,\n      cardCycleAccounting.spendingThisCycle.spentPersonalTotal,",
-    "      cardCycleAccounting.invoiceFormedByCycle.personalTotal,\n      cardCycleAccounting.spendingThisCycle.personalByArea,",
-    'useFinancas close deps',
+    '''        // A reserva do próximo caixa usa a fatura completa, não apenas a parte
+        // dos gastos cuja competência é o mês ativo.''',
+    '''        // A reserva do próximo caixa usa a parte pessoal da fatura que encerra
+        // o ciclo ativo.''',
+    'useFinancas reserve comment',
 )
 path.write_text(text)
 
-
-# History: label the stored number for what it really is in this workflow.
-path = Path('src/components/HistoryView.tsx')
-text = path.read_text()
-text = text.replace('Gasto no cartão (competência)', 'Fatura do ciclo (minha parte)')
-text = text.replace(
-    '“Gasto no cartão” é competência do mês e pode diferir do valor da fatura paga quando há\n          antecipações.',
-    '“Fatura do ciclo” é a sua parte efetivamente paga na fatura usada para encerrar o mês.\n          Valores antecipados já retirados da fatura não são somados novamente.',
-)
-text = text.replace('/mês de gasto no cartão', '/mês de fatura pessoal')
-text = text.replace(
-    'title="Gasto pessoal atribuído por competência ao mês; pode diferir da fatura paga"',
-    'title="Sua parte da fatura usada para encerrar o ciclo"',
-)
-text = text.replace('                  Gasto cartão', '                  Fatura')
-text = text.replace(
-    'title="Competência do mês; inclui valores antecipados e pode diferir da fatura ainda devida"',
-    'title="Sua parte efetivamente devida na fatura que encerrou o ciclo"',
-)
-path.write_text(text)
-
-
-# ClosingView: make the closing invoice the primary card number and remove the unrelated
-# legacy warning about the invoice that happened to be due in the civil month.
-path = Path('src/components/ClosingView.tsx')
+path = Path('src/components/CycleAlerts.tsx')
 text = path.read_text()
 text = replace_once(
     text,
-    "  const cardSpendingActual = cardCycleAccounting.spendingThisCycle.spentPersonalTotal\n  const competenceStillDue = cardCycleAccounting.spendingThisCycle.duePersonalTotal\n  const closingInvoiceDue = cardCycleAccounting.invoiceFormedByCycle.personalTotal",
-    "  const listedPersonalOnCard = cardCycleAccounting.spendingThisCycle.spentPersonalTotal\n  const competenceStillDue = cardCycleAccounting.spendingThisCycle.duePersonalTotal\n  const closingInvoiceDue = cardCycleAccounting.invoiceFormedByCycle.personalTotal\n  const closingInvoiceTotal = cardCycleAccounting.invoiceFormedByCycle.total\n  const cardSpendingActual = closingInvoiceDue",
-    'ClosingView primary card values',
-)
-text = replace_once(
-    text,
-    "  const prepaidInCycle = Math.max(0, cardSpendingActual - competenceStillDue)",
-    "  const prepaidInCycle = Math.max(0, listedPersonalOnCard - competenceStillDue)",
-    'ClosingView prepaid value',
-)
-text = regex_once(
-    text,
-    r"\n      \{!cardCycleAccounting\.invoiceThisCycle\.amountKnown && \([\s\S]*?\n      \)\}\n",
-    "\n",
-    'ClosingView old invoice warning',
-)
-text = replace_once(
-    text,
-    "              {formatMonthLong(activeCycle.month)}. O gasto no cartão é apurado por competência;\n              a fatura completa formada no fechamento vence em{' '}\n              {formatMonthLong(cardCycleAccounting.invoiceFormedByCycle.dueMonth)}. No fechamento\n              você pode encerrar apenas o ciclo ou encerrar e pagar essa fatura junto.",
-    "              {formatMonthLong(activeCycle.month)}. Para o cartão, o ciclo termina com a fatura\n              que está sendo formada agora e vence em{' '}\n              {formatMonthLong(cardCycleAccounting.invoiceFormedByCycle.dueMonth)}. A data original\n              de uma compra não muda o bucket do ciclo. No fechamento você pode encerrar apenas o\n              ciclo ou encerrar e pagar essa fatura junto.",
-    'ClosingView header description',
-)
-text = replace_once(
-    text,
-    "            vence em {formatMonthLong(cardCycleAccounting.invoiceFormedByCycle.dueMonth)} · total{' '}\n            {cardCycleAccounting.invoiceFormedByCycle.amountKnown\n              ? formatCurrency(closingInvoiceDue)\n              : 'não recuperado'}",
-    "            vence em {formatMonthLong(cardCycleAccounting.invoiceFormedByCycle.dueMonth)} · sua parte{' '}\n            {cardCycleAccounting.invoiceFormedByCycle.amountKnown\n              ? formatCurrency(closingInvoiceDue)\n              : 'não recuperada'}",
-    'ClosingView header closing invoice tile',
-)
-text = replace_once(
-    text,
-    "                ? `${formatCurrency(cardSpendingActual)} de gasto por competência em ${formatMonthLong(activeCycle.month)}. Desses gastos, ${formatCurrency(competenceStillDue)} ainda estão devidos e ${formatCurrency(prepaidInCycle)} já foram antecipados. A fatura completa de ${formatMonthLong(cardCycleAccounting.invoiceFormedByCycle.dueMonth)} está em ${cardCycleAccounting.invoiceFormedByCycle.amountKnown ? formatCurrency(closingInvoiceDue) : 'valor não recuperado'}.`\n                : 'Não foi possível reconstruir com segurança o detalhe desta competência; confira Cartões antes de fechar.'",
-    "                ? `Sua parte da fatura que encerra ${formatMonthLong(activeCycle.month)} é ${formatCurrency(closingInvoiceDue)}. A fatura vence em ${formatMonthLong(cardCycleAccounting.invoiceFormedByCycle.dueMonth)}${closingInvoiceTotal !== null ? ` e o total cheio é ${formatCurrency(closingInvoiceTotal)}` : ''}. ${prepaidInCycle > 0.005 ? `${formatCurrency(prepaidInCycle)} já foram antecipados e estão fora do valor a pagar.` : 'Não há valores pessoais antecipados fora da fatura.'}`\n                : 'Não foi possível reconstruir com segurança a fatura deste ciclo; confira Cartões antes de fechar.'",
-    'ClosingView workflow card detail',
-)
-text = replace_once(
-    text,
-    "                  Este é o snapshot que ficará no Histórico. “Gasto no cartão” é apenas a\n                  competência de {formatMonthLong(activeCycle.month)}; “fatura a pagar” é a fatura\n                  completa com vencimento em{' '}\n                  {formatMonthLong(cardCycleAccounting.invoiceFormedByCycle.dueMonth)} e pode conter\n                  lançamentos de outra competência. São leituras diferentes do mesmo cartão.",
-    "                  Este é o snapshot que ficará no Histórico. Para o seu fluxo, “Cartão” é a sua\n                  parte efetivamente devida na fatura que encerra {formatMonthLong(activeCycle.month)}.\n                  Compras com datas anteriores que ficaram nesse bucket continuam nessa fatura;\n                  valores antecipados já retirados dela não são somados novamente.",
-    'ClosingView review explanation',
-)
-text = replace_once(
-    text,
-    "              <StatTile\n                label=\"Gasto no cartão\"\n                value={formatCurrency(cardSpendingActual)}\n                detail={`competência de ${formatMonthLong(activeCycle.month)}${prepaidInCycle > 0.005 ? ` · inclui ${formatCurrency(prepaidInCycle)} antecipados` : ''}`}\n                tone=\"accent\"\n              />",
-    "              <StatTile\n                label=\"Minha parte da fatura\"\n                value={formatCurrency(closingInvoiceDue)}\n                detail={`encerra ${formatMonthLong(activeCycle.month)} · vence em ${formatMonthLong(cardCycleAccounting.invoiceFormedByCycle.dueMonth)}`}\n                tone=\"accent\"\n              />",
-    'ClosingView review personal tile',
-)
-text = replace_once(
-    text,
-    "              <StatTile\n                label={`Fatura a pagar em ${formatMonthLong(cardCycleAccounting.invoiceFormedByCycle.dueMonth)}`}\n                value={\n                  cardCycleAccounting.invoiceFormedByCycle.amountKnown\n                    ? formatCurrency(closingInvoiceDue)\n                    : '—'\n                }\n                detail={closingInvoiceAlreadyPaid ? 'já marcada como paga' : 'valor ainda devido'}\n              />",
-    "              <StatTile\n                label=\"Total da fatura\"\n                value={closingInvoiceTotal !== null ? formatCurrency(closingInvoiceTotal) : '—'}\n                detail={\n                  closingInvoiceAlreadyPaid\n                    ? 'já marcada como paga'\n                    : closingInvoiceTotal !== null\n                      ? `terceiros: ${formatCurrency(Math.max(0, closingInvoiceTotal - closingInvoiceDue))}`\n                      : 'total cheio não preservado'\n                }\n              />",
-    'ClosingView review total tile',
-)
-text = replace_once(
-    text,
-    "            label={`Gasto no cartão em ${formatMonthLong(activeCycle.month)}`}\n            planned={plannedOnCard}\n            actual={cardSpendingActual}\n            hint={`dos gastos desta competência, ${formatCurrency(competenceStillDue)} ainda estão devidos e ${formatCurrency(prepaidInCycle)} foram antecipados; fatura completa de ${formatMonthLong(cardCycleAccounting.invoiceFormedByCycle.dueMonth)}: ${cardCycleAccounting.invoiceFormedByCycle.amountKnown ? formatCurrency(closingInvoiceDue) : '—'}`}",
-    "            label={`Fatura pessoal de ${formatMonthLong(activeCycle.month)}`}\n            planned={plannedOnCard}\n            actual={cardSpendingActual}\n            hint={`vence em ${formatMonthLong(cardCycleAccounting.invoiceFormedByCycle.dueMonth)}${closingInvoiceTotal !== null ? ` · total cheio ${formatCurrency(closingInvoiceTotal)}` : ''}${prepaidInCycle > 0.005 ? ` · ${formatCurrency(prepaidInCycle)} antecipados fora da fatura` : ''}`}",
-    'ClosingView plan comparison',
+    '''  // Alertas de cartão são competência do mês ativo. `cards.summary` acompanha a
+  // fatura marcada como current e pode girar para o mês seguinte ao pagar.''',
+    '''  // Alertas de cartão seguem o bucket que encerra o ciclo ativo. `cards.summary`
+  // acompanha a fatura marcada como current e pode girar ao pagar.''',
+    'CycleAlerts comment',
 )
 path.write_text(text)
 
-print('invoice cycle patch applied')
+print('final invoice-cycle UI cleanup applied')
