@@ -34,6 +34,7 @@ describe('calculateCardCycleAccounting', () => {
       activeCycleMonth: '2026-08',
       currentDueMonth: '2026-08',
       currentPersonalTotal: 900,
+      nextPersonalTotal: 320,
       entries: [
         entry({ id: 'jul', cycle: 'current', spendingMonth: '2026-07', personalAmount: 900 }),
         entry({
@@ -49,6 +50,12 @@ describe('calculateCardCycleAccounting', () => {
     expect(result.invoiceThisCycle).toMatchObject({
       dueMonth: '2026-08',
       personalTotal: 900,
+      paid: false,
+      amountKnown: true,
+    })
+    expect(result.invoiceFormedByCycle).toMatchObject({
+      dueMonth: '2026-09',
+      personalTotal: 320,
       paid: false,
       amountKnown: true,
     })
@@ -68,6 +75,7 @@ describe('calculateCardCycleAccounting', () => {
       activeCycleMonth: '2026-08',
       currentDueMonth: '2026-09',
       currentPersonalTotal: 320,
+      nextPersonalTotal: 150,
       paidInvoices: [
         {
           dueMonth: '2026-08',
@@ -88,6 +96,11 @@ describe('calculateCardCycleAccounting', () => {
     })
 
     expect(result.invoiceThisCycle).toMatchObject({ personalTotal: 900, paid: true })
+    expect(result.invoiceFormedByCycle).toMatchObject({
+      dueMonth: '2026-09',
+      personalTotal: 320,
+      paid: false,
+    })
     expect(result.spendingThisCycle).toMatchObject({
       sourceCycle: 'current',
       spentPersonalTotal: 320,
@@ -101,6 +114,7 @@ describe('calculateCardCycleAccounting', () => {
       activeCycleMonth: '2026-08',
       currentDueMonth: '2026-09',
       currentPersonalTotal: 0,
+      nextPersonalTotal: 0,
       entries: [
         entry({
           cycle: 'current',
@@ -115,23 +129,98 @@ describe('calculateCardCycleAccounting', () => {
     expect(result.spendingThisCycle.spentPersonalTotal).toBe(200)
     expect(result.spendingThisCycle.duePersonalTotal).toBe(0)
     expect(result.spendingThisCycle.personalByArea.necessidades).toBe(200)
+    expect(result.invoiceFormedByCycle.personalTotal).toBe(0)
   })
 
-  it('pagar a fatura de setembro antes de fechar agosto preserva exatamente o mesmo realizado', () => {
-    const augustEntries = [
+  it('migra a fatura real de setembro separando compras avulsas de julho da competência de agosto', () => {
+    const currentEntries = [
+      // Compra avulsa feita depois do fechamento anterior: continua competência Julho.
       entry({
-        id: 'due',
+        id: 'jul-due',
         cycle: 'current',
-        spendingMonth: '2026-08',
-        personalAmount: 2_511.64,
+        purchaseDate: '20/07',
+        personalAmount: 843.55,
         budgetArea: 'desejos',
       }),
       entry({
-        id: 'prepaid',
+        id: 'jul-prepaid',
         cycle: 'current',
-        spendingMonth: '2026-08',
-        personalAmount: 178.72,
+        purchaseDate: '31/07',
+        personalAmount: 93.73,
         budgetArea: 'necessidades',
+        isPrepaid: true,
+      }),
+      // Parcela antiga: purchaseDate é a compra original, mas a parcela corrente é Agosto.
+      entry({
+        id: 'aug-installments',
+        cycle: 'current',
+        purchaseDate: '03/06',
+        personalAmount: 1_668.09,
+        budgetArea: 'desejos',
+        installmentCurrent: 3,
+        installmentTotal: 12,
+      }),
+      entry({
+        id: 'aug-prepaid',
+        cycle: 'current',
+        purchaseDate: '01/08',
+        personalAmount: 84.99,
+        budgetArea: 'desejos',
+        isPrepaid: true,
+      }),
+    ]
+
+    const result = calculateCardCycleAccounting({
+      activeCycleMonth: '2026-08',
+      currentDueMonth: '2026-09',
+      currentPersonalTotal: 2_511.64,
+      nextPersonalTotal: 500,
+      entries: currentEntries,
+    })
+
+    expect(result.invoiceFormedByCycle).toMatchObject({
+      dueMonth: '2026-09',
+      personalTotal: 2_511.64,
+      paid: false,
+      amountKnown: true,
+    })
+    expect(result.spendingThisCycle.spentPersonalTotal).toBeCloseTo(1_753.08)
+    expect(result.spendingThisCycle.duePersonalTotal).toBeCloseTo(1_668.09)
+    expect(result.spendingThisCycle.personalByArea.desejos).toBeCloseTo(1_753.08)
+  })
+
+  it('pagar a fatura de setembro antes de fechar agosto preserva competência e total da fatura', () => {
+    const currentEntries = [
+      entry({
+        id: 'jul-due',
+        cycle: 'current',
+        purchaseDate: '20/07',
+        personalAmount: 843.55,
+        budgetArea: 'desejos',
+      }),
+      entry({
+        id: 'jul-prepaid',
+        cycle: 'current',
+        purchaseDate: '31/07',
+        personalAmount: 93.73,
+        budgetArea: 'necessidades',
+        isPrepaid: true,
+      }),
+      entry({
+        id: 'aug-due',
+        cycle: 'current',
+        purchaseDate: '03/06',
+        personalAmount: 1_668.09,
+        budgetArea: 'desejos',
+        installmentCurrent: 3,
+        installmentTotal: 12,
+      }),
+      entry({
+        id: 'aug-prepaid',
+        cycle: 'current',
+        purchaseDate: '01/08',
+        personalAmount: 84.99,
+        budgetArea: 'desejos',
         isPrepaid: true,
       }),
     ]
@@ -140,10 +229,11 @@ describe('calculateCardCycleAccounting', () => {
       activeCycleMonth: '2026-08',
       currentDueMonth: '2026-09',
       currentPersonalTotal: 2_511.64,
-      entries: augustEntries,
+      nextPersonalTotal: 500,
+      entries: currentEntries,
     })
     const snapshot = createPaidInvoiceSnapshot({
-      entries: augustEntries,
+      entries: currentEntries,
       currentDueMonth: '2026-09',
       personalTotal: 2_511.64,
       paidAt: '2026-08-31T20:00:00.000Z',
@@ -151,13 +241,20 @@ describe('calculateCardCycleAccounting', () => {
     const afterPay = calculateCardCycleAccounting({
       activeCycleMonth: '2026-08',
       currentDueMonth: '2026-10',
-      currentPersonalTotal: 0,
+      currentPersonalTotal: 500,
+      nextPersonalTotal: 200,
       paidInvoices: [snapshot],
       entries: [],
     })
 
-    expect(beforePay.spendingThisCycle.spentPersonalTotal).toBeCloseTo(2_690.36)
-    expect(beforePay.spendingThisCycle.duePersonalTotal).toBeCloseTo(2_511.64)
+    expect(beforePay.spendingThisCycle.spentPersonalTotal).toBeCloseTo(1_753.08)
+    expect(beforePay.invoiceFormedByCycle.personalTotal).toBeCloseTo(2_511.64)
+    expect(afterPay.invoiceFormedByCycle).toMatchObject({
+      dueMonth: '2026-09',
+      personalTotal: 2_511.64,
+      paid: true,
+      amountKnown: true,
+    })
     expect(afterPay.spendingThisCycle).toMatchObject({
       spendingMonth: '2026-08',
       dueMonth: '2026-09',
@@ -180,6 +277,7 @@ describe('calculateCardCycleAccounting', () => {
       activeCycleMonth: '2026-08',
       currentDueMonth: '2026-10',
       currentPersonalTotal: 500,
+      nextPersonalTotal: 250,
       entries: [entry({ cycle: 'current', spendingMonth: '2026-09', personalAmount: 500 })],
       paidInvoices: [
         {
@@ -191,6 +289,12 @@ describe('calculateCardCycleAccounting', () => {
       ],
     })
 
+    expect(result.invoiceFormedByCycle).toMatchObject({
+      dueMonth: '2026-09',
+      personalTotal: 400,
+      paid: true,
+      amountKnown: true,
+    })
     expect(result.spendingThisCycle).toMatchObject({
       spentPersonalTotal: 0,
       duePersonalTotal: 0,
