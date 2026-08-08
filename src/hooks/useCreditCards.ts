@@ -11,6 +11,7 @@ import {
   buildRemainingInstallmentsAmount,
   calculateCreditCardSummary,
   describeCardCycles,
+  inferDueMonthFromPaymentDate,
   normalizeCreditCardSettings,
   normalizeCardAccount,
   normalizeCreditCardEntry,
@@ -19,7 +20,10 @@ import {
   unregisteredCardNames,
 } from '../lib/creditCards'
 import {
+  createPaidInvoiceSnapshot,
   normalizePaidInvoiceSnapshot,
+  normalizePaidInvoiceSnapshots,
+  withCardEntrySpendingMonth,
   type PaidInvoiceSnapshot,
 } from '../lib/cardCycleAccounting'
 import { readJson, uid } from '../lib/shared'
@@ -27,8 +31,33 @@ import { readJson, uid } from '../lib/shared'
 const ENTRIES_STORAGE_KEY = 'uf_credit_card_entries_v1'
 const SETTINGS_STORAGE_KEY = 'uf_credit_card_settings_v1'
 const ACCOUNTS_STORAGE_KEY = 'uf_credit_card_accounts_v1'
-const LAST_PAID_INVOICE_STORAGE_KEY = 'uf_credit_card_last_paid_invoice_v1'
+const LEGACY_LAST_PAID_INVOICE_STORAGE_KEY = 'uf_credit_card_last_paid_invoice_v1'
+const PAID_INVOICES_STORAGE_KEY = 'uf_credit_card_paid_invoices_v2'
 const DEFAULT_SETTINGS: CreditCardSettings = { paymentDate: '05/07', personalSpendingLimit: 1500 }
+
+type EntryWithSpendingMonth = CreditCardEntry & { spendingMonth?: string }
+
+function hasStoredSpendingMonth(entry: CreditCardEntry) {
+  return /^\d{4}-\d{2}$/.test((entry as EntryWithSpendingMonth).spendingMonth ?? '')
+}
+
+function normalizeEntryForDueMonth(entry: CreditCardEntry, currentDueMonth: string): CreditCardEntry {
+  const spendingMonth = (entry as EntryWithSpendingMonth).spendingMonth
+  const normalized = normalizeCreditCardEntry(entry)
+  const withStoredMonth = spendingMonth
+    ? ({ ...normalized, spendingMonth } as CreditCardEntry)
+    : normalized
+  return withCardEntrySpendingMonth(withStoredMonth, currentDueMonth)
+}
+
+function normalizeEntriesForDueMonth(entries: CreditCardEntry[], currentDueMonth: string) {
+  return entries.map((entry) => normalizeEntryForDueMonth(entry, currentDueMonth))
+}
+
+function syncEntriesForDueMonth(entries: CreditCardEntry[], currentDueMonth: string) {
+  const normalized = normalizeEntriesForDueMonth(entries, currentDueMonth)
+  return normalizeEntriesForDueMonth(syncGeneratedNextEntries(normalized), currentDueMonth)
+}
 
 /**
  * Cada cartão passou a ter fechamento e vencimento próprios. Na primeira carga,
@@ -51,17 +80,34 @@ function loadInitialAccounts(): CreditCardAccount[] {
   return names.map((name) => normalizeCardAccount({ name, closingDay: 30, dueDay }))
 }
 
-export function useCreditCards() {
-  const [storedEntries, setEntries] = useLocalStorage<CreditCardEntry[]>(ENTRIES_STORAGE_KEY, [])
-  const entries = useMemo(
-    () => (Array.isArray(storedEntries) ? storedEntries.map(normalizeCreditCardEntry) : []),
-    [storedEntries],
+function loadInitialPaidInvoices(): PaidInvoiceSnapshot[] {
+  const stored = normalizePaidInvoiceSnapshots(readJson<unknown>(PAID_INVOICES_STORAGE_KEY, []))
+  if (stored.length) return stored
+
+  const legacy = normalizePaidInvoiceSnapshot(
+    readJson<Partial<PaidInvoiceSnapshot> | null>(LEGACY_LAST_PAID_INVOICE_STORAGE_KEY, null),
   )
+  return legacy ? [legacy] : []
+}
+
+export function useCreditCards() {
   const [storedSettings, setSettingsRaw] = useLocalStorage<CreditCardSettings>(
     SETTINGS_STORAGE_KEY,
     DEFAULT_SETTINGS,
   )
   const settings = useMemo(() => normalizeCreditCardSettings(storedSettings), [storedSettings])
+  const currentDueMonth =
+    settings.currentDueMonth ?? inferDueMonthFromPaymentDate(settings.paymentDate)
+
+  const [storedEntries, setEntries] = useLocalStorage<CreditCardEntry[]>(ENTRIES_STORAGE_KEY, [])
+  const entries = useMemo(
+    () =>
+      Array.isArray(storedEntries)
+        ? normalizeEntriesForDueMonth(storedEntries, currentDueMonth)
+        : [],
+    [currentDueMonth, storedEntries],
+  )
+
   const [storedAccounts, setStoredAccounts] = useLocalStorage<CreditCardAccount[]>(
     ACCOUNTS_STORAGE_KEY,
     loadInitialAccounts,
@@ -70,14 +116,24 @@ export function useCreditCards() {
     () => (Array.isArray(storedAccounts) ? storedAccounts.map(normalizeCardAccount) : []),
     [storedAccounts],
   )
-  const [storedLastPaidInvoice, setLastPaidInvoice] = useLocalStorage<PaidInvoiceSnapshot | null>(
-    LAST_PAID_INVOICE_STORAGE_KEY,
-    null,
+
+  const [storedPaidInvoices, setStoredPaidInvoices] = useLocalStorage<PaidInvoiceSnapshot[]>(
+    PAID_INVOICES_STORAGE_KEY,
+    loadInitialPaidInvoices,
   )
-  const lastPaidInvoice = useMemo(
-    () => normalizePaidInvoiceSnapshot(storedLastPaidInvoice),
-    [storedLastPaidInvoice],
+  const paidInvoices = useMemo(
+    () => normalizePaidInvoiceSnapshots(storedPaidInvoices),
+    [storedPaidInvoices],
   )
+  const lastPaidInvoice = paidInvoices.length ? paidInvoices[paidInvoices.length - 1] : null
+
+  // Backups anteriores não tinham competência explícita em cada lançamento.
+  // Persiste a inferência uma única vez para que `current`/`next` possam girar
+  // sem alterar a qual mês aquele gasto pertence.
+  useEffect(() => {
+    if (!Array.isArray(storedEntries) || storedEntries.every(hasStoredSpendingMonth)) return
+    setEntries((prev) => normalizeEntriesForDueMonth(prev, currentDueMonth))
+  }, [currentDueMonth, setEntries, storedEntries])
 
   // Os cartões herdados dos lançamentos só existem em memória até a primeira
   // gravação; persiste-os no mount para a migração não se perder.
@@ -88,32 +144,34 @@ export function useCreditCards() {
   }, [accounts, setStoredAccounts])
 
   // A geração da próxima fatura roda a cada mutação, mas dados que chegam
-  // prontos (backup importado, outro dispositivo) nunca passaram por uma:
-  // sem isto, assinaturas e parcelas só apareceriam na próxima edição.
+  // prontos (backup importado, outro dispositivo) nunca passaram por uma.
   const syncedOnMount = useRef(false)
   useEffect(() => {
     if (syncedOnMount.current || entries.length === 0) return
     syncedOnMount.current = true
-    setEntries((prev) => {
-      const synced = syncGeneratedNextEntries(prev.map(normalizeCreditCardEntry))
-      return synced.length === prev.length ? prev : synced
-    })
-  }, [entries.length, setEntries])
+    setEntries((prev) => syncEntriesForDueMonth(prev, currentDueMonth))
+  }, [currentDueMonth, entries.length, setEntries])
 
   const addEntry = useCallback(
     (entry: Omit<CreditCardEntry, 'id'>) => {
       setEntries((prev) => {
-        const nextEntries = [...prev, normalizeCreditCardEntry({ ...entry, id: uid() })]
-        return entry.cycle === 'current' ? syncGeneratedNextEntries(nextEntries) : nextEntries
+        const nextEntries = [
+          ...normalizeEntriesForDueMonth(prev, currentDueMonth),
+          normalizeEntryForDueMonth({ ...entry, id: uid() }, currentDueMonth),
+        ]
+        return entry.cycle === 'current'
+          ? syncEntriesForDueMonth(nextEntries, currentDueMonth)
+          : nextEntries
       })
     },
-    [setEntries],
+    [currentDueMonth, setEntries],
   )
 
   const updateEntry = useCallback(
     (id: string, patch: Partial<Omit<CreditCardEntry, 'id'>>) => {
       setEntries((prev) => {
-        const target = prev.find((entry) => entry.id === id)
+        const normalizedPrev = normalizeEntriesForDueMonth(prev, currentDueMonth)
+        const target = normalizedPrev.find((entry) => entry.id === id)
         if (!target) return prev
 
         // Editar um lançamento gerado automaticamente o torna manual,
@@ -122,57 +180,75 @@ export function useCreditCards() {
           target.cycle === 'next' && target.autoGenerated
             ? { ...patch, autoGenerated: false }
             : patch
-        const nextEntries = prev.map((entry) =>
-          entry.id === id ? normalizeCreditCardEntry({ ...entry, ...effectivePatch }) : entry,
+        const nextEntries = normalizedPrev.map((entry) =>
+          entry.id === id
+            ? normalizeEntryForDueMonth({ ...entry, ...effectivePatch }, currentDueMonth)
+            : entry,
         )
 
-        return target.cycle === 'current' ? syncGeneratedNextEntries(nextEntries) : nextEntries
+        return target.cycle === 'current'
+          ? syncEntriesForDueMonth(nextEntries, currentDueMonth)
+          : nextEntries
       })
     },
-    [setEntries],
+    [currentDueMonth, setEntries],
   )
 
   const removeEntry = useCallback(
     (id: string) => {
       setEntries((prev) => {
-        const target = prev.find((entry) => entry.id === id)
-        const nextEntries = prev.filter((entry) => entry.id !== id)
-        return target?.cycle === 'current' ? syncGeneratedNextEntries(nextEntries) : nextEntries
+        const normalizedPrev = normalizeEntriesForDueMonth(prev, currentDueMonth)
+        const target = normalizedPrev.find((entry) => entry.id === id)
+        const nextEntries = normalizedPrev.filter((entry) => entry.id !== id)
+        return target?.cycle === 'current'
+          ? syncEntriesForDueMonth(nextEntries, currentDueMonth)
+          : nextEntries
       })
     },
-    [setEntries],
+    [currentDueMonth, setEntries],
   )
 
   const replaceEntries = useCallback(
     (cycle: CreditCardCycle, incoming: Omit<CreditCardEntry, 'id' | 'cycle'>[]) => {
       setEntries((prev) => {
         const nextEntries = [
-          ...prev.filter((entry) => entry.cycle !== cycle),
-          ...incoming.map((entry) => normalizeCreditCardEntry({ ...entry, cycle, id: uid() })),
+          ...normalizeEntriesForDueMonth(prev, currentDueMonth).filter(
+            (entry) => entry.cycle !== cycle,
+          ),
+          ...incoming.map((entry) =>
+            normalizeEntryForDueMonth({ ...entry, cycle, id: uid() }, currentDueMonth),
+          ),
         ]
-        return cycle === 'current' ? syncGeneratedNextEntries(nextEntries) : nextEntries
+        return cycle === 'current'
+          ? syncEntriesForDueMonth(nextEntries, currentDueMonth)
+          : nextEntries
       })
     },
-    [setEntries],
+    [currentDueMonth, setEntries],
   )
 
   const appendEntries = useCallback(
     (cycle: CreditCardCycle, incoming: Omit<CreditCardEntry, 'id' | 'cycle'>[]) => {
       setEntries((prev) => {
         const nextEntries = [
-          ...prev,
-          ...incoming.map((entry) => normalizeCreditCardEntry({ ...entry, cycle, id: uid() })),
+          ...normalizeEntriesForDueMonth(prev, currentDueMonth),
+          ...incoming.map((entry) =>
+            normalizeEntryForDueMonth({ ...entry, cycle, id: uid() }, currentDueMonth),
+          ),
         ]
-        return cycle === 'current' ? syncGeneratedNextEntries(nextEntries) : nextEntries
+        return cycle === 'current'
+          ? syncEntriesForDueMonth(nextEntries, currentDueMonth)
+          : nextEntries
       })
     },
-    [setEntries],
+    [currentDueMonth, setEntries],
   )
 
   const anticipateInstallments = useCallback(
     (id: string, count: number) => {
       setEntries((prev) => {
-        const entry = prev.find((item) => item.id === id)
+        const normalizedPrev = normalizeEntriesForDueMonth(prev, currentDueMonth)
+        const entry = normalizedPrev.find((item) => item.id === id)
         if (
           !entry ||
           entry.cycle !== 'current' ||
@@ -187,61 +263,84 @@ export function useCreditCards() {
         const quantity = Math.min(Math.max(1, Math.floor(count)), total - current)
         if (quantity < 1) return prev
 
-        // Cada parcela antecipada vira um lançamento próprio na fatura atual;
-        // o valor restante da compra fica concentrado na última parcela lançada.
+        // Cada parcela antecipada vira um lançamento próprio na mesma competência.
         const anticipated = Array.from({ length: quantity }, (_, index) => {
           const installment = current + index + 1
-          return normalizeCreditCardEntry({
-            ...entry,
-            id: uid(),
-            installmentCurrent: installment,
-            remainingAmount:
-              installment === current + quantity
-                ? buildRemainingInstallmentsAmount(entry.amount, installment, total)
-                : 0,
-          })
+          return normalizeEntryForDueMonth(
+            {
+              ...entry,
+              id: uid(),
+              installmentCurrent: installment,
+              remainingAmount:
+                installment === current + quantity
+                  ? buildRemainingInstallmentsAmount(entry.amount, installment, total)
+                  : 0,
+            },
+            currentDueMonth,
+          )
         })
 
-        return syncGeneratedNextEntries([
-          ...prev.map((item) => (item.id === id ? { ...item, remainingAmount: 0 } : item)),
-          ...anticipated,
-        ])
+        return syncEntriesForDueMonth(
+          [
+            ...normalizedPrev.map((item) =>
+              item.id === id ? { ...item, remainingAmount: 0 } : item,
+            ),
+            ...anticipated,
+          ],
+          currentDueMonth,
+        )
       })
     },
-    [setEntries],
+    [currentDueMonth, setEntries],
   )
 
   const payInvoice = useCallback(() => {
-    const dueMonth = settings.currentDueMonth
-    if (dueMonth) {
-      const paidSummary = calculateCreditCardSummary(entries, settings)
-      setLastPaidInvoice({
-        dueMonth,
-        personalTotal: paidSummary.currentPersonalTotal,
-        paidAt: new Date().toISOString(),
-      })
-    }
+    const paidSummary = calculateCreditCardSummary(entries, settings)
+    const snapshot = createPaidInvoiceSnapshot({
+      entries,
+      currentDueMonth,
+      personalTotal: paidSummary.currentPersonalTotal,
+    })
+    setStoredPaidInvoices((prev) => {
+      const existing = normalizePaidInvoiceSnapshots(prev)
+      return [...existing.filter((item) => item.dueMonth !== snapshot.dueMonth), snapshot]
+        .sort((a, b) => a.paidAt.localeCompare(b.paidAt))
+        .slice(-24)
+    })
+
+    const nextSettings = advanceCreditCardSettingsCycle(settings)
+    const nextDueMonth =
+      nextSettings.currentDueMonth ?? inferDueMonthFromPaymentDate(nextSettings.paymentDate)
 
     setEntries((prev) => {
-      // Sincroniza antes de virar o ciclo: dados criados antes da geração
-      // automática podem ainda não ter as parcelas materializadas na próxima.
-      const syncedEntries = syncGeneratedNextEntries(prev)
+      // Sincroniza antes de virar: assinaturas/parcelas precisam existir na próxima fatura.
+      const syncedEntries = syncEntriesForDueMonth(prev, currentDueMonth)
       const newCurrentEntries = syncedEntries
         .filter((entry) => entry.cycle === 'next')
         .map((entry) =>
-          normalizeCreditCardEntry({
-            ...entry,
-            id: uid(),
-            cycle: 'current',
-            autoGenerated: false,
-            sourceEntryId: undefined,
-          }),
+          normalizeEntryForDueMonth(
+            {
+              ...entry,
+              id: uid(),
+              cycle: 'current',
+              autoGenerated: false,
+              sourceEntryId: undefined,
+            },
+            nextDueMonth,
+          ),
         )
 
-      return syncGeneratedNextEntries(newCurrentEntries)
+      return syncEntriesForDueMonth(newCurrentEntries, nextDueMonth)
     })
-    setSettingsRaw((prev) => advanceCreditCardSettingsCycle(normalizeCreditCardSettings(prev)))
-  }, [entries, settings, setEntries, setLastPaidInvoice, setSettingsRaw])
+    setSettingsRaw(nextSettings)
+  }, [
+    currentDueMonth,
+    entries,
+    setEntries,
+    setSettingsRaw,
+    setStoredPaidInvoices,
+    settings,
+  ])
 
   const setSettings = useCallback(
     (next: CreditCardSettings) => {
@@ -289,6 +388,7 @@ export function useCreditCards() {
     cycles,
     unregistered,
     summary,
+    paidInvoices,
     lastPaidInvoice,
     addAccount,
     updateAccount,
