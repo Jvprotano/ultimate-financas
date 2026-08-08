@@ -25,14 +25,6 @@ export type { ScenarioMetrics } from '../lib/scenario'
  * Compõe os domínios e calcula o que depende de mais de um deles: o orçamento
  * do cenário ativo já enxergando o realizado do cartão, o caixa do mês, a
  * projeção de patrimônio líquido e o fechamento de mês.
- *
- * A ordem importa: dívidas precisam dos custos (para conferir a parcela) e dos
- * bens (para saber quais têm contrapartida), investimentos precisam do saldo
- * devedor e do valor dos bens (para fechar o balanço), e o orçamento precisa do
- * histórico (para a base da reserva).
- *
- * `useAssets` guarda só a lista, sem conhecer dívidas — é o que quebra o ciclo:
- * o resumo dos bens, que precisa do saldo devedor de cada um, é montado aqui.
  */
 export function useFinancas() {
   const activeCycle = useActiveCycle()
@@ -41,8 +33,6 @@ export function useFinancas() {
   const assetsState = useAssets()
   const debts = useDebts(scenarios.activeScenario.costs, assetsState.assets)
 
-  // Depende da *lista*, não do objeto de `useAssets` — que é novo a cada render.
-  // Sem isso o resumo mudava de identidade sempre e arrastava a projeção junto.
   const assetsSummary = useMemo(
     () => calculateAssetsSummary(assetsState.assets, debts.summary.debts),
     [assetsState.assets, debts.summary.debts],
@@ -70,8 +60,10 @@ export function useFinancas() {
   /**
    * Cartão tem dois relógios ao mesmo tempo:
    * - caixa: a fatura que vence no ciclo ativo;
-   * - competência: as compras feitas no ciclo ativo, que vencem no próximo.
-   * `current`/`next` giram ao pagar e por isso não podem ser usados diretamente.
+   * - competência: as compras/parcelas atribuídas ao ciclo ativo.
+   *
+   * A competência fica persistida nos lançamentos e também no snapshot da
+   * fatura paga, então pagar antes ou depois do fechamento não altera o mês.
    */
   const cardCycleAccounting = useMemo(
     () =>
@@ -80,14 +72,16 @@ export function useFinancas() {
         currentDueMonth: cards.settings.currentDueMonth ?? activeCycle.month,
         activeCycleMonth: activeCycle.month,
         currentPersonalTotal: cards.summary.currentPersonalTotal,
-        lastPaidInvoice: cards.lastPaidInvoice,
+        nextPersonalTotal: cards.summary.nextPersonalTotal,
+        paidInvoices: cards.paidInvoices,
       }),
     [
       activeCycle.month,
       cards.entries,
-      cards.lastPaidInvoice,
+      cards.paidInvoices,
       cards.settings.currentDueMonth,
       cards.summary.currentPersonalTotal,
+      cards.summary.nextPersonalTotal,
     ],
   )
   const realizedByArea = cardCycleAccounting.spendingThisCycle.personalByArea
@@ -111,7 +105,8 @@ export function useFinancas() {
     })
     const payroll = metrics.investmentDeductions
     const total = payroll + ledger.directNet
-    const savingsRate = metrics.availableForBudget > 0 ? (total / metrics.availableForBudget) * 100 : 0
+    const savingsRate =
+      metrics.availableForBudget > 0 ? (total / metrics.availableForBudget) * 100 : 0
 
     return { ...ledger, payroll, total, savingsRate }
   }, [
@@ -143,10 +138,7 @@ export function useFinancas() {
 
   /** O mês visto pelo extrato: o que entra, o que vence e o que sobra. */
   const cashFlow = useMemo(() => {
-    // Mesmo depois de pagar e girar o cartão, a fatura quitada continua sendo
-    // saída deste ciclo; o snapshot preserva esse valor para o caixa/histórico.
     const invoiceToPay = cardCycleAccounting.invoiceThisCycle.personalTotal
-    // Contas/boleto usam o realizado quando informado — é o que sai de fato.
     const costsOnAccount = actuals.summary.rows
       .filter((row) => row.cost.paidWith !== 'card')
       .reduce((sum, row) => sum + row.effective, 0)
@@ -178,17 +170,14 @@ export function useFinancas() {
         wantsOnAccount: cashFlow.wantsOnAccount,
         directInvestment: cashFlow.directInvestment,
         extraExpense: cashFlow.extraExpense,
-        // Compras do mês ativo formam a fatura do próximo ciclo, mesmo quando
-        // o cartão já girou `next` -> `current` depois do pagamento.
-        nextInvoicePersonal: cardCycleAccounting.spendingThisCycle.duePersonalTotal,
+        // A reserva do próximo caixa usa a fatura completa, não apenas a parte
+        // dos gastos cuja competência é o mês ativo.
+        nextInvoicePersonal: cardCycleAccounting.invoiceFormedByCycle.personalTotal,
         plannedNextInvoice: cashFlow.plannedOnCard,
       }),
-    [activeCycle.month, cardCycleAccounting.spendingThisCycle.duePersonalTotal, cashFlow],
+    [activeCycle.month, cardCycleAccounting.invoiceFormedByCycle.personalTotal, cashFlow],
   )
 
-  // Aporte recorrente da projeção: o do plano, salvo se você fixar outro. A
-  // sobra do mês entra pelo regime de competência (`balanceAfterPlan`), não
-  // pelo caixa — senão o 13º deste mês viraria aporte de todo mês.
   const monthlyContribution = useMemo(() => {
     if (forecast.assumptions.monthlyContribution !== null) {
       return forecast.assumptions.monthlyContribution
@@ -229,7 +218,6 @@ export function useFinancas() {
     () =>
       projectNetWorth({
         startMonth: activeCycle.month,
-        // Só o financeiro cresce por aporte e rendimento; o bem tem a curva dele.
         startAssets: investments.summary.financialAssets,
         monthlyContribution,
         annualReturnPct: forecast.assumptions.annualReturnPct,
@@ -276,8 +264,6 @@ export function useFinancas() {
       }
 
       const costs = actuals.summary.effectiveCosts
-      // A folha já saiu de `paycheckInAccount`; daqui só sai o que foi realmente
-      // movimentado da conta para reserva/posições/metas durante o mês.
       const balance =
         metrics.paycheckInAccount - costs - metrics.totalWantsAmount - investmentActuals.directNet
 
@@ -294,23 +280,20 @@ export function useFinancas() {
         balance,
         savingsRate: investmentActuals.savingsRate,
         costsByCategory,
-        // `grossAssets` guarda o financeiro, como sempre guardou; os bens vão
-        // no campo próprio, e é a soma dos dois que forma o líquido.
         grossAssets: investments.summary.financialAssets,
         physicalAssets: investments.summary.physicalAssets,
         liabilities: investments.summary.liabilities,
         securedLiabilities: investments.summary.securedLiabilities,
         netWorth: investments.summary.netWorth,
         emergencyFund: emergencyFund.current,
-        // Histórico é competência: registra compras feitas neste mês, não a
-        // fatura anterior que foi paga pelo caixa deste ciclo.
+        // Histórico é competência: inclui antecipados porque eles consumiram o
+        // orçamento do mês. O valor efetivamente devido aparece no fechamento.
         cardPersonalTotal: cardCycleAccounting.spendingThisCycle.spentPersonalTotal,
         cardByArea,
         cashLeftover: cashFlow.leftover,
         note,
       })
 
-      // Só avança na primeira vez que o ciclo ativo é fechado — refechar não pula mês.
       if (shouldAdvance) {
         activeCycle.advanceCycle()
       }
