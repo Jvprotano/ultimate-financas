@@ -42,7 +42,11 @@ function SnapshotEditor({ point, onClose }: { point: HistoryPoint; onClose: () =
       value: point.securedLiabilities,
       key: 'securedLiabilities',
     },
-    { label: 'Fatura (sua parte)', value: point.cardPersonalTotal, key: 'cardPersonalTotal' },
+    {
+      label: 'Gasto no cartão (competência)',
+      value: point.cardPersonalTotal,
+      key: 'cardPersonalTotal',
+    },
   ]
 
   return (
@@ -71,7 +75,8 @@ function SnapshotEditor({ point, onClose }: { point: HistoryPoint; onClose: () =
         </div>
         <p className="mt-2.5 text-[11px] leading-relaxed text-dark-text-muted">
           A taxa de poupança e o patrimônio líquido são recalculados a partir do que você editar.
-          Financeiro: {formatCurrency(point.financialNetWorth)} · líquido total:{' '}
+          “Gasto no cartão” é competência do mês e pode diferir do valor da fatura paga quando há
+          antecipações. Financeiro: {formatCurrency(point.financialNetWorth)} · líquido total:{' '}
           {formatCurrency(point.grossAssets + point.physicalAssets - point.liabilities)}.
         </p>
         <div className="mt-2.5 flex gap-2">
@@ -155,7 +160,7 @@ export function HistoryView() {
           value={formatCurrency(stats.averageCosts)}
           detail={
             stats.averageCardPersonal > 0
-              ? `+ ${formatCurrency(stats.averageCardPersonal)}/mês de fatura`
+              ? `+ ${formatCurrency(stats.averageCardPersonal)}/mês de gasto no cartão`
               : 'média dos meses fechados'
           }
         />
@@ -206,7 +211,12 @@ export function HistoryView() {
                 <th className="px-4 py-2.5 text-right font-medium">Custos</th>
                 <th className="px-4 py-2.5 text-right font-medium">Desejos</th>
                 <th className="px-4 py-2.5 text-right font-medium">Investido</th>
-                <th className="px-4 py-2.5 text-right font-medium">Cartão</th>
+                <th
+                  className="px-4 py-2.5 text-right font-medium"
+                  title="Gasto pessoal atribuído por competência ao mês; pode diferir da fatura paga"
+                >
+                  Gasto cartão
+                </th>
                 <th className="px-4 py-2.5 text-right font-medium">Poupança</th>
                 <th className="px-4 py-2.5 text-right font-medium">
                   {hasLiabilities || hasPhysicalAssets ? 'Líquido' : 'Patrimônio'}
@@ -255,7 +265,10 @@ export function HistoryView() {
                     <td className="px-4 py-2.5 text-right tabular-nums text-dark-text-secondary">
                       {formatCurrency(point.invested)}
                     </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-dark-text-secondary">
+                    <td
+                      className="px-4 py-2.5 text-right tabular-nums text-dark-text-secondary"
+                      title="Competência do mês; inclui valores antecipados e pode diferir da fatura ainda devida"
+                    >
                       {point.cardPersonalTotal > 0 ? formatCurrency(point.cardPersonalTotal) : '—'}
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-dark-text-secondary">
