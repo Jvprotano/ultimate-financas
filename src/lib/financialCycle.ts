@@ -111,6 +111,8 @@ export interface AllocationPreviewInput {
   invoice: number
   costsOnAccount: number
   baseInvestment: number
+  /** Desejos planejados fora do cartão: Viagens, Qualidade de vida etc. */
+  plannedWants: number
   extraIncome?: number
   extraExpense?: number
 }
@@ -123,9 +125,12 @@ export interface AllocationPreview {
   invoice: number
   costsOnAccount: number
   baseInvestment: number
+  plannedWants: number
   extraExpense: number
   committedBeforeAllocation: number
   availableToAllocate: number
+  /** Sobra (ou falta) depois de também respeitar o plano de Desejos fora do cartão. */
+  afterPlannedWants: number
   pool: number
   shortfall: number
 }
@@ -133,10 +138,12 @@ export interface AllocationPreview {
 export function calculateAllocationPreview(input: AllocationPreviewInput): AllocationPreview {
   const extraIncome = Math.max(0, input.extraIncome ?? 0)
   const extraExpense = Math.max(0, input.extraExpense ?? 0)
+  const plannedWants = Math.max(0, input.plannedWants)
   const totalIncome = input.paycheck + extraIncome
   const committedBeforeAllocation =
     input.invoice + input.costsOnAccount + input.baseInvestment + extraExpense
   const availableToAllocate = totalIncome - committedBeforeAllocation
+  const afterPlannedWants = availableToAllocate - plannedWants
 
   return {
     month: input.month,
@@ -146,9 +153,11 @@ export function calculateAllocationPreview(input: AllocationPreviewInput): Alloc
     invoice: input.invoice,
     costsOnAccount: input.costsOnAccount,
     baseInvestment: input.baseInvestment,
+    plannedWants,
     extraExpense,
     committedBeforeAllocation,
     availableToAllocate,
+    afterPlannedWants,
     pool: Math.max(0, availableToAllocate),
     shortfall: Math.max(0, -availableToAllocate),
   }

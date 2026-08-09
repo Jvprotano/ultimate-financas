@@ -135,11 +135,14 @@ describe('calculateAllocationPreview', () => {
       invoice: 2_511.64,
       costsOnAccount: 3_000,
       baseInvestment: 1_500,
+      plannedWants: 1_000,
     })
 
     expect(preview.month).toBe('2026-09')
     expect(preview.invoice).toBeCloseTo(2_511.64)
     expect(preview.availableToAllocate).toBeCloseTo(1_788.36)
+    expect(preview.plannedWants).toBe(1_000)
+    expect(preview.afterPlannedWants).toBeCloseTo(788.36)
     expect(preview.pool).toBeCloseTo(1_788.36)
     expect(preview.shortfall).toBe(0)
   })
@@ -151,6 +154,7 @@ describe('calculateAllocationPreview', () => {
       invoice: 2_511.64,
       costsOnAccount: 3_000,
       baseInvestment: 1_500,
+      plannedWants: 1_000,
       extraIncome: 300,
       extraExpense: 100,
     })
@@ -159,6 +163,7 @@ describe('calculateAllocationPreview', () => {
     expect(preview.totalIncome).toBe(9_100)
     expect(preview.committedBeforeAllocation).toBeCloseTo(7_111.64)
     expect(preview.availableToAllocate).toBeCloseTo(1_988.36)
+    expect(preview.afterPlannedWants).toBeCloseTo(988.36)
   })
 
   it('mostra shortfall quando as obrigações do próximo mês excedem as entradas', () => {
@@ -168,10 +173,36 @@ describe('calculateAllocationPreview', () => {
       invoice: 3_000,
       costsOnAccount: 3_000,
       baseInvestment: 1_500,
+      plannedWants: 1_000,
     })
 
     expect(preview.availableToAllocate).toBe(-500)
+    expect(preview.afterPlannedWants).toBe(-1_500)
     expect(preview.pool).toBe(0)
     expect(preview.shortfall).toBe(500)
+  })
+
+  it('mostra a margem contra o plano de desejos fora do cartão', () => {
+    const abovePlan = calculateAllocationPreview({
+      month: '2026-09',
+      paycheck: 5_010,
+      invoice: 2_000,
+      costsOnAccount: 1_000,
+      baseInvestment: 1_000,
+      plannedWants: 1_000,
+    })
+    expect(abovePlan.availableToAllocate).toBe(1_010)
+    expect(abovePlan.afterPlannedWants).toBe(10)
+
+    const belowPlan = calculateAllocationPreview({
+      month: '2026-09',
+      paycheck: 4_900,
+      invoice: 2_000,
+      costsOnAccount: 1_000,
+      baseInvestment: 1_000,
+      plannedWants: 1_000,
+    })
+    expect(belowPlan.availableToAllocate).toBe(900)
+    expect(belowPlan.afterPlannedWants).toBe(-100)
   })
 })

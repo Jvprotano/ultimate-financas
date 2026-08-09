@@ -204,6 +204,10 @@ export function useFinancas() {
       // valores efetivos do mês que está sendo encerrado.
       costsOnAccount: metrics.costsOnAccount,
       baseInvestment: metrics.directInvestmentTarget,
+      // Neste contexto, Desejos fora do cartão são os envelopes que sairão da
+      // conta (Viagens, Qualidade de vida etc.). O cartão já foi abatido inteiro
+      // pela fatura acima.
+      plannedWants: metrics.wantsOnAccount,
       extraIncome,
       extraExpense,
     })
@@ -214,6 +218,7 @@ export function useFinancas() {
     metrics.costsOnAccount,
     metrics.directInvestmentTarget,
     metrics.paycheckInAccount,
+    metrics.wantsOnAccount,
   ])
 
   const monthlyContribution = useMemo(() => {

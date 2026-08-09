@@ -21,6 +21,12 @@ import { formatCurrency, formatMonthLong, inputClass } from '../lib/format'
 import { useFinancasStore } from '../context/financasStore'
 import { cycleSalaryMonth } from '../lib/activeCycle'
 
+function formatPlanComparison(planned: number, actual: number) {
+  const delta = actual - planned
+  if (Math.abs(delta) <= 0.005) return `planejado ${formatCurrency(planned)} · no planejado`
+  return `planejado ${formatCurrency(planned)} · ${formatCurrency(Math.abs(delta))} ${delta > 0 ? 'acima' : 'abaixo'}`
+}
+
 export function ClosingView({
   onGoToCards,
   onGoToPlanning,
@@ -88,6 +94,10 @@ export function ClosingView({
 
   const allocationReliable = invoiceKnown
   const allocationTone = nextCycleAllocation.shortfall > 0.005 ? 'negative' : 'accent'
+  const allocationPlanDelta = nextCycleAllocation.afterPlannedWants
+  const costsPlanDelta = actuals.summary.effectiveCosts - actuals.summary.plannedCosts
+  const invoicePlanDelta = closingInvoiceDue - metrics.plannedOnCard
+  const investmentPlanDelta = investmentActuals.total - metrics.totalPlannedInvestment
 
   return (
     <div className="space-y-4">
@@ -144,6 +154,31 @@ export function ClosingView({
               em conta e o aporte-base. Este é o valor que você pode distribuir entre Desejos e
               aporte complementar no próximo mês.
             </p>
+            {allocationReliable && (
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                <span className="text-dark-text-muted">
+                  Desejos planejados fora do cartão{' '}
+                  <strong className="font-semibold tabular-nums text-dark-text">
+                    {formatCurrency(nextCycleAllocation.plannedWants)}
+                  </strong>
+                </span>
+                <span
+                  className={
+                    Math.abs(allocationPlanDelta) <= 0.005
+                      ? 'font-medium text-dark-text-secondary'
+                      : allocationPlanDelta > 0
+                        ? 'font-medium text-primary-300'
+                        : 'font-medium text-rose-300'
+                  }
+                >
+                  {Math.abs(allocationPlanDelta) <= 0.005
+                    ? 'exatamente no planejado'
+                    : allocationPlanDelta > 0
+                      ? `${formatCurrency(allocationPlanDelta)} além do planejado`
+                      : `${formatCurrency(Math.abs(allocationPlanDelta))} abaixo do planejado`}
+                </span>
+              </div>
+            )}
           </div>
           <SecondaryButton onClick={onGoToPlanning}>Ajustar planejamento</SecondaryButton>
         </div>
@@ -220,10 +255,13 @@ export function ClosingView({
           <StatTile
             label="Custos do mês"
             value={formatCurrency(actuals.summary.effectiveCosts)}
-            detail={
+            detail={`${formatPlanComparison(actuals.summary.plannedCosts, actuals.summary.effectiveCosts)}${
               missingActualRows.length > 0
-                ? `${missingActualRows.length} sem realizado · usarão o plano`
-                : 'todos os realizados conferidos'
+                ? ` · ${missingActualRows.length} sem realizado`
+                : ''
+            }`}
+            tone={
+              costsPlanDelta > 0.005 ? 'negative' : costsPlanDelta < -0.005 ? 'positive' : 'neutral'
             }
           />
           <StatTile
@@ -231,16 +269,30 @@ export function ClosingView({
             value={invoiceKnown ? formatCurrency(closingInvoiceDue) : '—'}
             detail={
               invoiceKnown
-                ? `pagar em ${formatMonthLong(cardCycleAccounting.invoiceFormedByCycle.dueMonth)}`
+                ? `${formatPlanComparison(metrics.plannedOnCard, closingInvoiceDue)} · pagar em ${formatMonthLong(cardCycleAccounting.invoiceFormedByCycle.dueMonth)}`
                 : 'confira Cartões antes de fechar'
             }
-            tone="accent"
+            tone={
+              !invoiceKnown
+                ? 'neutral'
+                : invoicePlanDelta > 0.005
+                  ? 'negative'
+                  : invoicePlanDelta < -0.005
+                    ? 'positive'
+                    : 'neutral'
+            }
           />
           <StatTile
             label="Investido no ciclo"
             value={formatCurrency(investmentActuals.total)}
-            detail={`${investmentActuals.savingsRate.toFixed(1)}% da base`}
-            tone="positive"
+            detail={`${formatPlanComparison(metrics.totalPlannedInvestment, investmentActuals.total)} · ${investmentActuals.savingsRate.toFixed(1)}% da base`}
+            tone={
+              investmentPlanDelta < -0.005
+                ? 'negative'
+                : investmentPlanDelta > 0.005
+                  ? 'positive'
+                  : 'neutral'
+            }
           />
         </div>
 
