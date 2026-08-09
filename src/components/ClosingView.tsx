@@ -202,7 +202,7 @@ export function ClosingView({
             <StatTile
               label="Custos em conta"
               value={formatCurrency(nextCycleAllocation.costsOnAccount)}
-              detail="planejamento recorrente do próximo mês"
+              detail="realizado no ciclo atual · usa o plano apenas onde falta realizado"
             />
             <StatTile
               label="Aporte-base"
