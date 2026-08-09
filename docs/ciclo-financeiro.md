@@ -202,3 +202,13 @@ A aba deve permanecer operacional e curta. A ordem é:
 5. revisão final apenas quando o usuário escolher fechar.
 
 Guias extensos, alertas duplicados, fluxo em cinco passos, painel completo de caixa e comparação detalhada Plano × Realizado não ficam mais na tela principal de Ciclo.
+
+## Comparação com o planejamento na aba Ciclo
+
+A aba Ciclo continua operacional e enxuta, mas mostra duas comparações que ajudam a decidir o próximo mês:
+
+- **Liberado para alocar**: além do saldo disponível do próximo mês, mostra o total planejado de Desejos **fora do cartão** (por exemplo, Viagens e Qualidade de vida) e a margem contra esse plano. Se havia R$ 1.000 planejados e o saldo disponível é R$ 1.010, há R$ 10 além do plano; se o saldo é R$ 900, faltam R$ 100 para manter o plano original.
+- **Fechamento**: Custos, Fatura pessoal e Investimentos mostram o realizado lado a lado com o planejado e a diferença. Para custos e fatura, ficar acima do plano é sinal de excesso; para investimentos, ficar acima do plano é positivo.
+
+O cartão não entra novamente no valor planejado de Desejos do bloco Liberado: ele já foi abatido integralmente pela fatura do próximo caixa. Assim, a comparação responde quanto sobra para os envelopes que ainda serão alocados e para eventual aporte complementar.
+
