@@ -26,7 +26,7 @@ import {
   withCardEntrySpendingMonth,
   type PaidInvoiceSnapshot,
 } from '../lib/cardCycleAccounting'
-import { readJson, uid } from '../lib/shared'
+import { addMonths, readJson, uid } from '../lib/shared'
 
 const ENTRIES_STORAGE_KEY = 'uf_credit_card_entries_v1'
 const SETTINGS_STORAGE_KEY = 'uf_credit_card_settings_v1'
@@ -37,8 +37,12 @@ const DEFAULT_SETTINGS: CreditCardSettings = { paymentDate: '05/07', personalSpe
 
 type EntryWithSpendingMonth = CreditCardEntry & { spendingMonth?: string }
 
-function hasStoredSpendingMonth(entry: CreditCardEntry) {
-  return /^\d{4}-\d{2}$/.test((entry as EntryWithSpendingMonth).spendingMonth ?? '')
+function expectedSpendingMonth(entry: CreditCardEntry, currentDueMonth: string) {
+  return entry.cycle === 'current' ? addMonths(currentDueMonth, -1) : currentDueMonth
+}
+
+function hasExpectedSpendingMonth(entry: CreditCardEntry, currentDueMonth: string) {
+  return (entry as EntryWithSpendingMonth).spendingMonth === expectedSpendingMonth(entry, currentDueMonth)
 }
 
 function normalizeEntryForDueMonth(entry: CreditCardEntry, currentDueMonth: string): CreditCardEntry {
@@ -127,11 +131,16 @@ export function useCreditCards() {
   )
   const lastPaidInvoice = paidInvoices.length ? paidInvoices[paidInvoices.length - 1] : null
 
-  // Backups anteriores não tinham competência explícita em cada lançamento.
-  // Persiste a inferência uma única vez para que `current`/`next` possam girar
-  // sem alterar a qual mês aquele gasto pertence.
+  // Repara backups antigos e também a migração anterior que tentou inferir o mês
+  // pela data da compra. A fronteira correta é o bucket da fatura: current = ciclo
+  // anterior ao vencimento; next = ciclo do vencimento atual.
   useEffect(() => {
-    if (!Array.isArray(storedEntries) || storedEntries.every(hasStoredSpendingMonth)) return
+    if (
+      !Array.isArray(storedEntries) ||
+      storedEntries.every((entry) => hasExpectedSpendingMonth(entry, currentDueMonth))
+    ) {
+      return
+    }
     setEntries((prev) => normalizeEntriesForDueMonth(prev, currentDueMonth))
   }, [currentDueMonth, setEntries, storedEntries])
 
@@ -299,6 +308,7 @@ export function useCreditCards() {
     const snapshot = createPaidInvoiceSnapshot({
       entries,
       currentDueMonth,
+      total: paidSummary.currentTotal,
       personalTotal: paidSummary.currentPersonalTotal,
     })
     setStoredPaidInvoices((prev) => {

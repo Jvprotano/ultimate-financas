@@ -10,12 +10,13 @@ import { useForecast } from './useForecast'
 import { useActuals } from './useActuals'
 import { calculateScenario } from '../lib/scenario'
 import { calculateCashFlow } from '../lib/cashflow'
-import { calculateFinancialCycle } from '../lib/financialCycle'
+import { calculateAllocationPreview, calculateFinancialCycle } from '../lib/financialCycle'
 import { calculateCardCycleAccounting } from '../lib/cardCycleAccounting'
 import { calculateMonthlyInvestmentActuals } from '../lib/investmentActuals'
 import { calculateAssetsSummary } from '../lib/assets'
-import { projectNetWorth } from '../lib/forecast'
+import { occurrencesInMonth, projectNetWorth } from '../lib/forecast'
 import { maybeCreateAutoBackup } from '../lib/backup'
+import { addMonths } from '../lib/shared'
 import type { BudgetArea, CostCategory, ScenarioSummary } from '../types'
 import { BUDGET_AREAS } from '../types/constants'
 
@@ -58,12 +59,9 @@ export function useFinancas() {
   const { activeScenario } = scenarios
 
   /**
-   * Cartão tem dois relógios ao mesmo tempo:
-   * - caixa: a fatura que vence no ciclo ativo;
-   * - competência: as compras/parcelas atribuídas ao ciclo ativo.
-   *
-   * A competência fica persistida nos lançamentos e também no snapshot da
-   * fatura paga, então pagar antes ou depois do fechamento não altera o mês.
+   * O cartão mantém o calendário de vencimento separado do ciclo financeiro.
+   * A fatura que vence no mês seguinte é o bucket usado para encerrar o ciclo
+   * atual; o snapshot do pagamento preserva total e parte pessoal após o giro.
    */
   const cardCycleAccounting = useMemo(
     () =>
@@ -71,7 +69,9 @@ export function useFinancas() {
         entries: cards.entries,
         currentDueMonth: cards.settings.currentDueMonth ?? activeCycle.month,
         activeCycleMonth: activeCycle.month,
+        currentTotal: cards.summary.currentTotal,
         currentPersonalTotal: cards.summary.currentPersonalTotal,
+        nextTotal: cards.summary.nextTotal,
         nextPersonalTotal: cards.summary.nextPersonalTotal,
         paidInvoices: cards.paidInvoices,
       }),
@@ -81,7 +81,9 @@ export function useFinancas() {
       cards.paidInvoices,
       cards.settings.currentDueMonth,
       cards.summary.currentPersonalTotal,
+      cards.summary.currentTotal,
       cards.summary.nextPersonalTotal,
+      cards.summary.nextTotal,
     ],
   )
   const realizedByArea = cardCycleAccounting.spendingThisCycle.personalByArea
@@ -170,13 +172,49 @@ export function useFinancas() {
         wantsOnAccount: cashFlow.wantsOnAccount,
         directInvestment: cashFlow.directInvestment,
         extraExpense: cashFlow.extraExpense,
-        // A reserva do próximo caixa usa a fatura completa, não apenas a parte
-        // dos gastos cuja competência é o mês ativo.
+        // A reserva do próximo caixa usa a parte pessoal da fatura que encerra
+        // o ciclo ativo.
         nextInvoicePersonal: cardCycleAccounting.invoiceFormedByCycle.personalTotal,
         plannedNextInvoice: cashFlow.plannedOnCard,
       }),
     [activeCycle.month, cardCycleAccounting.invoiceFormedByCycle.personalTotal, cashFlow],
   )
+
+  /**
+   * O "Liberado para alocar" pertence ao próximo ciclo. Ex.: ao fechar Agosto,
+   * usa o salário que financiará Setembro e abate a fatura de Setembro formada
+   * por Agosto. O snapshot mantém esse mesmo valor mesmo se a fatura já tiver
+   * sido paga antes do fechamento.
+   */
+  const nextCycleAllocation = useMemo(() => {
+    const month = addMonths(activeCycle.month, 1)
+    const occurrences = occurrencesInMonth(forecast.events, month)
+    const extraIncome = occurrences
+      .filter((item) => item.event.kind === 'income')
+      .reduce((sum, item) => sum + item.event.amount, 0)
+    const extraExpense = occurrences
+      .filter((item) => item.event.kind === 'expense')
+      .reduce((sum, item) => sum + item.event.amount, 0)
+
+    return calculateAllocationPreview({
+      month,
+      paycheck: metrics.paycheckInAccount,
+      invoice: cardCycleAccounting.invoiceFormedByCycle.personalTotal,
+      // Próximo mês ainda não tem realizado: use o plano recorrente, não os
+      // valores efetivos do mês que está sendo encerrado.
+      costsOnAccount: metrics.costsOnAccount,
+      baseInvestment: metrics.directInvestmentTarget,
+      extraIncome,
+      extraExpense,
+    })
+  }, [
+    activeCycle.month,
+    cardCycleAccounting.invoiceFormedByCycle.personalTotal,
+    forecast.events,
+    metrics.costsOnAccount,
+    metrics.directInvestmentTarget,
+    metrics.paycheckInAccount,
+  ])
 
   const monthlyContribution = useMemo(() => {
     if (forecast.assumptions.monthlyContribution !== null) {
@@ -286,9 +324,9 @@ export function useFinancas() {
         securedLiabilities: investments.summary.securedLiabilities,
         netWorth: investments.summary.netWorth,
         emergencyFund: emergencyFund.current,
-        // Histórico é competência: inclui antecipados porque eles consumiram o
-        // orçamento do mês. O valor efetivamente devido aparece no fechamento.
-        cardPersonalTotal: cardCycleAccounting.spendingThisCycle.spentPersonalTotal,
+        // Para o ciclo operacional, Cartão = a minha parte da fatura usada para
+        // encerrar o mês. Antecipados já removidos da fatura não são somados de novo.
+        cardPersonalTotal: cardCycleAccounting.invoiceFormedByCycle.personalTotal,
         cardByArea,
         cashLeftover: cashFlow.leftover,
         note,
@@ -303,8 +341,8 @@ export function useFinancas() {
       activeScenario.id,
       activeScenario.name,
       actuals.summary,
+      cardCycleAccounting.invoiceFormedByCycle.personalTotal,
       cardCycleAccounting.spendingThisCycle.personalByArea,
-      cardCycleAccounting.spendingThisCycle.spentPersonalTotal,
       cashFlow.leftover,
       emergencyFund,
       history,
@@ -329,6 +367,7 @@ export function useFinancas() {
     metrics,
     cashFlow,
     financialCycle,
+    nextCycleAllocation,
     projection,
     monthlyContribution,
     scenarioSummaries,

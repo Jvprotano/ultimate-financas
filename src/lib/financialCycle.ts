@@ -95,3 +95,61 @@ export function calculateFinancialCycle(input: FinancialCycleInput): FinancialCy
     discretionaryShortfall: Math.max(0, -discretionaryAvailable),
   }
 }
+
+
+/**
+ * Prévia do dinheiro que poderá ser alocado no próximo ciclo.
+ *
+ * Este número não é o caixa do ciclo que está sendo fechado. Ele responde à
+ * pergunta operacional: depois que o próximo salário pagar a fatura formada
+ * agora, as contas em conta e o aporte-base, quanto sobra para Desejos e aporte
+ * complementar?
+ */
+export interface AllocationPreviewInput {
+  month: string
+  paycheck: number
+  invoice: number
+  costsOnAccount: number
+  baseInvestment: number
+  extraIncome?: number
+  extraExpense?: number
+}
+
+export interface AllocationPreview {
+  month: string
+  paycheck: number
+  extraIncome: number
+  totalIncome: number
+  invoice: number
+  costsOnAccount: number
+  baseInvestment: number
+  extraExpense: number
+  committedBeforeAllocation: number
+  availableToAllocate: number
+  pool: number
+  shortfall: number
+}
+
+export function calculateAllocationPreview(input: AllocationPreviewInput): AllocationPreview {
+  const extraIncome = Math.max(0, input.extraIncome ?? 0)
+  const extraExpense = Math.max(0, input.extraExpense ?? 0)
+  const totalIncome = input.paycheck + extraIncome
+  const committedBeforeAllocation =
+    input.invoice + input.costsOnAccount + input.baseInvestment + extraExpense
+  const availableToAllocate = totalIncome - committedBeforeAllocation
+
+  return {
+    month: input.month,
+    paycheck: input.paycheck,
+    extraIncome,
+    totalIncome,
+    invoice: input.invoice,
+    costsOnAccount: input.costsOnAccount,
+    baseInvestment: input.baseInvestment,
+    extraExpense,
+    committedBeforeAllocation,
+    availableToAllocate,
+    pool: Math.max(0, availableToAllocate),
+    shortfall: Math.max(0, -availableToAllocate),
+  }
+}

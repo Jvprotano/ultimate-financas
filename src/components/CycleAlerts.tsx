@@ -12,8 +12,8 @@ const alertStyle: Record<AppAlert['severity'], { box: string; text: string }> = 
 /** Até 3 alertas do plano/ciclo — vive no hub, não numa aba separada. */
 export function CycleAlerts() {
   const store = useFinancasStore()
-  // Alertas de cartão são competência do mês ativo. `cards.summary` acompanha a
-  // fatura marcada como current e pode girar para o mês seguinte ao pagar.
+  // Alertas de cartão seguem o bucket que encerra o ciclo ativo. `cards.summary`
+  // acompanha a fatura marcada como current e pode girar ao pagar.
   const cardSummaryForCycle = {
     ...store.cards.summary,
     availablePersonalLimit:
