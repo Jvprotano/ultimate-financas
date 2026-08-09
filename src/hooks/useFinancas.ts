@@ -200,9 +200,11 @@ export function useFinancas() {
       month,
       paycheck: metrics.paycheckInAccount,
       invoice: cardCycleAccounting.invoiceFormedByCycle.personalTotal,
-      // Próximo mês ainda não tem realizado: use o plano recorrente, não os
-      // valores efetivos do mês que está sendo encerrado.
-      costsOnAccount: metrics.costsOnAccount,
+      // O Liberado carrega o resultado real do ciclo encerrado para o próximo:
+      // economia em custos aumenta a folga; estouro reduz o que resta para alocar.
+      // `cashFlow.costsOnAccount` usa realizado e cai no plano apenas onde ainda
+      // não há valor efetivo informado.
+      costsOnAccount: cashFlow.costsOnAccount,
       baseInvestment: metrics.directInvestmentTarget,
       // Neste contexto, Desejos fora do cartão são os envelopes que sairão da
       // conta (Viagens, Qualidade de vida etc.). O cartão já foi abatido inteiro
@@ -215,7 +217,7 @@ export function useFinancas() {
     activeCycle.month,
     cardCycleAccounting.invoiceFormedByCycle.personalTotal,
     forecast.events,
-    metrics.costsOnAccount,
+    cashFlow.costsOnAccount,
     metrics.directInvestmentTarget,
     metrics.paycheckInAccount,
     metrics.wantsOnAccount,
