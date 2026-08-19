@@ -44,7 +44,13 @@ describe('calculateCashFlow', () => {
     expect(flow.leftover).toBeLessThan(0)
   })
 
-  it('entradas esperadas do mês somam ao que entra', () => {
+  it('entrada extra recebida soma ao que entra', () => {
+    const flow = calculateCashFlow(input({ extraIncome: 6_800 }))
+    expect(flow.extraIncome).toBe(6_800)
+    expect(flow.totalIn).toBe(8_550 + 6_800)
+  })
+
+  it('entrada apenas prevista não vira caixa antes de ser recebida', () => {
     const events = [
       normalizeExpectedEvent({
         name: '13º',
@@ -55,8 +61,8 @@ describe('calculateCashFlow', () => {
       }),
     ]
     const flow = calculateCashFlow(input({ occurrences: occurrencesInMonth(events, '2026-12') }))
-    expect(flow.extraIncome).toBe(6_800)
-    expect(flow.totalIn).toBe(8_550 + 6_800)
+    expect(flow.extraIncome).toBe(0)
+    expect(flow.totalIn).toBe(8_550)
   })
 
   it('saídas esperadas do mês somam ao que sai', () => {
@@ -72,21 +78,6 @@ describe('calculateCashFlow', () => {
     const flow = calculateCashFlow(input({ occurrences: occurrencesInMonth(events, '2027-01') }))
     expect(flow.extraExpense).toBe(1_900)
     expect(flow.totalOut).toBe(1_499 + 2_600 + 1_270 + 1_900)
-  })
-
-  it('a fatia poupada de uma entrada não muda o caixa — o caixa vê o valor cheio', () => {
-    const events = [
-      normalizeExpectedEvent({
-        name: 'Bônus',
-        kind: 'income',
-        amount: 9_000,
-        month: '2027-03',
-        recurrence: 'once',
-        savedPct: 50,
-      }),
-    ]
-    const flow = calculateCashFlow(input({ occurrences: occurrencesInMonth(events, '2027-03') }))
-    expect(flow.extraIncome).toBe(9_000)
   })
 
   it('entra menos sai é sempre a sobra', () => {

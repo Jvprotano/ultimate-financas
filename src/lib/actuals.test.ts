@@ -18,21 +18,21 @@ describe('summarizeActuals', () => {
   })
 
   it('o valor informado substitui o planejado apenas naquele item', () => {
-    const summary = summarizeActuals(costs, { month: '2026-07', costs: { energia: 260 } }, '2026-07')
+    const summary = summarizeActuals(costs, { month: '2026-07', costs: { energia: 260 }, extraIncome: [] }, '2026-07')
     expect(summary.effectiveCosts).toBe(3_560)
     expect(summary.variance).toBe(60)
     expect(summary.informedCount).toBe(1)
   })
 
   it('zero informado é uma informação, não ausência', () => {
-    const summary = summarizeActuals(costs, { month: '2026-07', costs: { energia: 0 } }, '2026-07')
+    const summary = summarizeActuals(costs, { month: '2026-07', costs: { energia: 0 }, extraIncome: [] }, '2026-07')
     expect(summary.effectiveCosts).toBe(3_300)
     expect(summary.informedCount).toBe(1)
     expect(summary.rows.find((row) => row.cost.id === 'energia')?.actual).toBe(0)
   })
 
   it('cada linha carrega plano, realizado e a diferença', () => {
-    const summary = summarizeActuals(costs, { month: '2026-07', costs: { aluguel: 1_800 } }, '2026-07')
+    const summary = summarizeActuals(costs, { month: '2026-07', costs: { aluguel: 1_800 }, extraIncome: [] }, '2026-07')
     const row = summary.rows.find((item) => item.cost.id === 'aluguel')!
     expect(row.planned).toBe(2_000)
     expect(row.actual).toBe(1_800)
@@ -41,12 +41,12 @@ describe('summarizeActuals', () => {
   })
 
   it('itens sem valor informado ficam com actual null', () => {
-    const summary = summarizeActuals(costs, { month: '2026-07', costs: {} }, '2026-07')
+    const summary = summarizeActuals(costs, { month: '2026-07', costs: {}, extraIncome: [] }, '2026-07')
     expect(summary.rows.every((row) => row.actual === null)).toBe(true)
   })
 
   it('as categorias usam o realizado', () => {
-    const summary = summarizeActuals(costs, { month: '2026-07', costs: { energia: 260 } }, '2026-07')
+    const summary = summarizeActuals(costs, { month: '2026-07', costs: { energia: 260 }, extraIncome: [] }, '2026-07')
     expect(summary.byCategory.get('contas')).toBe(260)
     expect(summary.byCategory.get('moradia')).toBe(2_000)
   })
@@ -54,7 +54,7 @@ describe('summarizeActuals', () => {
   it('a soma das categorias é o total efetivo', () => {
     const summary = summarizeActuals(
       costs,
-      { month: '2026-07', costs: { energia: 260, mercado: 1_500 } },
+      { month: '2026-07', costs: { energia: 260, mercado: 1_500 }, extraIncome: [] },
       '2026-07',
     )
     const total = Array.from(summary.byCategory.values()).reduce((sum, value) => sum + value, 0)
@@ -72,7 +72,7 @@ describe('summarizeActuals', () => {
   it('valor informado de um custo que não existe mais é ignorado', () => {
     const summary = summarizeActuals(
       costs,
-      { month: '2026-07', costs: { apagado: 999 } },
+      { month: '2026-07', costs: { apagado: 999 }, extraIncome: [] },
       '2026-07',
     )
     expect(summary.effectiveCosts).toBe(3_500)
@@ -101,5 +101,38 @@ describe('normalizeActuals', () => {
 
   it('mês inválido cai no mês corrente', () => {
     expect(normalizeActuals({ month: 'julho' }).month).toMatch(/^\d{4}-\d{2}$/)
+  })
+
+  it('preserva apenas entradas extras identificadas e positivas', () => {
+    const normalized = normalizeActuals({
+      month: '2026-07',
+      extraIncome: [
+        { id: 'horas', name: ' Banco de horas ', amount: 850 },
+        { id: 'sem-nome', name: '', amount: 100 },
+        { id: 'negativa', name: 'Erro', amount: -50 },
+      ],
+    })
+
+    expect(normalized.extraIncome).toEqual([
+      { id: 'horas', name: 'Banco de horas', amount: 850, sourceEventId: undefined },
+    ])
+  })
+
+  it('soma as entradas extras no resumo sem misturá-las aos custos', () => {
+    const summary = summarizeActuals(
+      costs,
+      {
+        month: '2026-07',
+        costs: {},
+        extraIncome: [
+          { id: 'a', name: 'Banco de horas', amount: 850 },
+          { id: 'b', name: 'Venda', amount: 150 },
+        ],
+      },
+      '2026-07',
+    )
+
+    expect(summary.extraIncomeTotal).toBe(1_000)
+    expect(summary.effectiveCosts).toBe(3_500)
   })
 })

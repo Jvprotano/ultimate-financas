@@ -1,6 +1,11 @@
-import type { ActualsSummary, CostCategory, CostItem, MonthlyActuals } from '../types'
+import type {
+  ActualsSummary,
+  CostCategory,
+  CostItem,
+  MonthlyActuals,
+} from '../types'
 import { personalCostValue } from './scenario'
-import { finiteNumber, monthKey } from './shared'
+import { finiteNumber, monthKey, normalizeExtraIncomeEntries } from './shared'
 
 // ---------------------------------------------------------------------------
 // Realizado do mês.
@@ -23,9 +28,12 @@ export function normalizeActuals(raw: Partial<MonthlyActuals> | undefined): Mont
     }
   }
 
+  const extraIncome = normalizeExtraIncomeEntries(raw?.extraIncome)
+
   return {
     month: /^\d{4}-\d{2}$/.test(raw?.month ?? '') ? (raw?.month as string) : monthKey(),
     costs,
+    extraIncome,
   }
 }
 
@@ -52,6 +60,8 @@ export function summarizeActuals(
 
   return {
     month,
+    extraIncome: actuals?.extraIncome ?? [],
+    extraIncomeTotal: (actuals?.extraIncome ?? []).reduce((sum, entry) => sum + entry.amount, 0),
     effectiveCosts,
     plannedCosts,
     variance: effectiveCosts - plannedCosts,

@@ -583,7 +583,7 @@ export function useInvestments(
       holdings,
       investmentClasses,
       reserveHoldings.length,
-      legacyEmergencyFund.current,
+      legacyEmergencyFund,
       goalsBalance,
       liabilities,
       securedLiabilities,

@@ -31,6 +31,7 @@ function SnapshotEditor({ point, onClose }: { point: HistoryPoint; onClose: () =
   const fields: { label: string; value: number; key: keyof SnapshotPatch }[] = [
     { label: 'Base do orçamento', value: point.availableForBudget, key: 'availableForBudget' },
     { label: 'Salário na conta', value: point.paycheckInAccount, key: 'paycheckInAccount' },
+    { label: 'Entradas extras', value: point.extraIncome, key: 'extraIncome' },
     { label: 'Custos', value: point.costs, key: 'costs' },
     { label: 'Desejos', value: point.wants, key: 'wants' },
     { label: 'Investido', value: point.invested, key: 'invested' },
@@ -207,7 +208,12 @@ export function HistoryView() {
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-wider text-dark-text-muted">
                 <th className="px-5 py-2.5 font-medium">Mês</th>
-                <th className="px-4 py-2.5 text-right font-medium">Base</th>
+                <th
+                  className="px-4 py-2.5 text-right font-medium"
+                  title="Base recorrente do orçamento mais entradas extras recebidas"
+                >
+                  Renda
+                </th>
                 <th className="px-4 py-2.5 text-right font-medium">Custos</th>
                 <th className="px-4 py-2.5 text-right font-medium">Desejos</th>
                 <th className="px-4 py-2.5 text-right font-medium">Investido</th>
@@ -235,9 +241,29 @@ export function HistoryView() {
                       {point.note && (
                         <span className="ml-2 text-xs text-dark-text-muted">{point.note}</span>
                       )}
+                      {point.extraIncome > 0.005 && (
+                        <span
+                          className="mt-0.5 block max-w-64 truncate text-[11px] text-primary-300"
+                          title={point.extraIncomeEntries
+                            .map((entry) => `${entry.name}: ${formatCurrency(entry.amount)}`)
+                            .join(' · ')}
+                        >
+                          + {formatCurrency(point.extraIncome)} extra
+                          {point.extraIncomeEntries.length > 0
+                            ? ` · ${point.extraIncomeEntries.map((entry) => entry.name).join(', ')}`
+                            : ''}
+                        </span>
+                      )}
                     </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-dark-text-secondary">
-                      {formatCurrency(point.availableForBudget)}
+                    <td
+                      className="px-4 py-2.5 text-right tabular-nums text-dark-text-secondary"
+                      title={
+                        point.extraIncome > 0.005
+                          ? `Base ${formatCurrency(point.availableForBudget)} + extras ${formatCurrency(point.extraIncome)}`
+                          : 'Base recorrente do orçamento'
+                      }
+                    >
+                      {formatCurrency(point.availableForBudget + point.extraIncome)}
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-dark-text-secondary">
                       {formatCurrency(point.costs)}

@@ -1,4 +1,4 @@
-import type { LedgerEntry } from '../types'
+import type { ExtraIncomeEntry, LedgerEntry } from '../types'
 
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10)
@@ -19,6 +19,24 @@ export function readJson<T>(key: string, fallback: T): T {
 
 export function finiteNumber(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+export function normalizeExtraIncomeEntries(raw: unknown): ExtraIncomeEntry[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item) => {
+      const entry = item as Partial<ExtraIncomeEntry> | undefined
+      return {
+        id: typeof entry?.id === 'string' ? entry.id : '',
+        name: typeof entry?.name === 'string' ? entry.name.trim() : '',
+        amount: Math.max(0, finiteNumber(entry?.amount)),
+        sourceEventId:
+          typeof entry?.sourceEventId === 'string' && entry.sourceEventId
+            ? entry.sourceEventId
+            : undefined,
+      }
+    })
+    .filter((entry) => entry.id && entry.name && entry.amount > 0)
 }
 
 /** Mês de competência (AAAA-MM) de uma data — o padrão é hoje. */

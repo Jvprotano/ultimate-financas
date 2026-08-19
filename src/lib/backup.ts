@@ -52,7 +52,7 @@ export function clearAppStorage() {
 export function buildBackupPayload(): BackupPayload {
   return {
     app: 'fintano',
-    version: 4,
+    version: 5,
     exportedAt: new Date().toISOString(),
     localStorage: getAppStorageEntries(),
   }

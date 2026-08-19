@@ -60,13 +60,21 @@ export function useHistory(cycleMonth = monthKey()) {
       setStored((prev) =>
         prev.map((item) => {
           if (item.id !== id) return item
-          const merged = normalizeSnapshot({ ...item, ...patch })
+          const extraIncomeEntries =
+            patch.extraIncome === undefined
+              ? item.extraIncomeEntries
+              : patch.extraIncome <= 0
+                ? []
+                : item.extraIncomeEntries.length === 1
+                  ? [{ ...item.extraIncomeEntries[0], amount: patch.extraIncome }]
+                  : [{ id: uid(), name: 'Ajuste manual', amount: patch.extraIncome }]
+          const merged = normalizeSnapshot({ ...item, ...patch, extraIncomeEntries })
           return {
             ...merged,
             netWorth: merged.grossAssets + merged.physicalAssets - merged.liabilities,
             savingsRate:
-              merged.availableForBudget > 0
-                ? (merged.invested / merged.availableForBudget) * 100
+              merged.availableForBudget + merged.extraIncome > 0
+                ? (merged.invested / (merged.availableForBudget + merged.extraIncome)) * 100
                 : 0,
           }
         }),

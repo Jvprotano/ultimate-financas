@@ -34,7 +34,8 @@ Planejamento financeiro pessoal: orçamento do mês, patrimônio, cartões e o h
 - **A parcela não é toda despesa** — em um financiamento, só o juro é despesa; amortização aumenta seu equity no bem.
 - **Meta de poupança × meta de patrimônio** — a primeira guarda dinheiro próprio em livro-razão; a segunda pode apenas englobar saldos existentes sem duplicá-los.
 - **Investimento planejado × realizado** — o plano diz quanto deveria ser investido; o fechamento soma o que realmente foi aportado em folha, reserva, posições e metas, líquido de retiradas. Marcação a mercado não é aporte.
-- **Eventos esperados** — entradas e saídas fora do mês a mês, com mês, recorrência e a fatia que você guarda. Alimentam caixa e projeção.
+- **Eventos esperados** — entradas e saídas fora do mês a mês, com mês, recorrência e a fatia que você guarda. Alimentam a projeção e a prévia dos próximos ciclos.
+- **Entrada prevista × recebida** — “Futuro” antecipa bônus, 13º e outros eventos; só o que for marcado como recebido no Realizado vira caixa, entra no fechamento e fica identificado no Histórico.
 - **Realizado do mês** — o que de fato foi pago/usado no ciclo. Onde não houver realizado informado, o plano funciona como fallback.
 - **Valores de hoje** — a projeção pode ser lida descontada da inflação.
 - **Rentabilidade anualizada** — TIR sobre as datas dos aportes e o valor de mercado atual; histórico curto demais mostra `—`.

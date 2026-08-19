@@ -55,6 +55,21 @@ describe('normalizeSnapshot — compatibilidade', () => {
     })
     expect(normalized.cardByArea).toEqual({ necessidades: 769 })
   })
+
+  it('snapshots antigos não inventam entradas extras', () => {
+    const normalized = normalizeSnapshot({ month: '2026-07' })
+    expect(normalized.extraIncome).toBe(0)
+    expect(normalized.extraIncomeEntries).toEqual([])
+  })
+
+  it('preserva a composição das entradas extras', () => {
+    const normalized = normalizeSnapshot({
+      month: '2026-07',
+      extraIncomeEntries: [{ id: 'horas', name: 'Banco de horas', amount: 850 }],
+    })
+    expect(normalized.extraIncome).toBe(850)
+    expect(normalized.extraIncomeEntries[0].name).toBe('Banco de horas')
+  })
 })
 
 describe('buildHistoryPoints', () => {

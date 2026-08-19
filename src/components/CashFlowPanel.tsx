@@ -47,7 +47,7 @@ function FlowRow({
 }
 
 export function CashFlowPanel() {
-  const { cashFlow, cards, financialCycle, forecast, scenarios } = useFinancasStore()
+  const { actuals, cashFlow, cards, financialCycle, forecast, scenarios } = useFinancasStore()
   const {
     paycheck,
     extraIncome,
@@ -59,7 +59,6 @@ export function CashFlowPanel() {
     extraExpense,
   } = cashFlow
 
-  const incomeEvents = forecast.monthOccurrences.filter((item) => item.event.kind === 'income')
   const expenseEvents = forecast.monthOccurrences.filter((item) => item.event.kind === 'expense')
 
   // Com fechamentos diferentes, "a fatura" são várias — cada uma com sua data.
@@ -150,10 +149,10 @@ export function CashFlowPanel() {
         <FlowRow label="Salário na conta" value={paycheck} direction="in" />
         {extraIncome > 0 && (
           <FlowRow
-            label="Entradas do ano"
+            label="Entradas extras recebidas"
             value={extraIncome}
             direction="in"
-            hint={incomeEvents.map((item) => item.event.name).join(', ')}
+            hint={actuals.summary.extraIncome.map((item) => item.name).join(', ')}
           />
         )}
         <FlowRow

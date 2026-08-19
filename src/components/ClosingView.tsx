@@ -251,7 +251,17 @@ export function ClosingView({
           }
         />
 
-        <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <StatTile
+            label="Entradas extras"
+            value={formatCurrency(actuals.summary.extraIncomeTotal)}
+            detail={
+              actuals.summary.extraIncome.length > 0
+                ? actuals.summary.extraIncome.map((entry) => entry.name).join(', ')
+                : 'nenhuma recebida neste ciclo'
+            }
+            tone={actuals.summary.extraIncomeTotal > 0.005 ? 'positive' : 'neutral'}
+          />
           <StatTile
             label="Custos do mês"
             value={formatCurrency(actuals.summary.effectiveCosts)}
@@ -306,7 +316,11 @@ export function ClosingView({
                 <p className="mt-1 text-xs leading-relaxed text-dark-text-muted">
                   Histórico: custos {formatCurrency(actuals.summary.effectiveCosts)} · fatura pessoal{' '}
                   {invoiceKnown ? formatCurrency(closingInvoiceDue) : 'não recuperada'} · investido{' '}
-                  {formatCurrency(investmentActuals.total)}.
+                  {formatCurrency(investmentActuals.total)}
+                  {actuals.summary.extraIncomeTotal > 0.005 && (
+                    <> · extras recebidos {formatCurrency(actuals.summary.extraIncomeTotal)}</>
+                  )}
+                  .
                 </p>
               </div>
               {closingInvoiceAlreadyPaid && (

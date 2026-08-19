@@ -16,6 +16,8 @@ import type { CashFlowSummary, ExpectedOccurrence } from '../types'
 export interface CashFlowInput {
   /** O que efetivamente cai na conta depois da folha. */
   paycheck: number
+  /** Entradas avulsas efetivamente recebidas no ciclo. */
+  extraIncome?: number
   costsOnAccount: number
   costsOnCard: number
   wantsOnAccount: number
@@ -28,9 +30,9 @@ export interface CashFlowInput {
 }
 
 export function calculateCashFlow(input: CashFlowInput): CashFlowSummary {
-  const extraIncome = input.occurrences
-    .filter((item) => item.event.kind === 'income')
-    .reduce((sum, item) => sum + item.event.amount, 0)
+  // Futuro é previsão. Só o que foi registrado no Realizado vira caixa livre;
+  // assim uma entrada esperada não libera dinheiro antes de realmente cair.
+  const extraIncome = Math.max(0, input.extraIncome ?? 0)
   const extraExpense = input.occurrences
     .filter((item) => item.event.kind === 'expense')
     .reduce((sum, item) => sum + item.event.amount, 0)

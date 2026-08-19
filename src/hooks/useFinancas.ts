@@ -107,8 +107,8 @@ export function useFinancas() {
     })
     const payroll = metrics.investmentDeductions
     const total = payroll + ledger.directNet
-    const savingsRate =
-      metrics.availableForBudget > 0 ? (total / metrics.availableForBudget) * 100 : 0
+    const realizedIncomeBase = metrics.availableForBudget + actuals.summary.extraIncomeTotal
+    const savingsRate = realizedIncomeBase > 0 ? (total / realizedIncomeBase) * 100 : 0
 
     return { ...ledger, payroll, total, savingsRate }
   }, [
@@ -118,6 +118,7 @@ export function useFinancas() {
     investments.holdings,
     metrics.availableForBudget,
     metrics.investmentDeductions,
+    actuals.summary.extraIncomeTotal,
   ])
 
   const scenarioSummaries = useMemo<ScenarioSummary[]>(
@@ -147,6 +148,7 @@ export function useFinancas() {
 
     return calculateCashFlow({
       paycheck: metrics.paycheckInAccount,
+      extraIncome: actuals.summary.extraIncomeTotal,
       costsOnAccount,
       costsOnCard: metrics.costsOnCard,
       wantsOnAccount: metrics.wantsOnAccount,
@@ -157,6 +159,7 @@ export function useFinancas() {
     })
   }, [
     metrics,
+    actuals.summary.extraIncomeTotal,
     actuals.summary.rows,
     cardCycleAccounting.invoiceThisCycle.personalTotal,
     forecast.monthOccurrences,
@@ -310,7 +313,11 @@ export function useFinancas() {
 
       const costs = actuals.summary.effectiveCosts
       const balance =
-        metrics.paycheckInAccount - costs - metrics.totalWantsAmount - investmentActuals.directNet
+        metrics.paycheckInAccount +
+        actuals.summary.extraIncomeTotal -
+        costs -
+        metrics.totalWantsAmount -
+        investmentActuals.directNet
 
       history.closeMonth({
         month,
@@ -318,6 +325,8 @@ export function useFinancas() {
         scenarioName: activeScenario.name,
         availableForBudget: metrics.availableForBudget,
         paycheckInAccount: metrics.paycheckInAccount,
+        extraIncome: actuals.summary.extraIncomeTotal,
+        extraIncomeEntries: actuals.summary.extraIncome,
         costs,
         costsPlanned: actuals.summary.plannedCosts,
         wants: metrics.totalWantsAmount,

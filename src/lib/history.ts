@@ -1,6 +1,12 @@
-import type { BudgetArea, CostCategory, HistoryPoint, HistoryStats, MonthlySnapshot } from '../types'
+import type {
+  BudgetArea,
+  CostCategory,
+  HistoryPoint,
+  HistoryStats,
+  MonthlySnapshot,
+} from '../types'
 import { BUDGET_AREAS } from '../types/constants'
-import { finiteNumber, monthKey, uid } from './shared'
+import { finiteNumber, monthKey, normalizeExtraIncomeEntries, uid } from './shared'
 
 export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): MonthlySnapshot {
   const categories: Partial<Record<CostCategory, number>> = {}
@@ -18,6 +24,8 @@ export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): Mo
     }
   }
 
+  const extraIncomeEntries = normalizeExtraIncomeEntries(raw?.extraIncomeEntries)
+
   return {
     id: raw?.id || uid(),
     month: /^\d{4}-\d{2}$/.test(raw?.month ?? '') ? (raw?.month as string) : monthKey(),
@@ -26,6 +34,14 @@ export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): Mo
     scenarioName: raw?.scenarioName || 'Cenário',
     availableForBudget: finiteNumber(raw?.availableForBudget),
     paycheckInAccount: finiteNumber(raw?.paycheckInAccount),
+    extraIncome: Math.max(
+      0,
+      finiteNumber(
+        raw?.extraIncome,
+        extraIncomeEntries.reduce((sum, entry) => sum + entry.amount, 0),
+      ),
+    ),
+    extraIncomeEntries,
     costs: finiteNumber(raw?.costs),
     // Snapshots antigos não separavam plano de realizado: eram a mesma coisa.
     costsPlanned: finiteNumber(raw?.costsPlanned, finiteNumber(raw?.costs)),
