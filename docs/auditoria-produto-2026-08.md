@@ -153,3 +153,27 @@ Antes disso, o melhor investimento é tornar a persistência local confiável: e
 5. Divisão de Cartões e dos tipos por domínio.
 6. Testes de jornada e lint obrigatório no CI.
 7. Atualizações de dependências e, só se medido, lazy loading.
+
+## Estado da implementação
+
+Os 19 pontos desta auditoria foram tratados na aplicação:
+
+1. Entradas e saídas extraordinárias só afetam o caixa depois de marcadas como recebidas/pagas; a composição é preservada no Histórico.
+2. Falhas de gravação mantêm o estado anterior na tela, exibem um alerta persistente e bloqueiam fechamento e importação.
+3. A restauração valida tamanho/JSON, testa capacidade, cria cópia de segurança, verifica o resultado e faz rollback.
+4. O menu separa “Limpar dados atuais” de “Apagar dados e cópias”.
+5. Os cinco caminhos mortos e seus testes foram removidos.
+6. Ciclo começa por entrou, comprometido, livre e fatura do ciclo atual; a prévia seguinte é secundária.
+7. O seletor interno foi removido; existe somente o seletor global.
+8. Cartões separa cadastro, importação, revisão de pagamento, área e resumos em componentes sem persistência própria.
+9. Os tipos foram divididos por domínio; `types/index.ts` apenas reexporta.
+10. Cenários, cartões, investimentos, histórico, futuro, dívidas, bens, realizados, métricas e caixa têm contextos próprios.
+11. Ações essenciais ficam visíveis em dispositivos sem hover.
+12. Backup, restauração e limpeza usam um diálogo acessível comum.
+13. `dark-text-muted` passou a atender contraste de texto normal contra cards.
+14. Histórico usa cartões resumidos no mobile e tabela apenas no desktop.
+15. A suíte inclui jornadas de realizados, fechamento/reabertura, pagamento de fatura e importação segura.
+16. O CI executa lint, testes e build.
+17. Dependências patch/minor foram atualizadas; saltos major de ESLint e TypeScript ficaram fora do lote.
+18. `npm ci` e `npm ls --depth=0` comprovam instalação reproduzível sem pacotes extraneous.
+19. Cartões, Patrimônio, Histórico e Futuro são carregados por aba com `React.lazy`.

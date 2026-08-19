@@ -2,7 +2,7 @@ import { BanknoteArrowDown, BanknoteArrowUp, ClipboardCheck, RotateCcw, Wand2 } 
 import { CurrencyInput } from './CurrencyInput'
 import { EmptyState, Panel, PanelHeader, SecondaryButton, Tag } from './ui'
 import { formatCurrency, formatMonthLong } from '../lib/format'
-import { useFinancasStore } from '../context/financasStore'
+import { useActualsStore, useForecastStore } from '../context/financasStore'
 import { COST_CATEGORY_COLORS, COST_CATEGORY_LABELS } from '../types/constants'
 import { ActualCashEntries } from './ActualCashEntries'
 
@@ -18,7 +18,8 @@ import { ActualCashEntries } from './ActualCashEntries'
 // ---------------------------------------------------------------------------
 
 export function ActualsPanel() {
-  const { actuals, forecast } = useFinancasStore()
+  const actuals = useActualsStore()
+  const forecast = useForecastStore()
   const { summary } = actuals
   const {
     rows,

@@ -4,21 +4,22 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
-  CreditCard,
   FastForward,
-  FileText,
   Filter,
   HandCoins,
-  Plus,
   Repeat,
   Search,
   Trash2,
   Undo2,
-  Upload,
   X,
   Zap,
 } from 'lucide-react'
 import { CurrencyInput } from './CurrencyInput'
+import { CardImportPanel } from './cards/CardImportPanel'
+import { CardSummaryPanels } from './cards/CardSummaryPanels'
+import { CardAreaCell } from './cards/CardAreaCell'
+import { CardEntryForm } from './cards/CardEntryForm'
+import { InvoicePaymentReview } from './cards/InvoicePaymentReview'
 import {
   Meter,
   Panel,
@@ -28,17 +29,15 @@ import {
   SegmentedControl,
   StatTile,
 } from './ui'
-import { formatCurrency, formatMonthLong, inputClass } from '../lib/format'
+import { formatCurrency, formatMonthLong } from '../lib/format'
 import { addMonths, normalizeText } from '../lib/shared'
 import {
   buildRemainingAmount,
-  parseInstallments,
   parseSpreadsheet,
-  stripInstallmentToken,
 } from '../lib/cardImport'
 import { useCardsStore, useFinancasStore, useMetrics } from '../context/financasStore'
-import type { BudgetArea, CreditCardCycle, CreditCardEntry } from '../types'
-import { BUDGET_AREAS, BUDGET_AREA_COLORS, BUDGET_AREA_SHORT_LABELS } from '../types/constants'
+import type { CreditCardCycle, CreditCardEntry } from '../types'
+import { BUDGET_AREA_COLORS } from '../types/constants'
 
 type View = CreditCardCycle | 'import'
 type SortKey = 'description' | 'purchaseDate' | 'cardName' | 'amount'
@@ -48,49 +47,11 @@ const KNOWN_CARDS = ['Itaú', 'XP', 'Inter', 'Nu']
 const TABLE_COLS =
   'grid-cols-[minmax(140px,1.4fr)_84px_64px_92px_128px_104px_104px_104px_minmax(72px,0.8fr)_56px]'
 
-function todayShort() {
-  const now = new Date()
-  return `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}`
-}
-
 // Converte "dd/mm" num inteiro comparável (mm*100+dd). Sem data vai para o fim.
 function dateSortValue(raw: string) {
   const match = raw.match(/(\d{1,2})\s*\/\s*(\d{1,2})/)
   if (!match) return Number.MAX_SAFE_INTEGER
   return Number(match[2]) * 100 + Number(match[1])
-}
-
-/** Célula da área do orçamento — é o que liga a fatura ao plano do mês. */
-function AreaCell({
-  value,
-  onChange,
-}: {
-  value?: BudgetArea
-  onChange: (area: BudgetArea | undefined) => void
-}) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span
-        className="h-2 w-2 shrink-0 rounded-full"
-        style={{ backgroundColor: value ? BUDGET_AREA_COLORS[value] : 'transparent' }}
-      />
-      <select
-        value={value ?? ''}
-        onChange={(event) => onChange((event.target.value || undefined) as BudgetArea | undefined)}
-        aria-label="Área do orçamento"
-        className={`w-full rounded border border-transparent bg-transparent px-1 py-1 text-xs outline-none transition-all focus:border-dark-border focus:bg-dark-input ${
-          value ? 'text-dark-text-secondary' : 'text-dark-text-muted'
-        }`}
-      >
-        <option value="">— área</option>
-        {BUDGET_AREAS.map((area) => (
-          <option key={area} value={area}>
-            {BUDGET_AREA_SHORT_LABELS[area]}
-          </option>
-        ))}
-      </select>
-    </div>
-  )
 }
 
 export function CreditCardManager() {
@@ -128,21 +89,6 @@ export function CreditCardManager() {
   )
 
   const [view, setView] = useState<View>('current')
-
-  const descriptionInputRef = useRef<HTMLInputElement>(null)
-  const [description, setDescription] = useState('')
-  const [purchaseDate, setPurchaseDate] = useState(todayShort)
-  const [cardName, setCardName] = useState('Itaú')
-  const [amount, setAmount] = useState(0)
-  const [amountTotalInput, setAmountTotalInput] = useState(0)
-  const [amountInputMode, setAmountInputMode] = useState<'installment' | 'total'>('installment')
-  const [personalAmount, setPersonalAmount] = useState(0)
-  const [remainingAmount, setRemainingAmount] = useState(0)
-  const [ownerNote, setOwnerNote] = useState('')
-  const [newInstallmentCurrent, setNewInstallmentCurrent] = useState('')
-  const [newInstallmentTotal, setNewInstallmentTotal] = useState('')
-  const [newIsRecurring, setNewIsRecurring] = useState(false)
-  const [newArea, setNewArea] = useState<BudgetArea | undefined>(undefined)
 
   const [ownerFilter, setOwnerFilter] = useState('all')
   const [search, setSearch] = useState('')
@@ -198,20 +144,6 @@ export function CreditCardManager() {
     },
     { amount: 0, personal: 0, thirdParty: 0 },
   )
-  const parsedInstallmentsFromName = parseInstallments(description)
-  const newInstallmentTotalValue = newIsRecurring
-    ? 0
-    : Number(newInstallmentTotal) || parsedInstallmentsFromName.installmentTotal || 0
-  const isAddingInstallmentPurchase =
-    !newIsRecurring &&
-    (newInstallmentCurrent.trim() !== '' ||
-      newInstallmentTotal.trim() !== '' ||
-      Boolean(parsedInstallmentsFromName.installmentTotal))
-  const effectiveAmountInputMode = isAddingInstallmentPurchase ? amountInputMode : 'installment'
-  const newPurchaseTotal =
-    newInstallmentTotalValue > 1 ? amount * newInstallmentTotalValue : amount
-  const amountInputValue = effectiveAmountInputMode === 'total' ? amountTotalInput : amount
-
   const toggleSort = (key: SortKey) =>
     setSort((prev) => {
       if (!prev || prev.key !== key) return { key, dir: 'asc' }
@@ -259,86 +191,6 @@ export function CreditCardManager() {
     settings.personalSpendingLimit > 0
       ? (summary.currentPersonalTotal / settings.personalSpendingLimit) * 100
       : 0
-
-  const handleAmountChange = (val: number) => {
-    if (personalAmount === amount || personalAmount === 0) setPersonalAmount(val)
-    setAmount(val)
-  }
-
-  const handleAmountInputChange = (val: number) => {
-    if (effectiveAmountInputMode === 'total') {
-      setAmountTotalInput(val)
-      handleAmountChange(newInstallmentTotalValue > 1 ? val / newInstallmentTotalValue : val)
-      return
-    }
-    handleAmountChange(val)
-    setAmountTotalInput(newInstallmentTotalValue > 1 ? val * newInstallmentTotalValue : val)
-  }
-
-  const handleAmountModeChange = (mode: 'installment' | 'total') => {
-    setAmountInputMode(mode)
-    if (mode === 'total') {
-      setAmountTotalInput(newInstallmentTotalValue > 1 ? amount * newInstallmentTotalValue : amount)
-    }
-  }
-
-  const handleNewInstallmentTotalChange = (raw: string) => {
-    const next = raw.replace(/\D/g, '')
-    const nextTotal = Number(next) || parsedInstallmentsFromName.installmentTotal || 0
-    setNewInstallmentTotal(next)
-    if (effectiveAmountInputMode === 'total') {
-      handleAmountChange(nextTotal > 1 ? amountTotalInput / nextTotal : amountTotalInput)
-    } else {
-      setAmountTotalInput(nextTotal > 1 ? amount * nextTotal : amount)
-    }
-  }
-
-  const handleAdd = () => {
-    if (!description.trim() || amount === 0) return
-    const parsedFromName = parseInstallments(description)
-    const installmentCurrent = newIsRecurring
-      ? undefined
-      : Number(newInstallmentCurrent) || parsedFromName.installmentCurrent
-    const installmentTotal = newIsRecurring
-      ? undefined
-      : Number(newInstallmentTotal) || parsedFromName.installmentTotal
-    const cleanDescription = parsedFromName.installmentTotal
-      ? stripInstallmentToken(description)
-      : description.trim()
-    const computedRemainingAmount =
-      remainingAmount || buildRemainingAmount(amount, installmentCurrent, installmentTotal)
-
-    const isShared = amount - personalAmount > 0
-
-    addEntry({
-      cycle: visibleCycle,
-      description: cleanDescription,
-      purchaseDate,
-      cardName: cardName.trim() || 'Cartão',
-      amount,
-      personalAmount,
-      remainingAmount: computedRemainingAmount,
-      budgetArea: newArea,
-      ownerName: isShared ? ownerNote.trim() || 'Outro' : '',
-      ownerNote: isShared ? '' : ownerNote.trim(),
-      installmentCurrent,
-      installmentTotal,
-      isRecurring: newIsRecurring || undefined,
-    })
-
-    setDescription('')
-    // Data, cartão e área são mantidos: em geral várias compras seguidas os compartilham.
-    setAmount(0)
-    setAmountTotalInput(0)
-    setAmountInputMode('installment')
-    setPersonalAmount(0)
-    setRemainingAmount(0)
-    setOwnerNote('')
-    setNewInstallmentCurrent('')
-    setNewInstallmentTotal('')
-    setNewIsRecurring(false)
-    descriptionInputRef.current?.focus()
-  }
 
   const handleImport = () => {
     if (!parsedImport.length) return
@@ -521,44 +373,14 @@ export function CreditCardManager() {
       </div>
 
       {showPaySummary && view === 'current' && (
-        <Panel className="border-primary-500/30 bg-primary-500/[0.04]">
-          <PanelHeader
-            title="Resumo antes de pagar"
-            icon={<CheckCircle2 size={16} />}
-            description={`Fatura que encerra o bucket de ${formatMonthLong(currentSpendingMonth)} e vence em ${formatMonthLong(currentDueMonth)}. Marcar como paga salva o total e a sua parte antes de girar o cartão. Se você está encerrando esse ciclo agora, também pode pagar junto pela revisão da aba Ciclo.`}
-          />
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-            <StatTile label="Total da fatura" value={formatCurrency(summary.currentTotal)} />
-            <StatTile label="Minha parte" value={formatCurrency(summary.currentPersonalTotal)} />
-            <StatTile label="Não é meu" value={formatCurrency(summary.currentThirdPartyTotal)} />
-            <StatTile
-              label="Lançamentos"
-              value={String(summary.currentEntriesCount)}
-              detail={
-                summary.currentPrepaidTotal > 0
-                  ? `${formatCurrency(summary.currentPrepaidTotal)} já pagos fora do total`
-                  : undefined
-              }
-            />
-            <StatTile
-              label={`Próxima: ${formatMonthLong(nextDueMonth)}`}
-              value={formatCurrency(summary.nextTotal)}
-            />
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <PrimaryButton onClick={handlePayInvoice}>
-              <CheckCircle2 size={15} />
-              Pagar e abrir próxima fatura
-            </PrimaryButton>
-            <button
-              type="button"
-              onClick={() => setShowPaySummary(false)}
-              className="rounded-lg px-3 py-2 text-sm text-dark-text-muted transition-colors hover:text-dark-text"
-            >
-              Cancelar
-            </button>
-          </div>
-        </Panel>
+        <InvoicePaymentReview
+          summary={summary}
+          currentDueMonth={currentDueMonth}
+          currentSpendingMonth={currentSpendingMonth}
+          nextDueMonth={nextDueMonth}
+          onConfirm={handlePayInvoice}
+          onCancel={() => setShowPaySummary(false)}
+        />
       )}
 
       {view !== 'import' ? (
@@ -677,187 +499,11 @@ export function CreditCardManager() {
                 <div />
               </div>
 
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  handleAdd()
-                }}
-                className={`grid ${TABLE_COLS} items-center gap-2 border-b border-dark-border-subtle bg-dark-surface/30 px-3 py-2`}
-              >
-                <input
-                  ref={descriptionInputRef}
-                  placeholder="Nova compra..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  aria-label="Descrição da nova compra"
-                  className="w-full rounded-md border border-dark-border/60 bg-dark-input px-2.5 py-1.5 text-sm font-medium text-dark-text outline-none transition-all placeholder:text-dark-text-muted focus:border-primary-500/60"
-                />
-                <div className="flex items-center justify-center gap-1">
-                  {newIsRecurring ? (
-                    <button
-                      type="button"
-                      onClick={() => setNewIsRecurring(false)}
-                      title="Assinatura recorrente — clique para desmarcar"
-                      className="inline-flex items-center gap-1 rounded bg-dark-input px-1.5 py-1 text-[11px] font-semibold text-dark-text-secondary transition-colors hover:text-dark-text"
-                    >
-                      <Repeat size={11} />
-                      Assin.
-                    </button>
-                  ) : (
-                    <>
-                      <input
-                        value={newInstallmentCurrent}
-                        onChange={(e) =>
-                          setNewInstallmentCurrent(e.target.value.replace(/\D/g, ''))
-                        }
-                        placeholder="1"
-                        inputMode="numeric"
-                        aria-label="Parcela atual"
-                        className="w-8 rounded-md border border-dark-border/60 bg-dark-input px-1 py-1.5 text-center text-sm tabular-nums outline-none transition-all placeholder:text-dark-text-muted focus:border-primary-500/60"
-                      />
-                      <span className="text-xs text-dark-text-muted/60">/</span>
-                      <input
-                        value={newInstallmentTotal}
-                        onChange={(e) => handleNewInstallmentTotalChange(e.target.value)}
-                        placeholder="x"
-                        inputMode="numeric"
-                        aria-label="Total de parcelas"
-                        className="w-8 rounded-md border border-dark-border/60 bg-dark-input px-1 py-1.5 text-center text-sm tabular-nums outline-none transition-all placeholder:text-dark-text-muted focus:border-primary-500/60"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setNewIsRecurring(true)}
-                        title="Marcar como assinatura recorrente"
-                        className="text-dark-text-muted/50 transition-colors hover:text-dark-text"
-                      >
-                        <Repeat size={12} />
-                      </button>
-                    </>
-                  )}
-                </div>
-                <input
-                  placeholder="Data"
-                  value={purchaseDate}
-                  onChange={(e) => setPurchaseDate(e.target.value)}
-                  aria-label="Data da compra"
-                  className="w-full rounded-md border border-dark-border/60 bg-dark-input px-2 py-1.5 text-center text-sm outline-none transition-all placeholder:text-dark-text-muted focus:border-primary-500/60"
-                />
-                <input
-                  placeholder="Cartão"
-                  list="credit-card-names"
-                  value={cardName}
-                  onChange={(e) => setCardName(e.target.value)}
-                  aria-label="Cartão"
-                  className="w-full rounded-md border border-dark-border/60 bg-dark-input px-2 py-1.5 text-center text-sm outline-none transition-all placeholder:text-dark-text-muted focus:border-primary-500/60"
-                />
-                <datalist id="credit-card-names">
-                  {knownCards.map((card) => (
-                    <option key={card} value={card} />
-                  ))}
-                </datalist>
-                <AreaCell value={newArea} onChange={setNewArea} />
-                <div>
-                  <CurrencyInput
-                    value={amountInputValue}
-                    onChange={handleAmountInputChange}
-                    className="!border-dark-border/60 !bg-dark-input !py-1.5 !pl-7 !pr-2.5 text-sm transition-all"
-                  />
-                  <div className="-mt-0.5 px-1 text-[10px] text-dark-text-muted">
-                    {isAddingInstallmentPurchase
-                      ? effectiveAmountInputMode === 'total'
-                        ? `parcela calculada: ${formatCurrency(amount)}`
-                        : newInstallmentTotalValue > 1
-                          ? `total estimado: ${formatCurrency(newPurchaseTotal)}`
-                          : 'valor da parcela'
-                      : 'valor que entra nesta fatura'}
-                  </div>
-                </div>
-                <CurrencyInput
-                  value={personalAmount}
-                  onChange={setPersonalAmount}
-                  className="!border-dark-border/60 !bg-dark-input !py-1.5 !pl-7 !pr-2.5 text-sm transition-all"
-                />
-                <CurrencyInput
-                  value={remainingAmount}
-                  onChange={setRemainingAmount}
-                  className="!border-dark-border/60 !bg-dark-input !py-1.5 !pl-7 !pr-2.5 text-sm transition-all"
-                />
-                <input
-                  placeholder="Pessoa/Obs"
-                  value={ownerNote}
-                  onChange={(e) => setOwnerNote(e.target.value)}
-                  aria-label="Pessoa ou observação"
-                  className="w-full rounded-md border border-dark-border/60 bg-dark-input px-2 py-1.5 text-sm outline-none transition-all placeholder:text-dark-text-muted focus:border-primary-500/60"
-                />
-                <button
-                  type="submit"
-                  disabled={!description.trim() || amount === 0}
-                  className="flex h-8 w-8 items-center justify-center rounded-md bg-primary-600 text-white transition-all hover:bg-primary-500 disabled:opacity-40"
-                  title="Adicionar lançamento (Enter)"
-                >
-                  <Plus size={18} />
-                </button>
-                {isAddingInstallmentPurchase && (
-                  <div className="col-span-full rounded-xl border border-primary-500/20 bg-primary-500/[0.06] p-3">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-dark-text">
-                          Como você quer informar o valor da compra parcelada?
-                        </p>
-                        <p className="mt-0.5 text-xs leading-relaxed text-dark-text-muted">
-                          Use “valor da parcela” quando a fatura já mostra a parcela mensal. Use
-                          “valor total” quando você sabe o preço cheio e quer que o app calcule a
-                          parcela.
-                        </p>
-                      </div>
-                      <div className="grid min-w-full grid-cols-2 gap-2 rounded-lg bg-dark-card p-1 md:min-w-[360px]">
-                        <button
-                          type="button"
-                          onClick={() => handleAmountModeChange('installment')}
-                          className={`rounded-md px-3 py-2 text-sm font-medium transition-all ${
-                            amountInputMode === 'installment'
-                              ? 'bg-primary-600 text-white shadow-sm'
-                              : 'text-dark-text-muted hover:bg-dark-surface hover:text-dark-text'
-                          }`}
-                        >
-                          Valor da parcela
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleAmountModeChange('total')}
-                          className={`rounded-md px-3 py-2 text-sm font-medium transition-all ${
-                            amountInputMode === 'total'
-                              ? 'bg-primary-600 text-white shadow-sm'
-                              : 'text-dark-text-muted hover:bg-dark-surface hover:text-dark-text'
-                          }`}
-                        >
-                          Valor total
-                        </button>
-                      </div>
-                    </div>
-                    <div className="mt-3 grid gap-2 text-xs text-dark-text-muted sm:grid-cols-3">
-                      <span>
-                        Parcelas:{' '}
-                        <strong className="text-dark-text">
-                          {newInstallmentTotalValue > 1
-                            ? `${newInstallmentCurrent || parsedInstallmentsFromName.installmentCurrent || 1}/${newInstallmentTotalValue}`
-                            : 'preencha o total'}
-                        </strong>
-                      </span>
-                      <span>
-                        Entra na fatura:{' '}
-                        <strong className="text-dark-text">{formatCurrency(amount)}</strong>
-                      </span>
-                      <span>
-                        Compra cheia:{' '}
-                        <strong className="text-dark-text">
-                          {formatCurrency(newPurchaseTotal)}
-                        </strong>
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </form>
+              <CardEntryForm
+                cycle={visibleCycle}
+                knownCards={knownCards}
+                onAdd={addEntry}
+              />
 
               <div className="divide-y divide-dark-border/40">
                 {visibleEntries.length === 0 ? (
@@ -953,7 +599,7 @@ export function CreditCardManager() {
                         aria-label="Cartão"
                         className={`${cellClass} !px-1 text-center`}
                       />
-                      <AreaCell
+                      <CardAreaCell
                         value={entry.budgetArea}
                         onChange={(area) => updateEntry(entry.id, { budgetArea: area })}
                       />
@@ -1047,187 +693,28 @@ export function CreditCardManager() {
           </div>
         </Panel>
       ) : (
-        <Panel>
-          <PanelHeader
-            title="Colar planilha do cartão"
-            icon={<Upload size={16} />}
-            description='Cole linhas do Sheets com colunas parecidas: Descrição, Data, Cartão, Fatura, É meu, Restante, Área, Assinatura e Pago. Parcelas como "3/10" no nome são detectadas automaticamente.'
-            actions={
-              <span className="rounded-lg border border-dark-border bg-dark-surface px-3 py-1.5 text-xs font-medium text-dark-text-secondary">
-                {parsedImport.length} linhas detectadas
-              </span>
-            }
-          />
-
-          <textarea
-            value={importText}
-            onChange={(event) => setImportText(event.target.value)}
-            aria-label="Conteúdo da planilha"
-            placeholder={
-              'Descrição\tData\tCartão\tFatura\tÉ meu\tRestante\tÁrea\nYoutube premium\t20/06\tItaú\t53,90\t53,90\t0\tdesejo'
-            }
-            className="mt-4 min-h-[200px] w-full rounded-lg border border-dark-border bg-dark-input px-4 py-3 font-mono text-xs text-dark-text outline-none transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/25"
-          />
-
-          <div className="mt-4 flex flex-wrap items-end gap-3 rounded-lg border border-dark-border bg-dark-surface p-3">
-            <label className="block min-w-[150px] flex-1">
-              <span className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-dark-text-muted">
-                Destino
-              </span>
-              <select
-                value={importCycle}
-                onChange={(event) => setImportCycle(event.target.value as CreditCardCycle)}
-                className={inputClass}
-              >
-                <option value="current">
-                  Fatura ativa · pagar em {formatMonthLong(currentDueMonth)}
-                </option>
-                <option value="next">
-                  Próxima fatura · pagar em {formatMonthLong(nextDueMonth)}
-                </option>
-              </select>
-            </label>
-            <label className="flex h-[46px] min-w-[200px] flex-1 cursor-pointer items-center gap-2 rounded-lg border border-dark-border bg-dark-input px-3 text-sm text-dark-text-secondary transition-colors hover:text-dark-text">
-              <input
-                type="checkbox"
-                checked={replaceOnImport}
-                onChange={(event) => setReplaceOnImport(event.target.checked)}
-                className="h-4 w-4 rounded accent-primary-600"
-              />
-              Substituir fatura de destino
-            </label>
-            <button
-              type="button"
-              onClick={handleImport}
-              disabled={!parsedImport.length}
-              className="inline-flex h-[46px] items-center justify-center gap-1.5 rounded-lg bg-primary-600 px-6 text-sm font-semibold text-white transition-all hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <FileText size={16} />
-              Importar dados
-            </button>
-          </div>
-        </Panel>
+        <CardImportPanel
+          text={importText}
+          onTextChange={setImportText}
+          cycle={importCycle}
+          onCycleChange={setImportCycle}
+          replace={replaceOnImport}
+          onReplaceChange={setReplaceOnImport}
+          detectedCount={parsedImport.length}
+          currentDueMonth={currentDueMonth}
+          nextDueMonth={nextDueMonth}
+          onImport={handleImport}
+        />
       )}
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Panel>
-          <PanelHeader title="Totais por cartão" icon={<CreditCard size={15} />} />
-          {summary.totalsByCard.length > 0 ? (
-            <div className="mt-3 space-y-1.5">
-              {summary.totalsByCard.map((card) => (
-                <div
-                  key={card.cardName}
-                  className="flex items-center justify-between gap-3 rounded-lg bg-dark-surface px-3 py-2 text-sm"
-                >
-                  <span className="font-medium text-dark-text-secondary">{card.cardName}</span>
-                  <span className="text-right">
-                    <strong className="block tabular-nums text-dark-text">
-                      {formatCurrency(card.totalAmount)}
-                    </strong>
-                    <span className="text-[11px] tabular-nums text-dark-text-muted">
-                      meu: {formatCurrency(card.personalAmount)}
-                    </span>
-                    <span className="block text-[11px] tabular-nums text-dark-text-muted">
-                      não meu: {formatCurrency(card.thirdPartyAmount)}
-                    </span>
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-dark-text-muted">Sem cartões na fatura atual.</p>
-          )}
-        </Panel>
-
-        <Panel>
-          <PanelHeader
-            title={`Área do orçamento · ${formatMonthLong(activeCycle.month)}`}
-            description="Este bloco segue a fatura usada para encerrar o ciclo ativo, mesmo se ela já foi paga e o cartão girou. As áreas distribuem apenas a sua parte efetivamente devida; valores antecipados ficam fora para não serem somados duas vezes."
-          />
-          <div className="mt-3 space-y-1.5">
-            {BUDGET_AREAS.map((area) => {
-              const realized = cardCycleAccounting.spendingThisCycle.personalByArea[area]
-              const planned = budgetComparison[area].actual
-              return (
-                <div key={area} className="rounded-lg bg-dark-surface px-3 py-2 text-sm">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="flex items-center gap-2 font-medium text-dark-text-secondary">
-                      <span
-                        className="h-2 w-2 rounded-full"
-                        style={{ backgroundColor: BUDGET_AREA_COLORS[area] }}
-                      />
-                      {BUDGET_AREA_SHORT_LABELS[area]}
-                    </span>
-                    <strong className="tabular-nums text-dark-text">
-                      {formatCurrency(realized)}
-                    </strong>
-                  </div>
-                  {planned > 0 && (
-                    <p className="mt-0.5 text-[11px] tabular-nums text-dark-text-muted">
-                      {((realized / planned) * 100).toFixed(0)}% do plano de{' '}
-                      {formatCurrency(planned)}
-                    </p>
-                  )}
-                </div>
-              )
-            })}
-            {cardCycleAccounting.spendingThisCycle.unclassifiedPersonal > 0 && (
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.07] px-3 py-2 text-sm">
-                <span className="font-medium text-amber-300">Sem área definida</span>
-                <strong className="tabular-nums text-amber-300">
-                  {formatCurrency(cardCycleAccounting.spendingThisCycle.unclassifiedPersonal)}
-                </strong>
-              </div>
-            )}
-          </div>
-          {plannedOnCard > 0 && (
-            <p className="mt-3 border-t border-dark-border-subtle pt-3 text-[11px] leading-relaxed text-dark-text-muted">
-              Do planejamento de {formatMonthLong(activeCycle.month)}, {formatCurrency(plannedOnCard)}{' '}
-              deveriam passar pelo cartão. A sua parte da fatura que encerra este ciclo está em{' '}
-              {formatCurrency(cardCycleAccounting.invoiceFormedByCycle.personalTotal)}
-              {Math.max(
-                0,
-                cardCycleAccounting.spendingThisCycle.spentPersonalTotal -
-                  cardCycleAccounting.spendingThisCycle.duePersonalTotal,
-              ) > 0.005 && (
-                <>
-                  {' '}· antecipado fora da fatura:{' '}
-                  {formatCurrency(
-                    Math.max(
-                      0,
-                      cardCycleAccounting.spendingThisCycle.spentPersonalTotal -
-                        cardCycleAccounting.spendingThisCycle.duePersonalTotal,
-                    ),
-                  )}
-                </>
-              )}
-              .
-            </p>
-          )}
-        </Panel>
-
-        <Panel>
-          <PanelHeader title="Resumo do futuro" />
-          <dl className="mt-3 space-y-1.5 text-sm">
-            {[
-              { label: `Próxima (${formatMonthLong(nextDueMonth)})`, value: summary.nextTotal },
-              { label: 'Minha parte próxima', value: summary.nextPersonalTotal },
-              { label: 'Parcelas restantes', value: summary.remainingInstallmentsTotal },
-              { label: 'Minhas parcelas restantes', value: summary.remainingPersonalInstallmentsTotal },
-            ].map((row) => (
-              <div
-                key={row.label}
-                className="flex items-center justify-between gap-3 rounded-lg bg-dark-surface px-3 py-2"
-              >
-                <dt className="font-medium text-dark-text-secondary">{row.label}</dt>
-                <dd className="font-semibold tabular-nums text-dark-text">
-                  {formatCurrency(row.value)}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </Panel>
-      </div>
+      <CardSummaryPanels
+        summary={summary}
+        accounting={cardCycleAccounting}
+        activeMonth={activeCycle.month}
+        nextDueMonth={nextDueMonth}
+        budgetComparison={budgetComparison}
+        plannedOnCard={plannedOnCard}
+      />
 
       {pendingUndo && (
         <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-dark-border bg-dark-surface/95 px-4 py-3 shadow-2xl backdrop-blur">

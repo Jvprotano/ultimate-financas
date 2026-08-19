@@ -1,9 +1,11 @@
 import {
   useCallback,
   useEffect,
+  lazy,
   useMemo,
   useRef,
   useState,
+  Suspense,
   type ChangeEvent,
   type ReactNode,
 } from 'react'
@@ -34,10 +36,6 @@ import { CostManager } from './components/CostManager'
 import { WantsManager } from './components/WantsManager'
 import { InvestmentPlan } from './components/InvestmentPlan'
 import { ClosingView } from './components/ClosingView'
-import { CreditCardManager } from './components/CreditCardManager'
-import { InvestmentsManager } from './components/InvestmentsManager'
-import { ForecastView } from './components/ForecastView'
-import { HistoryView } from './components/HistoryView'
 import { ScenarioSwitcher } from './components/ScenarioSwitcher'
 import { CycleSwitcher } from './components/CycleSwitcher'
 import { ConfirmationDialog } from './components/ui'
@@ -54,6 +52,19 @@ import {
 } from './lib/backup'
 
 type View = 'closing' | 'planning' | 'cards' | 'investments' | 'history' | 'forecast'
+
+const CreditCardManager = lazy(() =>
+  import('./components/CreditCardManager').then((module) => ({ default: module.CreditCardManager })),
+)
+const InvestmentsManager = lazy(() =>
+  import('./components/InvestmentsManager').then((module) => ({ default: module.InvestmentsManager })),
+)
+const HistoryView = lazy(() =>
+  import('./components/HistoryView').then((module) => ({ default: module.HistoryView })),
+)
+const ForecastView = lazy(() =>
+  import('./components/ForecastView').then((module) => ({ default: module.ForecastView })),
+)
 
 interface AppDialogState {
   title: string
@@ -321,6 +332,13 @@ function AppShell() {
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file) return
+    if (persistence.hasError) {
+      showNotice(
+        'Resolva o erro de gravação primeiro',
+        'A importação foi bloqueada para não substituir seus dados enquanto o navegador não consegue salvá-los.',
+      )
+      return
+    }
 
     try {
       const payload = JSON.parse(await file.text()) as BackupPayload
@@ -468,10 +486,18 @@ function AppShell() {
           </MasonryColumns>
         )}
 
-        {activeView === 'cards' && <CreditCardManager />}
-        {activeView === 'investments' && <InvestmentsManager />}
-        {activeView === 'history' && <HistoryView />}
-        {activeView === 'forecast' && <ForecastView />}
+        <Suspense
+          fallback={
+            <div className="rounded-xl border border-dark-border bg-dark-card p-8 text-center text-sm text-dark-text-muted">
+              Carregando dados…
+            </div>
+          }
+        >
+          {activeView === 'cards' && <CreditCardManager />}
+          {activeView === 'investments' && <InvestmentsManager />}
+          {activeView === 'history' && <HistoryView />}
+          {activeView === 'forecast' && <ForecastView />}
+        </Suspense>
       </main>
 
       <footer className="border-t border-dark-border-subtle">

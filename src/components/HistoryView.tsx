@@ -17,7 +17,7 @@ import {
   formatMonthKey,
   inputClass,
 } from '../lib/format'
-import { useFinancasStore } from '../context/financasStore'
+import { useHistoryStore } from '../context/financasStore'
 import type { HistoryPoint, SnapshotPatch } from '../types'
 import { BUDGET_AREA_COLORS, CHART_PALETTE } from '../types/constants'
 
@@ -26,7 +26,7 @@ import { BUDGET_AREA_COLORS, CHART_PALETTE } from '../types/constants'
  * hoje — inútil quando o erro está três meses atrás.
  */
 function SnapshotEditorContent({ point, onClose }: { point: HistoryPoint; onClose: () => void }) {
-  const { history } = useFinancasStore()
+  const history = useHistoryStore()
   const set = (patch: SnapshotPatch) => history.updateSnapshot(point.id, patch)
 
   const fields: { label: string; value: number; key: keyof SnapshotPatch }[] = [
@@ -143,7 +143,7 @@ function HistoryActions({
 
 /** Só leitura do passado — o fechamento do mês corrente vive na aba Ciclo. */
 export function HistoryView() {
-  const { history } = useFinancasStore()
+  const history = useHistoryStore()
   const { points, stats } = history
   const [editingId, setEditingId] = useState<string | null>(null)
 

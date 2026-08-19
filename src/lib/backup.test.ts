@@ -47,6 +47,17 @@ describe('backup seguro', () => {
     ).toThrow()
   })
 
+  it('não toca no estado atual quando o arquivo é incompatível', () => {
+    const storage = new MemoryStorage()
+    storage.setItem('uf_salary_net', '1000')
+
+    expect(() =>
+      readBackupEntries({ app: 'outro-app', localStorage: { uf_history_v1: '{quebrado' } }),
+    ).toThrow()
+    expect(storage.getItem('uf_salary_net')).toBe('1000')
+    expect(storage.length).toBe(1)
+  })
+
   it('restaura todas as chaves e cria uma cópia do estado anterior', () => {
     const storage = new MemoryStorage()
     storage.setItem('uf_salary_net', '1000')
