@@ -1,5 +1,14 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactNode,
+} from 'react'
+import {
+  AlertTriangle,
   Archive,
   CalendarCheck,
   CalendarClock,
@@ -11,12 +20,14 @@ import {
   MoreVertical,
   RotateCcw,
   SlidersHorizontal,
+  Trash2,
   Upload,
   X,
 } from 'lucide-react'
 import { FinancasProvider } from './context/FinancasContext'
 import { useScenarioStore } from './context/financasStore'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
+import { usePersistenceStatus } from './hooks/usePersistenceStatus'
 import { IncomePanel } from './components/IncomePanel'
 import { BudgetModelPicker } from './components/BudgetModelPicker'
 import { CostManager } from './components/CostManager'
@@ -29,9 +40,11 @@ import { ForecastView } from './components/ForecastView'
 import { HistoryView } from './components/HistoryView'
 import { ScenarioSwitcher } from './components/ScenarioSwitcher'
 import { CycleSwitcher } from './components/CycleSwitcher'
+import { ConfirmationDialog } from './components/ui'
 import { formatDate } from './lib/format'
 import {
   clearAppStorage,
+  clearAllFinTanoStorage,
   downloadBackup,
   listAutoBackups,
   readBackupEntries,
@@ -41,6 +54,15 @@ import {
 } from './lib/backup'
 
 type View = 'closing' | 'planning' | 'cards' | 'investments' | 'history' | 'forecast'
+
+interface AppDialogState {
+  title: string
+  description: ReactNode
+  confirmLabel: string
+  tone?: 'danger' | 'primary'
+  hideCancel?: boolean
+  onConfirm: () => void
+}
 
 const SECONDARY_VIEWS = new Set<View>(['forecast'])
 
@@ -103,13 +125,15 @@ function TabBar({
 function AppMenu({
   onExport,
   onImport,
-  onReset,
+  onResetCurrent,
+  onResetAll,
   onShortcuts,
   onRestoreAuto,
 }: {
   onExport: () => void
   onImport: () => void
-  onReset: () => void
+  onResetCurrent: () => void
+  onResetAll: () => void
   onShortcuts: () => void
   onRestoreAuto: (createdAt: string) => void
 }) {
@@ -184,10 +208,18 @@ function AppMenu({
             <button
               type="button"
               className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-dark-text-muted transition-colors hover:bg-rose-500/10 hover:text-rose-300"
-              onClick={run(onReset)}
+              onClick={run(onResetCurrent)}
             >
               <RotateCcw size={14} />
-              Apagar todos os dados
+              Limpar dados atuais
+            </button>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-rose-300 transition-colors hover:bg-rose-500/10"
+              onClick={run(onResetAll)}
+            >
+              <Trash2 size={14} />
+              Apagar dados e cópias
             </button>
           </div>
         </div>
@@ -252,7 +284,20 @@ function AppShell() {
   const importInputRef = useRef<HTMLInputElement>(null)
   const [activeView, setActiveView] = useState<View>('closing')
   const [showShortcuts, setShowShortcuts] = useState(false)
+  const [dialog, setDialog] = useState<AppDialogState | null>(null)
   const scenarios = useScenarioStore()
+  const persistence = usePersistenceStatus()
+  const closeDialog = useCallback(() => setDialog(null), [])
+
+  const showNotice = useCallback((title: string, description: string) => {
+    setDialog({
+      title,
+      description,
+      confirmLabel: 'Entendi',
+      hideCancel: true,
+      onConfirm: () => undefined,
+    })
+  }, [])
 
   const shortcutHandlers = useMemo(
     () => ({
@@ -282,30 +327,63 @@ function AppShell() {
       const entries = readBackupEntries(payload)
       if (!entries.length) throw new Error('No FinTano keys found')
 
-      const confirmed = window.confirm(
-        `Importar backup com ${entries.length} registros locais? Seus dados atuais do FinTano serão substituídos.`,
+      setDialog({
+        title: 'Importar este backup?',
+        description: `O arquivo contém ${entries.length} registros do FinTano. Os dados atuais serão substituídos, mas uma cópia de segurança será criada antes.`,
+        confirmLabel: 'Importar backup',
+        onConfirm: () => {
+          const result = restoreEntries(entries)
+          if (result.ok) window.location.reload()
+          else showNotice('Não foi possível importar', result.error ?? 'O backup não foi restaurado.')
+        },
+      })
+    } catch (error) {
+      showNotice(
+        'Backup inválido',
+        error instanceof Error && error.message
+          ? error.message
+          : 'O arquivo não parece ser um backup válido do FinTano.',
       )
-      if (!confirmed) return
-
-      restoreEntries(entries)
-      window.location.reload()
-    } catch {
-      window.alert('Arquivo de backup inválido para o FinTano.')
     }
   }
 
-  const handleReset = () => {
-    if (window.confirm('Tem certeza que deseja limpar todos os dados?')) {
-      clearAppStorage()
-      window.location.reload()
-    }
+  const handleResetCurrent = () => {
+    setDialog({
+      title: 'Limpar os dados atuais?',
+      description: 'Planejamento, lançamentos e histórico serão removidos. As cópias automáticas serão mantidas para recuperação.',
+      confirmLabel: 'Limpar dados atuais',
+      tone: 'danger',
+      onConfirm: () => {
+        clearAppStorage()
+        window.location.reload()
+      },
+    })
+  }
+
+  const handleResetAll = () => {
+    setDialog({
+      title: 'Apagar tudo deste navegador?',
+      description: 'Dados atuais e todas as cópias automáticas serão removidos. Esta ação não pode ser desfeita sem um arquivo de backup exportado.',
+      confirmLabel: 'Apagar dados e cópias',
+      tone: 'danger',
+      onConfirm: () => {
+        clearAllFinTanoStorage()
+        window.location.reload()
+      },
+    })
   }
 
   const handleRestoreAuto = (createdAt: string) => {
-    if (!window.confirm(`Restaurar a cópia de ${formatDate(createdAt)}? Os dados atuais serão substituídos.`)) {
-      return
-    }
-    if (restoreAutoBackup(createdAt)) window.location.reload()
+    setDialog({
+      title: `Restaurar cópia de ${formatDate(createdAt)}?`,
+      description: 'Os dados atuais serão substituídos. Uma nova cópia de segurança será criada antes da restauração.',
+      confirmLabel: 'Restaurar cópia',
+      onConfirm: () => {
+        const result = restoreAutoBackup(createdAt)
+        if (result.ok) window.location.reload()
+        else showNotice('Não foi possível restaurar', result.error ?? 'A cópia não foi restaurada.')
+      },
+    })
   }
 
   return (
@@ -326,7 +404,8 @@ function AppShell() {
             <AppMenu
               onExport={downloadBackup}
               onImport={() => importInputRef.current?.click()}
-              onReset={handleReset}
+              onResetCurrent={handleResetCurrent}
+              onResetAll={handleResetAll}
               onShortcuts={() => setShowShortcuts(true)}
               onRestoreAuto={handleRestoreAuto}
             />
@@ -342,6 +421,29 @@ function AppShell() {
       </header>
 
       <main className="mx-auto max-w-6xl space-y-4 px-4 py-5 sm:px-6">
+        {persistence.hasError && (
+          <div
+            role="alert"
+            className="flex flex-col gap-3 rounded-xl border border-rose-500/35 bg-rose-500/[0.08] px-4 py-3 text-sm text-rose-100 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <span className="flex items-start gap-2">
+              <AlertTriangle size={16} className="mt-0.5 shrink-0 text-rose-300" />
+              <span>
+                <strong className="block text-rose-200">A última alteração não foi salva</strong>
+                <span className="mt-0.5 block text-xs leading-relaxed text-rose-100/80">
+                  {persistence.message} Libere espaço ou verifique as permissões e tente novamente.
+                </span>
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={persistence.retry}
+              className="shrink-0 rounded-lg border border-rose-400/30 px-3 py-2 text-xs font-semibold text-rose-100 transition-colors hover:bg-rose-500/10"
+            >
+              Testar novamente
+            </button>
+          </div>
+        )}
         <div className="flex items-center justify-between gap-3 md:hidden">
           <TabBar activeView={activeView} setActiveView={setActiveView} className="flex-1" />
         </div>
@@ -381,6 +483,16 @@ function AppShell() {
       </footer>
 
       {showShortcuts && <ShortcutsOverlay onClose={() => setShowShortcuts(false)} />}
+      <ConfirmationDialog
+        open={dialog !== null}
+        title={dialog?.title ?? ''}
+        description={dialog?.description}
+        confirmLabel={dialog?.confirmLabel}
+        tone={dialog?.tone}
+        hideCancel={dialog?.hideCancel}
+        onConfirm={dialog?.onConfirm ?? (() => undefined)}
+        onClose={closeDialog}
+      />
     </div>
   )
 }

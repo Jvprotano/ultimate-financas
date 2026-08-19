@@ -1,4 +1,4 @@
-import type { CashFlowSummary, ExpectedOccurrence } from '../types'
+import type { CashFlowSummary } from '../types'
 
 // ---------------------------------------------------------------------------
 // Caixa do mês.
@@ -18,6 +18,8 @@ export interface CashFlowInput {
   paycheck: number
   /** Entradas avulsas efetivamente recebidas no ciclo. */
   extraIncome?: number
+  /** Saídas avulsas efetivamente pagas no ciclo. */
+  extraExpense?: number
   costsOnAccount: number
   costsOnCard: number
   wantsOnAccount: number
@@ -25,17 +27,13 @@ export interface CashFlowInput {
   directInvestment: number
   /** Parte pessoal da fatura que vence neste mês. */
   invoiceToPay: number
-  /** Entradas e saídas esperadas com data neste mês (13º, IPVA…). */
-  occurrences: ExpectedOccurrence[]
 }
 
 export function calculateCashFlow(input: CashFlowInput): CashFlowSummary {
   // Futuro é previsão. Só o que foi registrado no Realizado vira caixa livre;
   // assim uma entrada esperada não libera dinheiro antes de realmente cair.
   const extraIncome = Math.max(0, input.extraIncome ?? 0)
-  const extraExpense = input.occurrences
-    .filter((item) => item.event.kind === 'expense')
-    .reduce((sum, item) => sum + item.event.amount, 0)
+  const extraExpense = Math.max(0, input.extraExpense ?? 0)
 
   const plannedOnCard = input.costsOnCard + input.wantsOnCard
   const totalIn = input.paycheck + extraIncome

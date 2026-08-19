@@ -29,11 +29,13 @@ export function normalizeActuals(raw: Partial<MonthlyActuals> | undefined): Mont
   }
 
   const extraIncome = normalizeExtraIncomeEntries(raw?.extraIncome)
+  const extraExpenses = normalizeExtraIncomeEntries(raw?.extraExpenses)
 
   return {
     month: /^\d{4}-\d{2}$/.test(raw?.month ?? '') ? (raw?.month as string) : monthKey(),
     costs,
     extraIncome,
+    extraExpenses,
   }
 }
 
@@ -62,6 +64,11 @@ export function summarizeActuals(
     month,
     extraIncome: actuals?.extraIncome ?? [],
     extraIncomeTotal: (actuals?.extraIncome ?? []).reduce((sum, entry) => sum + entry.amount, 0),
+    extraExpenses: actuals?.extraExpenses ?? [],
+    extraExpenseTotal: (actuals?.extraExpenses ?? []).reduce(
+      (sum, entry) => sum + entry.amount,
+      0,
+    ),
     effectiveCosts,
     plannedCosts,
     variance: effectiveCosts - plannedCosts,

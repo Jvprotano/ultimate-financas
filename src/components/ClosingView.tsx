@@ -2,10 +2,7 @@ import { useState } from 'react'
 import {
   AlertTriangle,
   CalendarCheck,
-  CalendarRange,
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
   Sparkles,
 } from 'lucide-react'
 import { ActualsPanel } from './ActualsPanel'
@@ -20,6 +17,7 @@ import {
 import { formatCurrency, formatMonthLong, inputClass } from '../lib/format'
 import { useFinancasStore } from '../context/financasStore'
 import { cycleSalaryMonth } from '../lib/activeCycle'
+import { usePersistenceStatus } from '../hooks/usePersistenceStatus'
 
 function formatPlanComparison(planned: number, actual: number) {
   const delta = actual - planned
@@ -38,6 +36,8 @@ export function ClosingView({
     activeCycle,
     history,
     metrics,
+    cashFlow,
+    financialCycle,
     actuals,
     cards,
     cardCycleAccounting,
@@ -48,12 +48,14 @@ export function ClosingView({
   const { currentMonth, isCurrentMonthClosed } = history
   const [note, setNote] = useState('')
   const [showCloseReview, setShowCloseReview] = useState(false)
+  const persistence = usePersistenceStatus()
 
   const missingActualRows = actuals.summary.rows.filter((row) => row.actual === null)
   const closingInvoiceDue = cardCycleAccounting.invoiceFormedByCycle.personalTotal
   const closingInvoiceTotal = cardCycleAccounting.invoiceFormedByCycle.total
   const invoiceKnown = cardCycleAccounting.invoiceFormedByCycle.amountKnown
   const closingInvoiceAlreadyPaid = cardCycleAccounting.invoiceFormedByCycle.paid
+  const currentInvoiceKnown = cardCycleAccounting.invoiceThisCycle.amountKnown
   const currentDueMonth = cards.settings.currentDueMonth ?? activeCycle.month
   const canPayClosingInvoiceTogether =
     invoiceKnown &&
@@ -65,16 +67,18 @@ export function ClosingView({
   const salaryMonth = cycleSalaryMonth(activeCycle.month)
 
   const finishClose = (payInvoice: boolean) => {
-    actuals.fillFromPlan(currentMonth)
-    closeCurrentMonth(currentMonth, note)
+    if (persistence.hasError) return
+    if (!actuals.fillFromPlan(currentMonth)) return
+    if (!closeCurrentMonth(currentMonth, note)) return
     if (payInvoice && canPayClosingInvoiceTogether) cards.payInvoice()
     setNote('')
     setShowCloseReview(false)
   }
 
   const handleReclose = () => {
-    actuals.fillFromPlan(currentMonth)
-    closeCurrentMonth(currentMonth, note)
+    if (persistence.hasError) return
+    if (!actuals.fillFromPlan(currentMonth)) return
+    if (!closeCurrentMonth(currentMonth, note)) return
     setNote('')
   }
 
@@ -101,134 +105,119 @@ export function ClosingView({
 
   return (
     <div className="space-y-4">
-      <Panel>
+      <Panel className="border-primary-500/25 bg-primary-500/[0.04]">
         <PanelHeader
           title={`Ciclo ${formatMonthLong(activeCycle.month)}`}
-          icon={<CalendarRange size={16} />}
-          description={`Atualize os realizados, confira a fatura e feche ${formatMonthLong(activeCycle.month)}. O próximo salário será usado para financiar ${formatMonthLong(nextCycleAllocation.month)}.`}
-          actions={
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => activeCycle.shiftCycle(-1)}
-                className="rounded-md border border-dark-border p-1.5 text-dark-text-muted transition-colors hover:text-dark-text"
-                aria-label="Ciclo anterior"
-              >
-                <ChevronLeft size={14} />
-              </button>
-              <button
-                type="button"
-                onClick={() => activeCycle.shiftCycle(1)}
-                className="rounded-md border border-dark-border p-1.5 text-dark-text-muted transition-colors hover:text-dark-text"
-                aria-label="Próximo ciclo"
-              >
-                <ChevronRight size={14} />
-              </button>
-            </div>
-          }
+          icon={<CalendarCheck size={16} />}
+          description={`O salário do fim de ${formatMonthLong(salaryMonth)} financia este ciclo. Veja primeiro o que entrou, o que já está comprometido e quanto ainda está livre.`}
         />
-      </Panel>
-
-      <Panel className="border-primary-500/25 bg-primary-500/[0.04]">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
-            <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-primary-300">
-              <Sparkles size={12} />
-              Liberado para alocar em {formatMonthLong(nextCycleAllocation.month)}
-            </span>
-            <strong
-              className={`mt-1 block text-4xl font-bold leading-tight tracking-tight tabular-nums ${
-                nextCycleAllocation.shortfall > 0.005 ? 'text-rose-300' : 'text-primary-300'
-              }`}
-            >
-              {allocationReliable
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <StatTile
+            label="Entrou no ciclo"
+            value={formatCurrency(cashFlow.totalIn)}
+            detail={
+              cashFlow.extraIncome > 0.005
+                ? `${formatCurrency(cashFlow.paycheck)} de salário + ${formatCurrency(cashFlow.extraIncome)} extras`
+                : 'salário líquido na conta'
+            }
+            tone="positive"
+          />
+          <StatTile
+            label="Já comprometido"
+            value={currentInvoiceKnown ? formatCurrency(financialCycle.commitmentsDueNow) : '—'}
+            detail="fatura, contas, desejos em conta, aporte e extraordinários"
+          />
+          <StatTile
+            label="Livre neste ciclo"
+            value={
+              currentInvoiceKnown
                 ? formatCurrency(
-                    nextCycleAllocation.shortfall > 0.005
-                      ? -nextCycleAllocation.shortfall
-                      : nextCycleAllocation.pool,
+                    financialCycle.shortfall > 0
+                      ? -financialCycle.shortfall
+                      : financialCycle.safeToSpend,
                   )
-                : '—'}
-            </strong>
-            <p className="mt-2 max-w-2xl text-xs leading-relaxed text-dark-text-muted">
-              Depois de separar a fatura de {formatMonthLong(nextCycleAllocation.month)}, os custos
-              em conta e o aporte-base. Este é o valor que você pode distribuir entre Desejos e
-              aporte complementar no próximo mês.
-            </p>
-            {allocationReliable && (
-              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                <span className="text-dark-text-muted">
-                  Desejos planejados fora do cartão{' '}
-                  <strong className="font-semibold tabular-nums text-dark-text">
-                    {formatCurrency(nextCycleAllocation.plannedWants)}
-                  </strong>
-                </span>
-                <span
-                  className={
-                    Math.abs(allocationPlanDelta) <= 0.005
-                      ? 'font-medium text-dark-text-secondary'
-                      : allocationPlanDelta > 0
-                        ? 'font-medium text-primary-300'
-                        : 'font-medium text-rose-300'
-                  }
-                >
-                  {Math.abs(allocationPlanDelta) <= 0.005
-                    ? 'exatamente no planejado'
-                    : allocationPlanDelta > 0
-                      ? `${formatCurrency(allocationPlanDelta)} além do planejado`
-                      : `${formatCurrency(Math.abs(allocationPlanDelta))} abaixo do planejado`}
-                </span>
-              </div>
-            )}
-          </div>
-          <SecondaryButton onClick={onGoToPlanning}>Ajustar planejamento</SecondaryButton>
+                : '—'
+            }
+            detail="depois de tudo que sai deste salário"
+            tone={financialCycle.shortfall > 0 ? 'negative' : 'accent'}
+          />
+          <StatTile
+            label={`Fatura que vence em ${formatMonthLong(activeCycle.month)}`}
+            value={currentInvoiceKnown ? formatCurrency(cashFlow.invoiceToPay) : '—'}
+            detail={`gastos de ${formatMonthLong(financialCycle.spendingMonth)}`}
+          />
         </div>
 
-        {allocationReliable ? (
+        {!currentInvoiceKnown && (
+          <div className="mt-4 flex flex-col gap-3 rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3 py-3 text-xs leading-relaxed text-amber-100/90 sm:flex-row sm:items-center sm:justify-between">
+            <span className="flex items-start gap-2">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-300" />
+              A fatura que vence neste ciclo ainda não tem valor confiável. O FinTano não calcula
+              um livre incompleto.
+            </span>
+            <SecondaryButton onClick={onGoToCards}>Conferir cartões</SecondaryButton>
+          </div>
+        )}
+      </Panel>
+
+      {allocationReliable && (
+        <Panel>
+          <PanelHeader
+            title={`Prévia de ${formatMonthLong(nextCycleAllocation.month)}`}
+            icon={<Sparkles size={15} />}
+            description="Planejamento do próximo salário, depois da fatura formada agora, contas e aporte-base."
+            actions={<SecondaryButton onClick={onGoToPlanning}>Ajustar planejamento</SecondaryButton>}
+          />
           <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <StatTile
+              label="Disponível para alocar"
+              value={formatCurrency(
+                nextCycleAllocation.shortfall > 0
+                  ? -nextCycleAllocation.shortfall
+                  : nextCycleAllocation.pool,
+              )}
+              detail={
+                Math.abs(allocationPlanDelta) <= 0.005
+                  ? 'cobre exatamente os desejos planejados'
+                  : allocationPlanDelta > 0
+                    ? `${formatCurrency(allocationPlanDelta)} além dos desejos planejados`
+                    : `${formatCurrency(Math.abs(allocationPlanDelta))} abaixo dos desejos planejados`
+              }
+              tone={allocationTone}
+            />
             <StatTile
               label="Entradas previstas"
               value={formatCurrency(nextCycleAllocation.totalIncome)}
               detail={
                 nextCycleAllocation.extraIncome > 0.005
-                  ? `${formatCurrency(nextCycleAllocation.paycheck)} de salário + ${formatCurrency(nextCycleAllocation.extraIncome)} extras`
-                  : `salário que financia ${formatMonthLong(nextCycleAllocation.month)}`
+                  ? `${formatCurrency(nextCycleAllocation.extraIncome)} em extras previstos`
+                  : 'somente salário recorrente'
               }
             />
             <StatTile
               label={`Fatura de ${formatMonthLong(nextCycleAllocation.month)}`}
               value={formatCurrency(nextCycleAllocation.invoice)}
-              detail={closingInvoiceAlreadyPaid ? 'já paga, mas já consumiu este caixa' : 'formada pelo ciclo atual'}
+              detail={closingInvoiceAlreadyPaid ? 'já paga, mas consumiu este caixa' : 'formada pelo ciclo atual'}
             />
             <StatTile
-              label="Custos em conta"
-              value={formatCurrency(nextCycleAllocation.costsOnAccount)}
-              detail="realizado no ciclo atual · usa o plano apenas onde falta realizado"
-            />
-            <StatTile
-              label="Aporte-base"
-              value={formatCurrency(nextCycleAllocation.baseInvestment)}
-              detail="antes do aporte complementar"
-              tone={allocationTone}
+              label="Custos + aporte-base"
+              value={formatCurrency(
+                nextCycleAllocation.costsOnAccount +
+                  nextCycleAllocation.baseInvestment +
+                  nextCycleAllocation.extraExpense,
+              )}
+              detail="antes dos desejos planejados"
             />
           </div>
-        ) : (
-          <div className="mt-4 flex flex-col gap-3 rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3 py-3 text-xs leading-relaxed text-amber-100/90 sm:flex-row sm:items-center sm:justify-between">
-            <span className="flex items-start gap-2">
-              <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-300" />
-              A fatura que financiará {formatMonthLong(nextCycleAllocation.month)} ainda não tem um
-              valor confiável. O FinTano não mostra um “liberado” incompleto.
-            </span>
-            <SecondaryButton onClick={onGoToCards}>Conferir cartões</SecondaryButton>
-          </div>
-        )}
 
-        {allocationReliable && nextCycleAllocation.extraExpense > 0.005 && (
-          <p className="mt-3 text-[11px] leading-relaxed text-dark-text-muted">
-            A prévia também reserva {formatCurrency(nextCycleAllocation.extraExpense)} de saídas
-            extraordinárias previstas para {formatMonthLong(nextCycleAllocation.month)}.
-          </p>
-        )}
-      </Panel>
+          {nextCycleAllocation.extraExpense > 0.005 && (
+            <p className="mt-3 text-[11px] leading-relaxed text-dark-text-muted">
+              A prévia reserva {formatCurrency(nextCycleAllocation.extraExpense)} de saídas
+              extraordinárias previstas.
+            </p>
+          )}
+        </Panel>
+      )}
 
       <ActualsPanel />
 
@@ -243,7 +232,10 @@ export function ClosingView({
                 Refechar
               </ConfirmButton>
             ) : (
-              <PrimaryButton onClick={() => setShowCloseReview(true)}>
+              <PrimaryButton
+                onClick={() => setShowCloseReview(true)}
+                disabled={persistence.hasError}
+              >
                 <CalendarCheck size={15} />
                 Revisar e fechar
               </PrimaryButton>
@@ -253,14 +245,18 @@ export function ClosingView({
 
         <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           <StatTile
-            label="Entradas extras"
-            value={formatCurrency(actuals.summary.extraIncomeTotal)}
-            detail={
-              actuals.summary.extraIncome.length > 0
-                ? actuals.summary.extraIncome.map((entry) => entry.name).join(', ')
-                : 'nenhuma recebida neste ciclo'
+            label="Movimentos extraordinários"
+            value={formatCurrency(
+              actuals.summary.extraIncomeTotal - actuals.summary.extraExpenseTotal,
+            )}
+            detail={`entrou ${formatCurrency(actuals.summary.extraIncomeTotal)} · saiu ${formatCurrency(actuals.summary.extraExpenseTotal)}`}
+            tone={
+              actuals.summary.extraIncomeTotal - actuals.summary.extraExpenseTotal > 0.005
+                ? 'positive'
+                : actuals.summary.extraExpenseTotal - actuals.summary.extraIncomeTotal > 0.005
+                  ? 'negative'
+                  : 'neutral'
             }
-            tone={actuals.summary.extraIncomeTotal > 0.005 ? 'positive' : 'neutral'}
           />
           <StatTile
             label="Custos do mês"
@@ -319,6 +315,9 @@ export function ClosingView({
                   {formatCurrency(investmentActuals.total)}
                   {actuals.summary.extraIncomeTotal > 0.005 && (
                     <> · extras recebidos {formatCurrency(actuals.summary.extraIncomeTotal)}</>
+                  )}
+                  {actuals.summary.extraExpenseTotal > 0.005 && (
+                    <> · extraordinários pagos {formatCurrency(actuals.summary.extraExpenseTotal)}</>
                   )}
                   .
                 </p>

@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -731,5 +732,90 @@ export function ConfirmButton({
         Cancelar
       </button>
     </span>
+  )
+}
+
+export function ConfirmationDialog({
+  open,
+  title,
+  description,
+  confirmLabel = 'Confirmar',
+  cancelLabel = 'Cancelar',
+  tone = 'primary',
+  hideCancel = false,
+  onConfirm,
+  onClose,
+}: {
+  open: boolean
+  title: string
+  description: ReactNode
+  confirmLabel?: string
+  cancelLabel?: string
+  tone?: 'danger' | 'primary'
+  hideCancel?: boolean
+  onConfirm: () => void
+  onClose: () => void
+}) {
+  const titleId = useId()
+  const descriptionId = useId()
+  const confirmRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const previous = document.activeElement as HTMLElement | null
+    const frame = requestAnimationFrame(() => confirmRef.current?.focus())
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      cancelAnimationFrame(frame)
+      document.removeEventListener('keydown', handleKeyDown)
+      previous?.focus()
+    }
+  }, [onClose, open])
+
+  if (!open) return null
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+    >
+      <section
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
+        className="w-full max-w-md rounded-xl border border-dark-border bg-dark-card p-5 shadow-2xl shadow-black/50"
+      >
+        <h2 id={titleId} className="text-base font-semibold tracking-tight text-dark-text">
+          {title}
+        </h2>
+        <div id={descriptionId} className="mt-2 text-sm leading-relaxed text-dark-text-secondary">
+          {description}
+        </div>
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          {!hideCancel && <SecondaryButton onClick={onClose}>{cancelLabel}</SecondaryButton>}
+          <button
+            ref={confirmRef}
+            type="button"
+            onClick={() => {
+              onClose()
+              onConfirm()
+            }}
+            className={`rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-dark-card ${
+              tone === 'danger'
+                ? 'bg-rose-600 hover:bg-rose-500 focus:ring-rose-400'
+                : 'bg-primary-600 hover:bg-primary-500 focus:ring-primary-400'
+            }`}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </section>
+    </div>
   )
 }

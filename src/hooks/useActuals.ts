@@ -5,10 +5,26 @@ import { normalizeActuals, summarizeActuals } from '../lib/actuals'
 import { monthKey, uid } from '../lib/shared'
 
 const ACTUALS_STORAGE_KEY = 'uf_actuals_v1'
+type CashEntryField = 'extraIncome' | 'extraExpenses'
+
+const sortMonths = (items: MonthlyActuals[]) =>
+  items.sort((a, b) => a.month.localeCompare(b.month))
+
+const emptyMonth = (month: string): MonthlyActuals => ({
+  month,
+  costs: {},
+  extraIncome: [],
+  extraExpenses: [],
+})
+
+const hasFacts = (actuals: MonthlyActuals) =>
+  Object.keys(actuals.costs).length > 0 ||
+  actuals.extraIncome.length > 0 ||
+  actuals.extraExpenses.length > 0
 
 /**
- * O que de fato foi pago em cada mês. Guardado por mês (não por cenário): o
- * realizado é um fato, não uma hipótese.
+ * O que de fato foi pago e recebido em cada mês. Guardado por mês (não por
+ * cenário): o realizado é um fato, não uma hipótese.
  */
 export function useActuals(costs: CostItem[] = [], month = monthKey()) {
   const [stored, setStored] = useLocalStorage<MonthlyActuals[]>(ACTUALS_STORAGE_KEY, [])
@@ -23,63 +39,54 @@ export function useActuals(costs: CostItem[] = [], month = monthKey()) {
   )
   const summary = useMemo(() => summarizeActuals(costs, forMonth, month), [costs, forMonth, month])
 
+  const updateMonth = useCallback(
+    (targetMonth: string, update: (current: MonthlyActuals) => MonthlyActuals) => {
+      return setStored((prev) => {
+        const list = (Array.isArray(prev) ? prev : []).map(normalizeActuals)
+        const current = list.find((item) => item.month === targetMonth) ?? emptyMonth(targetMonth)
+        const next = update(current)
+        const others = list.filter((item) => item.month !== targetMonth)
+        return hasFacts(next) ? sortMonths([...others, next]) : others
+      })
+    },
+    [setStored],
+  )
+
   /** Informa o valor pago de um custo. `null` volta a usar o planejado. */
   const setActual = useCallback(
     (costId: string, amount: number | null, targetMonth = month) => {
-      setStored((prev) => {
-        const list = Array.isArray(prev) ? prev.map(normalizeActuals) : []
-        const existing = list.find((item) => item.month === targetMonth)
-        const costs = { ...(existing?.costs ?? {}) }
-
-        if (amount === null) delete costs[costId]
-        else costs[costId] = Math.max(0, amount)
-
-        const others = list.filter((item) => item.month !== targetMonth)
-        const extraIncome = existing?.extraIncome ?? []
-        // Mês sem nenhum valor informado não precisa ocupar espaço.
-        if (Object.keys(costs).length === 0 && extraIncome.length === 0) return others
-        return [...others, { month: targetMonth, costs, extraIncome }].sort((a, b) =>
-          a.month.localeCompare(b.month),
-        )
+      updateMonth(targetMonth, (current) => {
+        const nextCosts = { ...current.costs }
+        if (amount === null) delete nextCosts[costId]
+        else nextCosts[costId] = Math.max(0, amount)
+        return { ...current, costs: nextCosts }
       })
     },
-    [month, setStored],
+    [month, updateMonth],
   )
 
   /** Preenche todos os itens ainda vazios com o valor planejado. */
   const fillFromPlan = useCallback(
     (targetMonth = month) => {
-      setStored((prev) => {
-        const list = Array.isArray(prev) ? prev.map(normalizeActuals) : []
-        const existing = list.find((item) => item.month === targetMonth)
-        const filled = { ...(existing?.costs ?? {}) }
+      return updateMonth(targetMonth, (current) => {
+        const filled = { ...current.costs }
         for (const row of summary.rows) {
           if (!Object.hasOwn(filled, row.cost.id)) filled[row.cost.id] = row.planned
         }
-        if (Object.keys(filled).length === 0) return list
-        return [...list.filter((item) => item.month !== targetMonth), { month: targetMonth, costs: filled, extraIncome: existing?.extraIncome ?? [] }].sort(
-          (a, b) => a.month.localeCompare(b.month),
-        )
+        return { ...current, costs: filled }
       })
     },
-    [month, setStored, summary.rows],
+    [month, summary.rows, updateMonth],
   )
 
   const clearCosts = useCallback(
-    (targetMonth = month) => {
-      setStored((prev) => {
-        const list = (Array.isArray(prev) ? prev : []).map(normalizeActuals)
-        const existing = list.find((item) => item.month === targetMonth)
-        const others = list.filter((item) => item.month !== targetMonth)
-        if (!existing?.extraIncome.length) return others
-        return [...others, { ...existing, costs: {} }].sort((a, b) => a.month.localeCompare(b.month))
-      })
-    },
-    [month, setStored],
+    (targetMonth = month) => updateMonth(targetMonth, (current) => ({ ...current, costs: {} })),
+    [month, updateMonth],
   )
 
-  const addExtraIncome = useCallback(
+  const addCashEntry = useCallback(
     (
+      field: CashEntryField,
       name: string,
       amount: number,
       sourceEventId?: string,
@@ -87,18 +94,9 @@ export function useActuals(costs: CostItem[] = [], month = monthKey()) {
     ) => {
       const cleanName = name.trim()
       if (!cleanName || amount <= 0) return
-      setStored((prev) => {
-        const list = (Array.isArray(prev) ? prev : []).map(normalizeActuals)
-        const existing = list.find((item) => item.month === targetMonth) ?? {
-          month: targetMonth,
-          costs: {},
-          extraIncome: [],
-        }
-        if (
-          sourceEventId &&
-          existing.extraIncome.some((entry) => entry.sourceEventId === sourceEventId)
-        ) {
-          return list
+      updateMonth(targetMonth, (current) => {
+        if (sourceEventId && current[field].some((entry) => entry.sourceEventId === sourceEventId)) {
+          return current
         }
         const entry: ExtraIncomeEntry = {
           id: uid(),
@@ -106,52 +104,74 @@ export function useActuals(costs: CostItem[] = [], month = monthKey()) {
           amount,
           sourceEventId: sourceEventId || undefined,
         }
-        return [
-          ...list.filter((item) => item.month !== targetMonth),
-          { ...existing, extraIncome: [...existing.extraIncome, entry] },
-        ].sort((a, b) => a.month.localeCompare(b.month))
+        return { ...current, [field]: [...current[field], entry] }
       })
     },
-    [month, setStored],
+    [month, updateMonth],
   )
 
+  const updateCashEntry = useCallback(
+    (
+      field: CashEntryField,
+      id: string,
+      patch: Partial<Pick<ExtraIncomeEntry, 'name' | 'amount'>>,
+      targetMonth = month,
+    ) => {
+      updateMonth(targetMonth, (current) => ({
+        ...current,
+        [field]: current[field]
+          .map((entry) =>
+            entry.id === id
+              ? {
+                  ...entry,
+                  name: patch.name === undefined ? entry.name : patch.name.trim(),
+                  amount: patch.amount === undefined ? entry.amount : Math.max(0, patch.amount),
+                }
+              : entry,
+          )
+          .filter((entry) => entry.name && entry.amount > 0),
+      }))
+    },
+    [month, updateMonth],
+  )
+
+  const removeCashEntry = useCallback(
+    (field: CashEntryField, id: string, targetMonth = month) => {
+      updateMonth(targetMonth, (current) => ({
+        ...current,
+        [field]: current[field].filter((entry) => entry.id !== id),
+      }))
+    },
+    [month, updateMonth],
+  )
+
+  const addExtraIncome = useCallback(
+    (name: string, amount: number, sourceEventId?: string, targetMonth = month) =>
+      addCashEntry('extraIncome', name, amount, sourceEventId, targetMonth),
+    [addCashEntry, month],
+  )
+  const addExtraExpense = useCallback(
+    (name: string, amount: number, sourceEventId?: string, targetMonth = month) =>
+      addCashEntry('extraExpenses', name, amount, sourceEventId, targetMonth),
+    [addCashEntry, month],
+  )
   const updateExtraIncome = useCallback(
-    (id: string, patch: Partial<Pick<ExtraIncomeEntry, 'name' | 'amount'>>, targetMonth = month) => {
-      setStored((prev) =>
-        (Array.isArray(prev) ? prev : []).map(normalizeActuals).map((item) =>
-          item.month !== targetMonth
-            ? item
-            : {
-                ...item,
-                extraIncome: item.extraIncome.map((entry) =>
-                  entry.id === id
-                    ? {
-                        ...entry,
-                        name: patch.name === undefined ? entry.name : patch.name.trim(),
-                        amount:
-                          patch.amount === undefined ? entry.amount : Math.max(0, patch.amount),
-                      }
-                    : entry,
-                ).filter((entry) => entry.name && entry.amount > 0),
-              },
-        ),
-      )
-    },
-    [month, setStored],
+    (id: string, patch: Partial<Pick<ExtraIncomeEntry, 'name' | 'amount'>>, targetMonth = month) =>
+      updateCashEntry('extraIncome', id, patch, targetMonth),
+    [month, updateCashEntry],
   )
-
+  const updateExtraExpense = useCallback(
+    (id: string, patch: Partial<Pick<ExtraIncomeEntry, 'name' | 'amount'>>, targetMonth = month) =>
+      updateCashEntry('extraExpenses', id, patch, targetMonth),
+    [month, updateCashEntry],
+  )
   const removeExtraIncome = useCallback(
-    (id: string, targetMonth = month) => {
-      setStored((prev) =>
-        (Array.isArray(prev) ? prev : []).map(normalizeActuals).flatMap((item) => {
-          if (item.month !== targetMonth) return [item]
-          const next = item.extraIncome.filter((entry) => entry.id !== id)
-          if (Object.keys(item.costs).length === 0 && next.length === 0) return []
-          return [{ ...item, extraIncome: next }]
-        }),
-      )
-    },
-    [month, setStored],
+    (id: string, targetMonth = month) => removeCashEntry('extraIncome', id, targetMonth),
+    [month, removeCashEntry],
+  )
+  const removeExtraExpense = useCallback(
+    (id: string, targetMonth = month) => removeCashEntry('extraExpenses', id, targetMonth),
+    [month, removeCashEntry],
   )
 
   return {
@@ -162,7 +182,10 @@ export function useActuals(costs: CostItem[] = [], month = monthKey()) {
     fillFromPlan,
     clearCosts,
     addExtraIncome,
+    addExtraExpense,
     updateExtraIncome,
+    updateExtraExpense,
     removeExtraIncome,
+    removeExtraExpense,
   }
 }

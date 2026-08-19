@@ -6,9 +6,17 @@ interface CurrencyInputProps {
   placeholder?: string
   className?: string
   id?: string
+  onBlur?: () => void
 }
 
-export function CurrencyInput({ value, onChange, placeholder = '0,00', className = '', id }: CurrencyInputProps) {
+export function CurrencyInput({
+  value,
+  onChange,
+  placeholder = '0,00',
+  className = '',
+  id,
+  onBlur,
+}: CurrencyInputProps) {
   const formatDisplay = (val: number): string => {
     if (val === 0) return ''
     return val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -34,6 +42,7 @@ export function CurrencyInput({ value, onChange, placeholder = '0,00', className
         inputMode="numeric"
         value={formatDisplay(value)}
         onChange={handleChange}
+        onBlur={onBlur}
         placeholder={placeholder}
         className={`w-full rounded-lg border border-dark-border bg-dark-input py-2.5 pl-10 pr-3 text-right text-sm font-medium tabular-nums text-dark-text transition-colors placeholder:text-dark-text-muted focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/25 ${className}`}
       />

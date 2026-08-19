@@ -933,7 +933,7 @@ export function CreditCardManager() {
                                 type="button"
                                 onClick={() => updateEntry(entry.id, { isRecurring: true })}
                                 title="Marcar como assinatura recorrente"
-                                className="text-dark-text-muted/40 opacity-100 transition-all hover:text-dark-text md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100"
+                                className="text-dark-text-muted/40 opacity-100 transition-all hover:text-dark-text [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100"
                               >
                                 <Repeat size={12} />
                               </button>
@@ -987,7 +987,7 @@ export function CreditCardManager() {
                           className={`flex h-7 w-7 items-center justify-center rounded-md transition-all ${
                             entry.isPrepaid
                               ? 'bg-primary-500/15 text-primary-400 hover:bg-primary-500/25'
-                              : 'text-dark-text-muted opacity-100 hover:bg-primary-500/15 hover:text-primary-400 focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100'
+                              : 'text-dark-text-muted opacity-100 hover:bg-primary-500/15 hover:text-primary-400 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100'
                           }`}
                           title={
                             entry.isPrepaid
@@ -1006,7 +1006,7 @@ export function CreditCardManager() {
                                 setAnticipateId(entry.id)
                                 setAnticipateCount(1)
                               }}
-                              className="flex h-7 w-7 items-center justify-center rounded-md text-dark-text-muted opacity-100 transition-all hover:bg-amber-500/15 hover:text-amber-300 focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                              className="flex h-7 w-7 items-center justify-center rounded-md text-dark-text-muted opacity-100 transition-all hover:bg-amber-500/15 hover:text-amber-300 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100"
                               title="Antecipar parcelas"
                             >
                               <FastForward size={15} />
@@ -1014,7 +1014,7 @@ export function CreditCardManager() {
                           )}
                         <button
                           onClick={() => handleDelete(entry)}
-                          className="flex h-7 w-7 items-center justify-center rounded-md text-dark-text-muted opacity-100 transition-all hover:bg-rose-500/15 hover:text-rose-400 focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                          className="flex h-7 w-7 items-center justify-center rounded-md text-dark-text-muted opacity-100 transition-all hover:bg-rose-500/15 hover:text-rose-400 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100"
                           title="Remover"
                         >
                           <Trash2 size={15} />

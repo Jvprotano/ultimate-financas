@@ -637,6 +637,8 @@ export interface MonthlyActuals {
   costs: Record<string, number>
   /** Dinheiro não recorrente que realmente entrou neste ciclo. */
   extraIncome: ExtraIncomeEntry[]
+  /** Saídas não recorrentes efetivamente pagas neste ciclo. */
+  extraExpenses: ExtraExpenseEntry[]
 }
 
 export interface ExtraIncomeEntry {
@@ -648,10 +650,14 @@ export interface ExtraIncomeEntry {
   sourceEventId?: string
 }
 
+export type ExtraExpenseEntry = ExtraIncomeEntry
+
 export interface ActualsSummary {
   month: string
   extraIncome: ExtraIncomeEntry[]
   extraIncomeTotal: number
+  extraExpenses: ExtraExpenseEntry[]
+  extraExpenseTotal: number
   /** Soma dos custos usando o realizado onde houver, o plano no resto. */
   effectiveCosts: number
   /** Soma do que o plano previa. */
@@ -685,6 +691,9 @@ export interface MonthlySnapshot {
   extraIncome: number
   /** Composição preservada para o Histórico explicar de onde veio o valor. */
   extraIncomeEntries: ExtraIncomeEntry[]
+  /** Saídas não recorrentes efetivamente pagas no ciclo. */
+  extraExpense: number
+  extraExpenseEntries: ExtraExpenseEntry[]
   /** Custos do mês — o realizado quando informado, o plano no resto. */
   costs: number
   /** O que o plano previa de custos, para comparar com o realizado. */
@@ -728,6 +737,7 @@ export type SnapshotPatch = Partial<
     | 'availableForBudget'
     | 'paycheckInAccount'
     | 'extraIncome'
+    | 'extraExpense'
     | 'costs'
     | 'wants'
     | 'invested'

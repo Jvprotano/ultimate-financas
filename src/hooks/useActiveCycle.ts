@@ -52,7 +52,9 @@ export function useActiveCycle() {
 
   const setCycle = useCallback(
     (patch: Partial<ActiveCycle>) => {
-      setStored((prev) => normalizeActiveCycle({ ...normalizeActiveCycle(prev ?? undefined), ...patch }))
+      return setStored((prev) =>
+        normalizeActiveCycle({ ...normalizeActiveCycle(prev ?? undefined), ...patch }),
+      )
     },
     [setStored],
   )
@@ -67,9 +69,10 @@ export function useActiveCycle() {
     [cycle.month, setCycleMonth],
   )
 
-  const advanceCycle = useCallback(() => {
-    setCycleMonth(advanceCycleMonth(cycle.month))
-  }, [cycle.month, setCycleMonth])
+  const advanceCycle = useCallback(
+    () => setCycleMonth(advanceCycleMonth(cycle.month)),
+    [cycle.month, setCycleMonth],
+  )
 
   return {
     cycle,

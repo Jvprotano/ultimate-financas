@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { calculateCashFlow, type CashFlowInput } from './cashflow'
-import { normalizeExpectedEvent, occurrencesInMonth } from './forecast'
 
 function input(overrides: Partial<CashFlowInput> = {}): CashFlowInput {
   return {
@@ -11,7 +10,6 @@ function input(overrides: Partial<CashFlowInput> = {}): CashFlowInput {
     wantsOnCard: 628,
     directInvestment: 1_270,
     invoiceToPay: 1_499,
-    occurrences: [],
     ...overrides,
   }
 }
@@ -50,32 +48,8 @@ describe('calculateCashFlow', () => {
     expect(flow.totalIn).toBe(8_550 + 6_800)
   })
 
-  it('entrada apenas prevista não vira caixa antes de ser recebida', () => {
-    const events = [
-      normalizeExpectedEvent({
-        name: '13º',
-        kind: 'income',
-        amount: 6_800,
-        month: '2026-12',
-        recurrence: 'once',
-      }),
-    ]
-    const flow = calculateCashFlow(input({ occurrences: occurrencesInMonth(events, '2026-12') }))
-    expect(flow.extraIncome).toBe(0)
-    expect(flow.totalIn).toBe(8_550)
-  })
-
-  it('saídas esperadas do mês somam ao que sai', () => {
-    const events = [
-      normalizeExpectedEvent({
-        name: 'IPVA',
-        kind: 'expense',
-        amount: 1_900,
-        month: '2027-01',
-        recurrence: 'once',
-      }),
-    ]
-    const flow = calculateCashFlow(input({ occurrences: occurrencesInMonth(events, '2027-01') }))
+  it('saída extraordinária paga soma ao que sai', () => {
+    const flow = calculateCashFlow(input({ extraExpense: 1_900 }))
     expect(flow.extraExpense).toBe(1_900)
     expect(flow.totalOut).toBe(1_499 + 2_600 + 1_270 + 1_900)
   })
@@ -94,7 +68,6 @@ describe('calculateCashFlow', () => {
       wantsOnCard: 0,
       directInvestment: 0,
       invoiceToPay: 0,
-      occurrences: [],
     })
     expect(flow.leftover).toBe(0)
     expect(flow.cardPlanGap).toBe(0)

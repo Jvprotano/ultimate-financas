@@ -23,7 +23,7 @@ export function useHistory(cycleMonth = monthKey()) {
   /** Fecha um mês. Refechar o mesmo mês substitui o registro anterior. */
   const closeMonth = useCallback(
     (snapshot: Omit<MonthlySnapshot, 'id' | 'closedAt'>) => {
-      setStored((prev) => {
+      return setStored((prev) => {
         const others = (Array.isArray(prev) ? prev : []).filter(
           (item) => item.month !== snapshot.month,
         )
@@ -68,7 +68,20 @@ export function useHistory(cycleMonth = monthKey()) {
                 : item.extraIncomeEntries.length === 1
                   ? [{ ...item.extraIncomeEntries[0], amount: patch.extraIncome }]
                   : [{ id: uid(), name: 'Ajuste manual', amount: patch.extraIncome }]
-          const merged = normalizeSnapshot({ ...item, ...patch, extraIncomeEntries })
+          const extraExpenseEntries =
+            patch.extraExpense === undefined
+              ? item.extraExpenseEntries
+              : patch.extraExpense <= 0
+                ? []
+                : item.extraExpenseEntries.length === 1
+                  ? [{ ...item.extraExpenseEntries[0], amount: patch.extraExpense }]
+                  : [{ id: uid(), name: 'Ajuste manual', amount: patch.extraExpense }]
+          const merged = normalizeSnapshot({
+            ...item,
+            ...patch,
+            extraIncomeEntries,
+            extraExpenseEntries,
+          })
           return {
             ...merged,
             netWorth: merged.grossAssets + merged.physicalAssets - merged.liabilities,

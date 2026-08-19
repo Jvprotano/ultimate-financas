@@ -269,7 +269,7 @@ function NewHoldingForm({ onClose }: { onClose: () => void }) {
                   <button
                     type="button"
                     onClick={() => removeClass(assetClass.id)}
-                    className="pr-2 text-dark-text-muted opacity-0 transition-opacity hover:text-rose-400 focus-visible:opacity-100 group-hover:opacity-100"
+                    className="pr-2 text-dark-text-muted opacity-100 transition-opacity hover:text-rose-400 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100"
                     title={`Remover a classe ${assetClass.name}`}
                     aria-label={`Remover a classe ${assetClass.name}`}
                   >

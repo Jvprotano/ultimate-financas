@@ -146,7 +146,7 @@ export function InvestmentPlan() {
                       {unallocatedPct > 0 && (
                         <button
                           onClick={() => assignRemainingToSlice(slice.id)}
-                          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold text-dark-text-muted opacity-0 transition-all hover:bg-primary-500/10 hover:text-primary-300 focus-visible:opacity-100 group-hover:opacity-100"
+                          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold text-dark-text-muted opacity-100 transition-all hover:bg-primary-500/10 hover:text-primary-300 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100"
                           title={`Somar os ${unallocatedPct}% que sobraram aqui`}
                         >
                           +{unallocatedPct}%
@@ -154,7 +154,7 @@ export function InvestmentPlan() {
                       )}
                       <button
                         onClick={() => removeDiversificationSlice(slice.id)}
-                        className="shrink-0 rounded p-1 text-dark-text-muted opacity-0 transition-all hover:text-rose-400 focus-visible:opacity-100 group-hover:opacity-100"
+                        className="shrink-0 rounded p-1 text-dark-text-muted opacity-100 transition-all hover:text-rose-400 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100"
                         aria-label={`Remover ${slice.name}`}
                       >
                         <Trash2 size={12} />

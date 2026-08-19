@@ -149,20 +149,20 @@ export function useFinancas() {
     return calculateCashFlow({
       paycheck: metrics.paycheckInAccount,
       extraIncome: actuals.summary.extraIncomeTotal,
+      extraExpense: actuals.summary.extraExpenseTotal,
       costsOnAccount,
       costsOnCard: metrics.costsOnCard,
       wantsOnAccount: metrics.wantsOnAccount,
       wantsOnCard: metrics.wantsOnCard,
       directInvestment: metrics.directInvestmentTarget,
       invoiceToPay,
-      occurrences: forecast.monthOccurrences,
     })
   }, [
     metrics,
     actuals.summary.extraIncomeTotal,
+    actuals.summary.extraExpenseTotal,
     actuals.summary.rows,
     cardCycleAccounting.invoiceThisCycle.personalTotal,
-    forecast.monthOccurrences,
   ])
 
   const financialCycle = useMemo(
@@ -315,11 +315,12 @@ export function useFinancas() {
       const balance =
         metrics.paycheckInAccount +
         actuals.summary.extraIncomeTotal -
+        actuals.summary.extraExpenseTotal -
         costs -
         metrics.totalWantsAmount -
         investmentActuals.directNet
 
-      history.closeMonth({
+      const saved = history.closeMonth({
         month,
         scenarioId: activeScenario.id,
         scenarioName: activeScenario.name,
@@ -327,6 +328,8 @@ export function useFinancas() {
         paycheckInAccount: metrics.paycheckInAccount,
         extraIncome: actuals.summary.extraIncomeTotal,
         extraIncomeEntries: actuals.summary.extraIncome,
+        extraExpense: actuals.summary.extraExpenseTotal,
+        extraExpenseEntries: actuals.summary.extraExpenses,
         costs,
         costsPlanned: actuals.summary.plannedCosts,
         wants: metrics.totalWantsAmount,
@@ -348,9 +351,12 @@ export function useFinancas() {
         note,
       })
 
+      if (!saved) return false
+
       if (shouldAdvance) {
-        activeCycle.advanceCycle()
+        return activeCycle.advanceCycle()
       }
+      return true
     },
     [
       activeCycle,

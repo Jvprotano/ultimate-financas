@@ -238,7 +238,7 @@ export function WantsManager() {
                     </div>
                     <button
                       onClick={() => removeWant(want.id)}
-                      className="rounded-md p-1.5 text-dark-text-muted opacity-0 transition-all hover:bg-rose-500/10 hover:text-rose-400 focus-visible:opacity-100 group-hover:opacity-100"
+                      className="rounded-md p-1.5 text-dark-text-muted opacity-100 transition-all hover:bg-rose-500/10 hover:text-rose-400 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100"
                       aria-label={`Remover ${want.name}`}
                     >
                       <Trash2 size={14} />

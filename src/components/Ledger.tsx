@@ -132,7 +132,7 @@ export function LedgerList({
               <button
                 type="button"
                 onClick={() => onRemove(tx.id)}
-                className="text-dark-text-muted opacity-0 transition-all hover:text-rose-400 focus-visible:opacity-100 group-hover:opacity-100"
+                className="text-dark-text-muted opacity-100 transition-all hover:text-rose-400 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100"
                 title="Remover movimentação"
               >
                 <Trash2 size={13} />

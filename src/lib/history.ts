@@ -25,6 +25,7 @@ export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): Mo
   }
 
   const extraIncomeEntries = normalizeExtraIncomeEntries(raw?.extraIncomeEntries)
+  const extraExpenseEntries = normalizeExtraIncomeEntries(raw?.extraExpenseEntries)
 
   return {
     id: raw?.id || uid(),
@@ -42,6 +43,14 @@ export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): Mo
       ),
     ),
     extraIncomeEntries,
+    extraExpense: Math.max(
+      0,
+      finiteNumber(
+        raw?.extraExpense,
+        extraExpenseEntries.reduce((sum, entry) => sum + entry.amount, 0),
+      ),
+    ),
+    extraExpenseEntries,
     costs: finiteNumber(raw?.costs),
     // Snapshots antigos não separavam plano de realizado: eram a mesma coisa.
     costsPlanned: finiteNumber(raw?.costsPlanned, finiteNumber(raw?.costs)),

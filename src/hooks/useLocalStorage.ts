@@ -1,4 +1,7 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { writeStorageValue } from '../lib/persistence'
+
+export type LocalStorageSetter<T> = (value: T | ((prev: T) => T)) => boolean
 
 /**
  * Estado espelhado no localStorage.
@@ -11,7 +14,7 @@ import { useState, useEffect, useCallback } from 'react'
 export function useLocalStorage<T>(
   key: string,
   initialValue: T | (() => T),
-): [T, (value: T | ((prev: T) => T)) => void] {
+): [T, LocalStorageSetter<T>] {
   const [storedValue, setStoredValue] = useState<T>(() => {
     const resolveInitial = () =>
       initialValue instanceof Function ? (initialValue as () => T)() : initialValue
@@ -23,18 +26,15 @@ export function useLocalStorage<T>(
       return resolveInitial()
     }
   })
+  const valueRef = useRef(storedValue)
 
   const setValue = useCallback(
     (value: T | ((prev: T) => T)) => {
-      setStoredValue((prev) => {
-        const nextValue = value instanceof Function ? value(prev) : value
-        try {
-          window.localStorage.setItem(key, JSON.stringify(nextValue))
-        } catch {
-          // quota exceeded or other storage error
-        }
-        return nextValue
-      })
+      const nextValue = value instanceof Function ? value(valueRef.current) : value
+      if (!writeStorageValue(key, JSON.stringify(nextValue))) return false
+      valueRef.current = nextValue
+      setStoredValue(nextValue)
+      return true
     },
     [key],
   )
@@ -49,7 +49,9 @@ export function useLocalStorage<T>(
         return
       }
       try {
-        setStoredValue(JSON.parse(e.newValue) as T)
+        const nextValue = JSON.parse(e.newValue) as T
+        valueRef.current = nextValue
+        setStoredValue(nextValue)
       } catch {
         // ignore parse errors
       }

@@ -3,6 +3,7 @@ import { History, Pencil, Trash2, TrendingUp } from 'lucide-react'
 import { CurrencyInput } from './CurrencyInput'
 import {
   EmptyState,
+  ConfirmButton,
   Panel,
   PanelHeader,
   SecondaryButton,
@@ -24,7 +25,7 @@ import { BUDGET_AREA_COLORS, CHART_PALETTE } from '../types/constants'
  * Correção de um mês já fechado. Refechar substituiria tudo pelos números de
  * hoje — inútil quando o erro está três meses atrás.
  */
-function SnapshotEditor({ point, onClose }: { point: HistoryPoint; onClose: () => void }) {
+function SnapshotEditorContent({ point, onClose }: { point: HistoryPoint; onClose: () => void }) {
   const { history } = useFinancasStore()
   const set = (patch: SnapshotPatch) => history.updateSnapshot(point.id, patch)
 
@@ -32,6 +33,7 @@ function SnapshotEditor({ point, onClose }: { point: HistoryPoint; onClose: () =
     { label: 'Base do orçamento', value: point.availableForBudget, key: 'availableForBudget' },
     { label: 'Salário na conta', value: point.paycheckInAccount, key: 'paycheckInAccount' },
     { label: 'Entradas extras', value: point.extraIncome, key: 'extraIncome' },
+    { label: 'Saídas extraordinárias', value: point.extraExpense, key: 'extraExpense' },
     { label: 'Custos', value: point.costs, key: 'costs' },
     { label: 'Desejos', value: point.wants, key: 'wants' },
     { label: 'Investido', value: point.invested, key: 'invested' },
@@ -51,8 +53,7 @@ function SnapshotEditor({ point, onClose }: { point: HistoryPoint; onClose: () =
   ]
 
   return (
-    <tr className="border-t border-dark-border-subtle bg-dark-surface/40">
-      <td colSpan={9} className="px-5 py-4">
+    <div>
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {fields.map((field) => (
             <label key={field.key} className="block">
@@ -83,8 +84,60 @@ function SnapshotEditor({ point, onClose }: { point: HistoryPoint; onClose: () =
         <div className="mt-2.5 flex gap-2">
           <SecondaryButton onClick={onClose}>Fechar</SecondaryButton>
         </div>
+    </div>
+  )
+}
+
+function SnapshotEditor({ point, onClose }: { point: HistoryPoint; onClose: () => void }) {
+  return (
+    <tr className="border-t border-dark-border-subtle bg-dark-surface/40">
+      <td colSpan={9} className="px-5 py-4">
+        <SnapshotEditorContent point={point} onClose={onClose} />
       </td>
     </tr>
+  )
+}
+
+function HistoryActions({
+  point,
+  editing,
+  onToggleEdit,
+  onRemove,
+  desktop = false,
+}: {
+  point: HistoryPoint
+  editing: boolean
+  onToggleEdit: () => void
+  onRemove: () => void
+  desktop?: boolean
+}) {
+  const visibility = desktop
+    ? 'opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100'
+    : ''
+  return (
+    <div className="flex items-center justify-end gap-1">
+      <button
+        type="button"
+        onClick={onToggleEdit}
+        className={`rounded-md p-1.5 transition-all focus-visible:opacity-100 ${visibility} ${
+          editing
+            ? 'bg-dark-hover text-dark-text opacity-100'
+            : 'text-dark-text-muted hover:bg-dark-hover hover:text-dark-text'
+        }`}
+        aria-label={`Corrigir ${formatMonthKey(point.month)}`}
+        aria-expanded={editing}
+      >
+        <Pencil size={14} />
+      </button>
+      <ConfirmButton
+        onConfirm={onRemove}
+        confirmLabel="Apagar mês"
+        className={`!p-1.5 ${visibility}`}
+      >
+        <Trash2 size={14} />
+        <span className="sr-only">Apagar {formatMonthKey(point.month)}</span>
+      </ConfirmButton>
+    </div>
   )
 }
 
@@ -203,7 +256,74 @@ export function HistoryView() {
         <h3 className="border-b border-dark-border-subtle px-5 py-4 text-sm font-semibold tracking-tight text-dark-text">
           Meses fechados
         </h3>
-        <div className="overflow-x-auto">
+        <div className="space-y-2 p-3 sm:hidden">
+          {reversed.map((point) => {
+            const editing = editingId === point.id
+            return (
+              <article
+                key={point.id}
+                className="rounded-lg border border-dark-border-subtle bg-dark-surface/45 p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h4 className="font-semibold text-dark-text">{formatMonthKey(point.month)}</h4>
+                    {point.note && <p className="mt-0.5 text-xs text-dark-text-muted">{point.note}</p>}
+                  </div>
+                  <HistoryActions
+                    point={point}
+                    editing={editing}
+                    onToggleEdit={() => setEditingId(editing ? null : point.id)}
+                    onRemove={() => history.removeSnapshot(point.id)}
+                  />
+                </div>
+                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                  <div>
+                    <dt className="text-dark-text-muted">Renda</dt>
+                    <dd className="mt-0.5 tabular-nums text-dark-text">
+                      {formatCurrency(point.availableForBudget + point.extraIncome)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-dark-text-muted">Custos + desejos</dt>
+                    <dd className="mt-0.5 tabular-nums text-dark-text">
+                      {formatCurrency(point.costs + point.wants)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-dark-text-muted">Investido</dt>
+                    <dd className="mt-0.5 tabular-nums text-dark-text">{formatCurrency(point.invested)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-dark-text-muted">Poupança</dt>
+                    <dd className="mt-0.5 tabular-nums text-dark-text">{point.savingsRate.toFixed(0)}%</dd>
+                  </div>
+                  <div className="col-span-2">
+                    <dt className="text-dark-text-muted">
+                      {hasLiabilities || hasPhysicalAssets ? 'Patrimônio líquido' : 'Patrimônio'}
+                    </dt>
+                    <dd className="mt-0.5 tabular-nums text-dark-text">{formatCurrency(point.netWorth)}</dd>
+                  </div>
+                </dl>
+                {(point.extraIncome > 0.005 || point.extraExpense > 0.005) && (
+                  <div className="mt-3 border-t border-dark-border-subtle pt-2 text-[11px] leading-relaxed">
+                    {point.extraIncome > 0.005 && (
+                      <p className="text-primary-300">+ {formatCurrency(point.extraIncome)} em entradas extras</p>
+                    )}
+                    {point.extraExpense > 0.005 && (
+                      <p className="text-amber-300">− {formatCurrency(point.extraExpense)} em saídas extraordinárias</p>
+                    )}
+                  </div>
+                )}
+                {editing && (
+                  <div className="mt-3 border-t border-dark-border-subtle pt-3">
+                    <SnapshotEditorContent point={point} onClose={() => setEditingId(null)} />
+                  </div>
+                )}
+              </article>
+            )
+          })}
+        </div>
+        <div className="hidden overflow-x-auto sm:block">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-wider text-dark-text-muted">
@@ -251,6 +371,19 @@ export function HistoryView() {
                           + {formatCurrency(point.extraIncome)} extra
                           {point.extraIncomeEntries.length > 0
                             ? ` · ${point.extraIncomeEntries.map((entry) => entry.name).join(', ')}`
+                            : ''}
+                        </span>
+                      )}
+                      {point.extraExpense > 0.005 && (
+                        <span
+                          className="mt-0.5 block max-w-64 truncate text-[11px] text-amber-300"
+                          title={point.extraExpenseEntries
+                            .map((entry) => `${entry.name}: ${formatCurrency(entry.amount)}`)
+                            .join(' · ')}
+                        >
+                          − {formatCurrency(point.extraExpense)} extraordinário
+                          {point.extraExpenseEntries.length > 0
+                            ? ` · ${point.extraExpenseEntries.map((entry) => entry.name).join(', ')}`
                             : ''}
                         </span>
                       )}
@@ -314,29 +447,15 @@ export function HistoryView() {
                       )}
                     </td>
                     <td className="whitespace-nowrap px-5 py-2.5 text-right">
-                      <button
-                        type="button"
-                        onClick={() =>
+                      <HistoryActions
+                        point={point}
+                        editing={editingId === point.id}
+                        onToggleEdit={() =>
                           setEditingId((prev) => (prev === point.id ? null : point.id))
                         }
-                        className={`rounded-md p-1.5 transition-all focus-visible:opacity-100 group-hover:opacity-100 ${
-                          editingId === point.id
-                            ? 'bg-dark-hover text-dark-text opacity-100'
-                            : 'text-dark-text-muted opacity-0 hover:text-dark-text'
-                        }`}
-                        aria-label={`Corrigir ${formatMonthKey(point.month)}`}
-                        aria-expanded={editingId === point.id}
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => history.removeSnapshot(point.id)}
-                        className="rounded-md p-1.5 text-dark-text-muted opacity-0 transition-all hover:bg-rose-500/10 hover:text-rose-400 focus-visible:opacity-100 group-hover:opacity-100"
-                        aria-label={`Apagar ${formatMonthKey(point.month)}`}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                        onRemove={() => history.removeSnapshot(point.id)}
+                        desktop
+                      />
                     </td>
                   </tr>
                   {editingId === point.id && (
