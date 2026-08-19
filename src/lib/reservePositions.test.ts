@@ -46,6 +46,11 @@ describe('posições da reserva', () => {
     expect(summary.totalMarketValue).toBe(3_000)
     expect(summary.financialAssets).toBe(5_100)
     expect(summary.reserveHoldings.map((holding) => holding.id)).toEqual(['reserve'])
+    expect(summary.allHoldings.map((holding) => holding.id)).toEqual(['reserve', 'portfolio'])
+    expect(summary.allClasses.map((assetClass) => assetClass.id)).toEqual([
+      'renda-fixa',
+      'acoes',
+    ])
     expect(summary.classes).toHaveLength(1)
     expect(summary.classes[0].id).toBe('acoes')
   })

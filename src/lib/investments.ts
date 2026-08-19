@@ -36,6 +36,13 @@ export type FinancialHoldingSummary = HoldingSummary & {
 }
 
 export type ExtendedInvestmentsSummary = InvestmentsSummary & {
+  /** Todas as posições, inclusive as que materializam a reserva. */
+  allHoldings: FinancialHoldingSummary[]
+  /** Classes reais de todas as posições financeiras. */
+  allClasses: AssetClassSummary[]
+  holdingsMarketValue: number
+  financialInvested: number
+  financialGain: number
   /** Posições cuja finalidade é a reserva, fora da carteira de rebalanceamento. */
   reserveHoldings: FinancialHoldingSummary[]
   reserveInvested: number
@@ -203,6 +210,8 @@ export function calculateInvestmentsSummary(
   const reserveBalance = reserveHoldings.length > 0 ? reserveMarketValue : legacyReserveBalance
   const reserveInvested = reserveHoldings.reduce((sum, h) => sum + h.invested, 0)
   const reserveGain = reserveHoldings.reduce((sum, h) => sum + h.gain, 0)
+  const holdingsMarketValue = holdingSummaries.reduce((sum, h) => sum + h.marketValue, 0)
+  const holdingsInvested = holdingSummaries.reduce((sum, h) => sum + h.invested, 0)
 
   // Estes totais continuam significando a carteira de médio/longo prazo. A
   // reserva é um ativo financeiro, mas não participa do rebalanceamento dela.
@@ -264,7 +273,45 @@ export function calculateInvestmentsSummary(
     })
     .filter((summary) => summary.holdings.length > 0)
 
+  const allOrphanClassIds = holdingSummaries
+    .map((holding) => holding.assetClassId)
+    .filter((id) => !classes.some((assetClass) => assetClass.id === id))
+  const allOrderedClasses: InvestmentAssetClass[] = [
+    ...classes,
+    ...Array.from(new Set(allOrphanClassIds)).map((id, index) => ({
+      id,
+      name: 'Sem classe',
+      color: DEFAULT_INVESTMENT_CLASSES[index % DEFAULT_INVESTMENT_CLASSES.length].color,
+    })),
+  ]
+  const allClasses: AssetClassSummary[] = allOrderedClasses
+    .map((assetClass) => {
+      const classHoldings = holdingSummaries.filter(
+        (holding) => holding.assetClassId === assetClass.id,
+      )
+      const marketValue = classHoldings.reduce((sum, holding) => sum + holding.marketValue, 0)
+      const invested = classHoldings.reduce((sum, holding) => sum + holding.invested, 0)
+      const gain = marketValue - invested
+      return {
+        id: assetClass.id,
+        name: assetClass.name,
+        color: assetClass.color,
+        marketValue,
+        invested,
+        gain,
+        gainPct: invested > 0 ? (gain / invested) * 100 : 0,
+        allocationPct: holdingsMarketValue > 0 ? (marketValue / holdingsMarketValue) * 100 : 0,
+        holdings: classHoldings,
+      }
+    })
+    .filter((summary) => summary.holdings.length > 0)
+
   return {
+    allHoldings: holdingSummaries,
+    allClasses,
+    holdingsMarketValue,
+    financialInvested: holdingsInvested + goalsBalance,
+    financialGain: totalGain + reserveGain,
     totalMarketValue,
     totalInvested,
     totalGain,

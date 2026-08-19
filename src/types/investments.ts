@@ -11,13 +11,18 @@ export type GoalInclusionType =
   | 'investments'
   | 'goals'
   | 'class'
+  | 'holding'
   | 'debts'
   | 'assets'
 
 export interface GoalInclusion {
   type: GoalInclusionType
   id?: string
+  /** Valor da posição reservado para uma meta de dinheiro. */
+  amount?: number
 }
+
+export type GoalKind = 'funding' | 'tracking'
 
 export interface FinancialGoal {
   id: string
@@ -28,7 +33,17 @@ export interface FinancialGoal {
   transactions: LedgerEntry[]
   createdAt: string
   completedAt?: string
+  kind?: GoalKind
   includes?: GoalInclusion[]
+}
+
+export interface GoalHoldingAllocationSummary {
+  holdingId: string
+  holdingName: string
+  institution?: string
+  requested: number
+  allocated: number
+  unavailable: number
 }
 
 export interface GoalSummary extends FinancialGoal {
@@ -36,6 +51,9 @@ export interface GoalSummary extends FinancialGoal {
   includedBalance: number
   current: number
   includedLabels: string[]
+  holdingAllocations: GoalHoldingAllocationSummary[]
+  allocatedBalance: number
+  trackingBalance: number
   remaining: number
   progress: number
   monthsLeft: number | null

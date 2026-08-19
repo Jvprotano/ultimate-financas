@@ -153,6 +153,84 @@ export function SegmentedBar({
   )
 }
 
+/** Composição parte-de-um-todo com rótulos diretos e centro informativo. */
+export function DonutChart({
+  segments,
+  total,
+  centerLabel,
+  centerValue,
+}: {
+  segments: Segment[]
+  total?: number
+  centerLabel: string
+  centerValue: string
+}) {
+  const visible = segments.filter((segment) => segment.value > 0)
+  const sum = visible.reduce((acc, segment) => acc + segment.value, 0)
+  const base = total && total > 0 ? Math.max(total, sum) : sum
+  const chart = visible.reduce(
+    (result, segment) => {
+      const end = result.cursor + (base > 0 ? (segment.value / base) * 100 : 0)
+      return {
+        cursor: end,
+        stops: [...result.stops, `${segment.color} ${result.cursor}% ${end}%`],
+      }
+    },
+    { cursor: 0, stops: [] as string[] },
+  )
+  const stops =
+    chart.cursor < 100
+      ? [...chart.stops, `rgba(255,255,255,0.06) ${chart.cursor}% 100%`]
+      : chart.stops
+
+  if (base <= 0) return null
+
+  return (
+    <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+      <div
+        className="relative mx-auto h-40 w-40 shrink-0 rounded-full"
+        style={{ background: `conic-gradient(${stops.join(', ')})` }}
+        role="img"
+        aria-label={visible
+          .map(
+            (segment) =>
+              `${segment.label}: ${formatCurrency(segment.value)} (${((segment.value / base) * 100).toFixed(0)}%)`,
+          )
+          .join(', ')}
+      >
+        <div className="absolute inset-[18px] flex flex-col items-center justify-center rounded-full border border-dark-border-subtle bg-dark-card px-3 text-center shadow-inner shadow-black/25">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-dark-text-muted">
+            {centerLabel}
+          </span>
+          <strong className="mt-1 text-base font-semibold tabular-nums text-dark-text">
+            {centerValue}
+          </strong>
+        </div>
+      </div>
+
+      <div className="min-w-0 flex-1 space-y-2.5">
+        {visible.map((segment) => (
+          <div key={segment.id} className="flex items-center gap-2 text-xs">
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: segment.color }}
+            />
+            <span className="min-w-0 flex-1 truncate text-dark-text-secondary">
+              {segment.label}
+            </span>
+            <span className="shrink-0 tabular-nums text-dark-text-muted">
+              {((segment.value / base) * 100).toFixed(0)}%
+            </span>
+            <strong className="w-24 shrink-0 text-right font-semibold tabular-nums text-dark-text">
+              {formatCurrency(segment.value)}
+            </strong>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /**
  * Medidor de progresso sobre um trilho.
  *

@@ -1,4 +1,10 @@
-import type { FinancialGoal, GoalInclusion, GoalInclusionType, GoalSummary } from '../types'
+import type {
+  FinancialGoal,
+  GoalHoldingAllocationSummary,
+  GoalInclusion,
+  GoalInclusionType,
+  GoalSummary,
+} from '../types'
 import { GOAL_PRESET_COLORS } from '../types/constants'
 import { finiteNumber, ledgerBalance, monthKey, monthsBetween, normalizeLedger, nowIso, uid } from './shared'
 
@@ -23,11 +29,12 @@ const INCLUSION_TYPES: GoalInclusionType[] = [
   'investments',
   'goals',
   'class',
+  'holding',
   'debts',
   'assets',
 ]
 
-export const INCLUSION_LABELS: Record<Exclude<GoalInclusionType, 'class'>, string> = {
+export const INCLUSION_LABELS: Record<Exclude<GoalInclusionType, 'class' | 'holding'>, string> = {
   reserve: 'Reserva de emergência',
   investments: 'Investimentos',
   goals: 'Outras metas',
@@ -40,6 +47,12 @@ export interface GoalContext {
   reserveBalance: number
   investmentsBalance: number
   classBalances: { id: string; name: string; marketValue: number }[]
+  holdings: {
+    id: string
+    name: string
+    institution?: string
+    marketValue: number
+  }[]
   /** Saldo do livro-razão de cada meta, indexado por id. */
   goalOwnBalances: Record<string, number>
   /** Valor de mercado dos bens — imóvel, veículo. */
@@ -52,6 +65,7 @@ export const EMPTY_GOAL_CONTEXT: GoalContext = {
   reserveBalance: 0,
   investmentsBalance: 0,
   classBalances: [],
+  holdings: [],
   goalOwnBalances: {},
   assetsBalance: 0,
   debtBalance: 0,
@@ -65,12 +79,22 @@ function normalizeInclusions(raw: unknown): GoalInclusion[] {
   for (const item of raw as Partial<GoalInclusion>[]) {
     if (!item || !INCLUSION_TYPES.includes(item.type as GoalInclusionType)) continue
     const type = item.type as GoalInclusionType
-    const id = type === 'class' ? item.id : undefined
-    if (type === 'class' && !id) continue
+    const id = type === 'class' || type === 'holding' ? item.id : undefined
+    if ((type === 'class' || type === 'holding') && !id) continue
     const key = `${type}:${id ?? ''}`
     if (seen.has(key)) continue
     seen.add(key)
-    inclusions.push(id ? { type, id } : { type })
+    inclusions.push(
+      id
+        ? {
+            type,
+            id,
+            ...(type === 'holding' && finiteNumber(item.amount) > 0
+              ? { amount: finiteNumber(item.amount) }
+              : {}),
+          }
+        : { type },
+    )
   }
 
   // "Investimentos" já cobre qualquer classe: manter as duas confundiria a conta.
@@ -80,7 +104,14 @@ function normalizeInclusions(raw: unknown): GoalInclusion[] {
 }
 
 export function normalizeGoal(raw: Partial<FinancialGoal> | undefined, index = 0): FinancialGoal {
-  const includes = normalizeInclusions(raw?.includes)
+  const normalizedIncludes = normalizeInclusions(raw?.includes)
+  const inferredKind = normalizedIncludes.some((item) => item.type !== 'holding')
+    ? 'tracking'
+    : 'funding'
+  const kind = raw?.kind === 'funding' || raw?.kind === 'tracking' ? raw.kind : inferredKind
+  const includes = normalizedIncludes.filter((item) =>
+    kind === 'funding' ? item.type === 'holding' : item.type !== 'holding',
+  )
 
   return {
     id: raw?.id || uid(),
@@ -91,12 +122,13 @@ export function normalizeGoal(raw: Partial<FinancialGoal> | undefined, index = 0
     transactions: normalizeLedger(raw?.transactions),
     createdAt: raw?.createdAt || nowIso(),
     completedAt: raw?.completedAt || undefined,
+    kind,
     includes: includes.length ? includes : undefined,
   }
 }
 
 /** Saldo e rótulo de cada fonte englobada por uma meta. */
-function resolveInclusions(goal: FinancialGoal, context: GoalContext) {
+function resolveTrackingInclusions(goal: FinancialGoal, context: GoalContext) {
   let balance = 0
   const labels: string[] = []
 
@@ -133,17 +165,65 @@ function resolveInclusions(goal: FinancialGoal, context: GoalContext) {
   return { balance, labels }
 }
 
+function resolveHoldingAllocations(
+  goal: FinancialGoal,
+  context: GoalContext,
+  remainingByHolding: Map<string, number>,
+) {
+  const allocations: GoalHoldingAllocationSummary[] = []
+
+  for (const inclusion of goal.includes ?? []) {
+    if (inclusion.type !== 'holding' || !inclusion.id) continue
+    const holding = context.holdings.find((item) => item.id === inclusion.id)
+    if (!holding) continue
+
+    const requested = Math.max(0, finiteNumber(inclusion.amount, holding.marketValue))
+    const available = Math.max(0, remainingByHolding.get(holding.id) ?? holding.marketValue)
+    const allocated = Math.min(requested, available, holding.marketValue)
+    remainingByHolding.set(holding.id, Math.max(0, available - allocated))
+    allocations.push({
+      holdingId: holding.id,
+      holdingName: holding.name,
+      institution: holding.institution,
+      requested,
+      allocated,
+      unavailable: Math.max(0, requested - allocated),
+    })
+  }
+
+  return allocations
+}
+
 export function summarizeGoals(
   goals: FinancialGoal[],
   context: GoalContext = EMPTY_GOAL_CONTEXT,
 ): GoalSummary[] {
   const currentMonth = monthKey()
+  const remainingByHolding = new Map(
+    context.holdings.map((holding) => [holding.id, Math.max(0, holding.marketValue)]),
+  )
 
   return goals.map((goal) => {
     const ownBalance = Math.max(0, ledgerBalance(goal.transactions))
-    const included = resolveInclusions(goal, context)
+    const holdingAllocations =
+      goal.kind === 'funding'
+        ? resolveHoldingAllocations(goal, context, remainingByHolding)
+        : []
+    const allocatedBalance = holdingAllocations.reduce(
+      (sum, allocation) => sum + allocation.allocated,
+      0,
+    )
+    const tracked =
+      goal.kind === 'tracking'
+        ? resolveTrackingInclusions(goal, context)
+        : { balance: 0, labels: [] }
+    const includedBalance = allocatedBalance + tracked.balance
+    const includedLabels = [
+      ...holdingAllocations.map((allocation) => allocation.holdingName),
+      ...tracked.labels,
+    ]
     // Pode ficar negativo: uma meta de patrimônio líquido com mais dívida que ativo.
-    const current = ownBalance + included.balance
+    const current = ownBalance + includedBalance
     const remaining = Math.max(0, goal.targetAmount - current)
     const monthsLeft = goal.targetMonth ? monthsBetween(currentMonth, goal.targetMonth) : null
     // O mês corrente ainda conta como uma chance de aportar.
@@ -152,8 +232,11 @@ export function summarizeGoals(
     return {
       ...goal,
       ownBalance,
-      includedBalance: included.balance,
-      includedLabels: included.labels,
+      includedBalance,
+      includedLabels,
+      holdingAllocations,
+      allocatedBalance,
+      trackingBalance: tracked.balance,
       current,
       remaining,
       progress:

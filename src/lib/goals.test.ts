@@ -18,6 +18,10 @@ const context: GoalContext = {
   reserveBalance: 4_200,
   investmentsBalance: 1_800,
   classBalances: [{ id: 'renda-fixa', name: 'Renda Fixa', marketValue: 1_800 }],
+  holdings: [
+    { id: 'cdb-europa', name: 'CDB Europa', institution: 'Itaú', marketValue: 7_000 },
+    { id: 'etf-global', name: 'ETF Global', institution: 'XP', marketValue: 10_000 },
+  ],
   goalOwnBalances: { g1: 0, outra: 900 },
   assetsBalance: 480_000,
   debtBalance: 30_000,
@@ -48,6 +52,47 @@ describe('summarizeGoals — meta de poupança', () => {
       context,
     )
     expect(summary.ownBalance).toBe(0)
+  })
+})
+
+describe('summarizeGoals — dinheiro destinado em posições', () => {
+  it('conta somente o valor ligado à meta, não a posição inteira', () => {
+    const [summary] = summarizeGoals(
+      [goal({ kind: 'funding', includes: [{ type: 'holding', id: 'etf-global', amount: 2_500 }] })],
+      context,
+    )
+
+    expect(summary.allocatedBalance).toBe(2_500)
+    expect(summary.current).toBe(2_500)
+    expect(summary.holdingAllocations[0]).toMatchObject({
+      holdingName: 'ETF Global',
+      institution: 'XP',
+      allocated: 2_500,
+    })
+  })
+
+  it('não deixa duas metas consumirem o mesmo dinheiro', () => {
+    const summaries = summarizeGoals(
+      [
+        goal({ id: 'europa', kind: 'funding', includes: [{ type: 'holding', id: 'cdb-europa', amount: 5_000 }] }),
+        goal({ id: 'carro', kind: 'funding', includes: [{ type: 'holding', id: 'cdb-europa', amount: 4_000 }] }),
+      ],
+      context,
+    )
+
+    expect(summaries[0].allocatedBalance).toBe(5_000)
+    expect(summaries[1].allocatedBalance).toBe(2_000)
+    expect(summaries[1].holdingAllocations[0].unavailable).toBe(2_000)
+  })
+
+  it('expõe a parte descoberta quando o saldo da posição cai', () => {
+    const [summary] = summarizeGoals(
+      [goal({ kind: 'funding', includes: [{ type: 'holding', id: 'cdb-europa', amount: 7_000 }] })],
+      { ...context, holdings: [{ id: 'cdb-europa', name: 'CDB Europa', marketValue: 4_000 }] },
+    )
+
+    expect(summary.allocatedBalance).toBe(4_000)
+    expect(summary.holdingAllocations[0].unavailable).toBe(3_000)
   })
 })
 
@@ -159,7 +204,13 @@ describe('normalizeGoal', () => {
   })
 
   it('sem inclusões, o campo não existe (em vez de um array vazio)', () => {
-    expect(normalizeGoal({ includes: [] }).includes).toBeUndefined()
+    const normalized = normalizeGoal({ includes: [] })
+    expect(normalized.includes).toBeUndefined()
+    expect(normalized.kind).toBe('funding')
+  })
+
+  it('migra metas antigas amplas como indicador patrimonial', () => {
+    expect(normalizeGoal({ includes: [{ type: 'investments' }] }).kind).toBe('tracking')
   })
 
   it('aceita mês-alvo só no formato AAAA-MM', () => {

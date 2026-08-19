@@ -4,6 +4,7 @@ import type {
   EmergencyFundState,
   FinancialGoal,
   GoalInclusion,
+  GoalKind,
   InvestmentAssetClass,
   LedgerEntry,
 } from '../types'
@@ -280,13 +281,48 @@ export function useInvestments(
           holding.id === id ? normalizeHolding({ ...holding, ...patch }) : normalizeHolding(holding),
         ),
       )
+
+      // Dinheiro da reserva continua sendo uma posição real, mas não pode
+      // financiar uma meta discricionária ao mesmo tempo.
+      if (patch.purpose === 'emergency_fund') {
+        setGoals((prev) =>
+          prev.map((goal, index) =>
+            normalizeGoal(
+              {
+                ...goal,
+                includes: goal.includes?.filter(
+                  (inclusion) => inclusion.type !== 'holding' || inclusion.id !== id,
+                ),
+              },
+              index,
+            ),
+          ),
+        )
+      }
     },
-    [setHoldings],
+    [setGoals, setHoldings],
   )
 
   const removeHolding = useCallback(
-    (id: string) => setHoldings((prev) => (Array.isArray(prev) ? prev : []).filter((h) => h.id !== id)),
-    [setHoldings],
+    (id: string) => {
+      setHoldings((prev) =>
+        (Array.isArray(prev) ? prev : []).filter((holding) => holding.id !== id),
+      )
+      setGoals((prev) =>
+        prev.map((goal, index) =>
+          normalizeGoal(
+            {
+              ...goal,
+              includes: goal.includes?.filter(
+                (inclusion) => inclusion.type !== 'holding' || inclusion.id !== id,
+              ),
+            },
+            index,
+          ),
+        ),
+      )
+    },
+    [setGoals, setHoldings],
   )
 
   // Aporte/retirada: ajusta também o valor de mercado (retirada limitada a ele).
@@ -469,6 +505,7 @@ export function useInvestments(
       targetAmount: number
       targetMonth?: string
       initialAmount?: number
+      kind?: GoalKind
       includes?: GoalInclusion[]
     }) => {
       const trimmed = input.name.trim()
@@ -484,6 +521,7 @@ export function useInvestments(
             targetMonth: input.targetMonth,
             color: GOAL_PRESET_COLORS[prev.length % GOAL_PRESET_COLORS.length],
             createdAt: nowIso(),
+            kind: input.kind,
             transactions:
               initial > 0
                 ? [{ id: uid(), amount: initial, date: nowIso(), note: 'Saldo inicial' }]
@@ -518,7 +556,9 @@ export function useInvestments(
   const updateGoal = useCallback(
     (
       id: string,
-      patch: Partial<Pick<FinancialGoal, 'name' | 'targetAmount' | 'targetMonth' | 'includes'>>,
+      patch: Partial<
+        Pick<FinancialGoal, 'name' | 'targetAmount' | 'targetMonth' | 'kind' | 'includes'>
+      >,
     ) => {
       setGoals((prev) =>
         prev.map((goal, index) =>
@@ -527,6 +567,47 @@ export function useInvestments(
       )
     },
     [setGoals],
+  )
+
+  const setGoalHoldingAllocation = useCallback(
+    (goalId: string, holdingId: string, amount: number) => {
+      const holding = portfolioHoldings.find((item) => item.id === holdingId)
+      if (!holding) return
+
+      setGoals((prev) => {
+        const normalized = prev.map((goal, index) => normalizeGoal(goal, index))
+        const claimedByOthers = normalized
+          .filter((goal) => goal.id !== goalId && goal.kind === 'funding')
+          .flatMap((goal) => goal.includes ?? [])
+          .filter((inclusion) => inclusion.type === 'holding' && inclusion.id === holdingId)
+          .reduce(
+            (sum, inclusion) =>
+              sum + Math.max(0, finiteNumber(inclusion.amount, holding.marketValue)),
+            0,
+          )
+        const maximum = Math.max(0, holding.marketValue - claimedByOthers)
+        const nextAmount = Math.min(Math.max(0, finiteNumber(amount)), maximum)
+
+        return normalized.map((goal, index) => {
+          if (goal.id !== goalId) return goal
+          const withoutHolding = (goal.includes ?? []).filter(
+            (inclusion) => inclusion.type !== 'holding' || inclusion.id !== holdingId,
+          )
+          return normalizeGoal(
+            {
+              ...goal,
+              kind: 'funding',
+              includes:
+                nextAmount > 0
+                  ? [...withoutHolding, { type: 'holding', id: holdingId, amount: nextAmount }]
+                  : withoutHolding,
+            },
+            index,
+          )
+        })
+      })
+    },
+    [portfolioHoldings, setGoals],
   )
 
   const removeGoal = useCallback(
@@ -601,6 +682,14 @@ export function useInvestments(
         name: item.name,
         marketValue: item.marketValue,
       })),
+      holdings: summary.allHoldings
+        .filter((holding) => holdingPurpose(holding) === 'portfolio')
+        .map((holding) => ({
+          id: holding.id,
+          name: holding.name,
+          institution: holding.institution,
+          marketValue: holding.marketValue,
+        })),
       goalOwnBalances,
       assetsBalance: physicalAssets,
       debtBalance: liabilities,
@@ -609,6 +698,7 @@ export function useInvestments(
       summary.reserveBalance,
       summary.totalMarketValue,
       summary.classes,
+      summary.allHoldings,
       goalOwnBalances,
       physicalAssets,
       liabilities,
@@ -642,6 +732,7 @@ export function useInvestments(
     addGoal,
     updateGoal,
     toggleGoalInclusion,
+    setGoalHoldingAllocation,
     removeGoal,
     addGoalTransaction,
     removeGoalTransaction,
