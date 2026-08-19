@@ -505,12 +505,14 @@ export function StatTile({
   label: string
   value: string
   detail?: ReactNode
-  tone?: 'neutral' | 'positive' | 'negative' | 'accent'
+  tone?: 'neutral' | 'positive' | 'warning' | 'caution' | 'negative' | 'accent'
   className?: string
 }) {
   const valueClass = {
     neutral: 'text-dark-text',
     positive: 'text-primary-400',
+    warning: 'text-amber-300',
+    caution: 'text-orange-300',
     negative: 'text-rose-400',
     accent: 'text-primary-400',
   }[tone]

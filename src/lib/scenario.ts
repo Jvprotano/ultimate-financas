@@ -38,6 +38,64 @@ export function isWantIncludedInCardPlan(want: WantItem, wants: WantItem[]): boo
   return want.includedInCardPlan !== false
 }
 
+/**
+ * Mantém o envelope Cartão como item de primeiro nível e coloca seus detalhes
+ * imediatamente abaixo. A ordem relativa de cada nível continua sendo a ordem
+ * escolhida pela pessoa.
+ */
+export function orderWantsForPlanning(wants: WantItem[]): WantItem[] {
+  if (!wants.some(isCardEnvelopeWant)) return wants
+
+  const included = wants.filter((want) => isWantIncludedInCardPlan(want, wants))
+  const topLevel = wants.filter((want) => !isWantIncludedInCardPlan(want, wants))
+  const envelopeIndex = topLevel.findIndex(isCardEnvelopeWant)
+
+  return [
+    ...topLevel.slice(0, envelopeIndex + 1),
+    ...included,
+    ...topLevel.slice(envelopeIndex + 1),
+  ]
+}
+
+/** Reordena dentro do mesmo nível: o Cartão se move com seus filhos. */
+export function moveWantInPlanningOrder(
+  wants: WantItem[],
+  id: string,
+  direction: -1 | 1,
+): WantItem[] {
+  const ordered = orderWantsForPlanning(wants)
+  const target = ordered.find((want) => want.id === id)
+  if (!target) return wants
+
+  const targetIsIncluded = isWantIncludedInCardPlan(target, ordered)
+  const sameLevel = ordered.filter(
+    (want) => isWantIncludedInCardPlan(want, ordered) === targetIsIncluded,
+  )
+  const currentIndex = sameLevel.findIndex((want) => want.id === id)
+  const nextIndex = currentIndex + direction
+  if (currentIndex < 0 || nextIndex < 0 || nextIndex >= sameLevel.length) return ordered
+
+  const reorderedLevel = [...sameLevel]
+  ;[reorderedLevel[currentIndex], reorderedLevel[nextIndex]] = [
+    reorderedLevel[nextIndex],
+    reorderedLevel[currentIndex],
+  ]
+
+  const otherLevel = ordered.filter(
+    (want) => isWantIncludedInCardPlan(want, ordered) !== targetIsIncluded,
+  )
+  const included = targetIsIncluded ? reorderedLevel : otherLevel
+  const topLevel = targetIsIncluded ? otherLevel : reorderedLevel
+  const envelopeIndex = topLevel.findIndex(isCardEnvelopeWant)
+
+  if (envelopeIndex < 0) return topLevel
+  return [
+    ...topLevel.slice(0, envelopeIndex + 1),
+    ...included,
+    ...topLevel.slice(envelopeIndex + 1),
+  ]
+}
+
 function normalizeCost(raw: Partial<CostItem> | undefined): CostItem {
   const value = Math.max(0, finiteNumber(raw?.value))
   return {

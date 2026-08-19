@@ -18,11 +18,48 @@ import { formatCurrency, formatMonthLong, inputClass } from '../lib/format'
 import { useFinancasStore } from '../context/financasStore'
 import { cycleSalaryMonth } from '../lib/activeCycle'
 import { usePersistenceStatus } from '../hooks/usePersistenceStatus'
+import {
+  evaluateBudgetCeiling,
+  evaluateGoalProgress,
+  type PlanStatus,
+} from '../lib/planStatus'
 
 function formatPlanComparison(planned: number, actual: number) {
   const delta = actual - planned
   if (Math.abs(delta) <= 0.005) return `planejado ${formatCurrency(planned)} · no planejado`
   return `planejado ${formatCurrency(planned)} · ${formatCurrency(Math.abs(delta))} ${delta > 0 ? 'acima' : 'abaixo'}`
+}
+
+const statusClasses: Record<PlanStatus['tone'], string> = {
+  neutral: 'bg-white/[0.05] text-dark-text-muted',
+  positive: 'bg-primary-500/10 text-primary-300',
+  warning: 'bg-amber-500/10 text-amber-300',
+  caution: 'bg-orange-500/10 text-orange-300',
+  negative: 'bg-rose-500/10 text-rose-300',
+}
+
+function PlanComparisonDetail({
+  comparison,
+  status,
+  suffix,
+}: {
+  comparison: string
+  status: PlanStatus
+  suffix?: string
+}) {
+  return (
+    <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+      <span>
+        {comparison}
+        {suffix}
+      </span>
+      <span
+        className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${statusClasses[status.tone]}`}
+      >
+        {status.label}
+      </span>
+    </span>
+  )
 }
 
 export function ClosingView({
@@ -99,9 +136,15 @@ export function ClosingView({
   const allocationReliable = invoiceKnown
   const allocationTone = nextCycleAllocation.shortfall > 0.005 ? 'negative' : 'accent'
   const allocationPlanDelta = nextCycleAllocation.afterPlannedWants
-  const costsPlanDelta = actuals.summary.effectiveCosts - actuals.summary.plannedCosts
-  const invoicePlanDelta = closingInvoiceDue - metrics.plannedOnCard
-  const investmentPlanDelta = investmentActuals.total - metrics.totalPlannedInvestment
+  const costsStatus = evaluateBudgetCeiling(
+    actuals.summary.plannedCosts,
+    actuals.summary.effectiveCosts,
+  )
+  const invoiceStatus = evaluateBudgetCeiling(metrics.plannedOnCard, closingInvoiceDue)
+  const investmentStatus = evaluateGoalProgress(
+    metrics.totalPlannedInvestment,
+    investmentActuals.total,
+  )
 
   return (
     <div className="space-y-4">
@@ -261,44 +304,52 @@ export function ClosingView({
           <StatTile
             label="Custos do mês"
             value={formatCurrency(actuals.summary.effectiveCosts)}
-            detail={`${formatPlanComparison(actuals.summary.plannedCosts, actuals.summary.effectiveCosts)}${
-              missingActualRows.length > 0
-                ? ` · ${missingActualRows.length} sem realizado`
-                : ''
-            }`}
-            tone={
-              costsPlanDelta > 0.005 ? 'negative' : costsPlanDelta < -0.005 ? 'positive' : 'neutral'
+            detail={
+              <PlanComparisonDetail
+                comparison={formatPlanComparison(
+                  actuals.summary.plannedCosts,
+                  actuals.summary.effectiveCosts,
+                )}
+                status={costsStatus}
+                suffix={
+                  missingActualRows.length > 0
+                    ? ` · ${missingActualRows.length} sem realizado`
+                    : ''
+                }
+              />
             }
+            tone={costsStatus.tone}
           />
           <StatTile
             label="Minha parte da fatura"
             value={invoiceKnown ? formatCurrency(closingInvoiceDue) : '—'}
             detail={
               invoiceKnown
-                ? `${formatPlanComparison(metrics.plannedOnCard, closingInvoiceDue)} · pagar em ${formatMonthLong(cardCycleAccounting.invoiceFormedByCycle.dueMonth)}`
+                ? (
+                    <PlanComparisonDetail
+                      comparison={formatPlanComparison(metrics.plannedOnCard, closingInvoiceDue)}
+                      status={invoiceStatus}
+                      suffix={` · pagar em ${formatMonthLong(cardCycleAccounting.invoiceFormedByCycle.dueMonth)}`}
+                    />
+                  )
                 : 'confira Cartões antes de fechar'
             }
-            tone={
-              !invoiceKnown
-                ? 'neutral'
-                : invoicePlanDelta > 0.005
-                  ? 'negative'
-                  : invoicePlanDelta < -0.005
-                    ? 'positive'
-                    : 'neutral'
-            }
+            tone={invoiceKnown ? invoiceStatus.tone : 'neutral'}
           />
           <StatTile
             label="Investido no ciclo"
             value={formatCurrency(investmentActuals.total)}
-            detail={`${formatPlanComparison(metrics.totalPlannedInvestment, investmentActuals.total)} · ${investmentActuals.savingsRate.toFixed(1)}% da base`}
-            tone={
-              investmentPlanDelta < -0.005
-                ? 'negative'
-                : investmentPlanDelta > 0.005
-                  ? 'positive'
-                  : 'neutral'
+            detail={
+              <PlanComparisonDetail
+                comparison={formatPlanComparison(
+                  metrics.totalPlannedInvestment,
+                  investmentActuals.total,
+                )}
+                status={investmentStatus}
+                suffix={` · ${investmentActuals.savingsRate.toFixed(1)}% da base`}
+              />
             }
+            tone={investmentStatus.tone}
           />
         </div>
 

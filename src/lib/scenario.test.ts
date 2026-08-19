@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { calculateScenario, createDefaultScenario, normalizeScenario, personalCostValue } from './scenario'
+import {
+  calculateScenario,
+  createDefaultScenario,
+  moveWantInPlanningOrder,
+  normalizeScenario,
+  orderWantsForPlanning,
+  personalCostValue,
+} from './scenario'
 import { normalizeEmergencyFund } from './investments'
 import type { CostItem, FinanceScenario } from '../types'
 
@@ -273,5 +280,51 @@ describe('calculateScenario — orçamento e realizado', () => {
     )
     expect(metrics.budgetAllocation.investimentos).toBe(400)
     expect(metrics.budgetAllocation.desejos).toBe(200)
+  })
+})
+
+describe('ordem dos desejos no planejamento', () => {
+  const wants = [
+    { id: 'trip', name: 'Viagens', plannedAmount: 300, paidWith: 'account' as const },
+    { id: 'yt', name: 'YT Premium', plannedAmount: 54, paidWith: 'card' as const },
+    { id: 'card', name: 'Cartão', plannedAmount: 2_800, paidWith: 'card' as const },
+    { id: 'gym', name: 'Academia', plannedAmount: 80, paidWith: 'card' as const },
+    {
+      id: 'extra',
+      name: 'Compra fora do envelope',
+      plannedAmount: 200,
+      paidWith: 'card' as const,
+      includedInCardPlan: false,
+    },
+  ]
+
+  it('coloca os detalhes imediatamente abaixo do envelope Cartão', () => {
+    expect(orderWantsForPlanning(wants).map((want) => want.id)).toEqual([
+      'trip',
+      'card',
+      'yt',
+      'gym',
+      'extra',
+    ])
+  })
+
+  it('reordena detalhes sem separá-los do envelope', () => {
+    expect(moveWantInPlanningOrder(wants, 'gym', -1).map((want) => want.id)).toEqual([
+      'trip',
+      'card',
+      'gym',
+      'yt',
+      'extra',
+    ])
+  })
+
+  it('move o envelope inteiro entre os itens de primeiro nível', () => {
+    expect(moveWantInPlanningOrder(wants, 'card', -1).map((want) => want.id)).toEqual([
+      'card',
+      'yt',
+      'gym',
+      'trip',
+      'extra',
+    ])
   })
 })

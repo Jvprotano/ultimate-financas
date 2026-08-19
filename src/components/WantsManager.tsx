@@ -1,11 +1,15 @@
 import { useState } from 'react'
-import { CreditCard, Heart, Landmark, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, CreditCard, Heart, Landmark, Plus, Trash2 } from 'lucide-react'
 import { Card } from './Card'
 import { CurrencyInput } from './CurrencyInput'
 import { HeaderMetric } from './HeaderMetric'
 import { MeterWithMarker, PrimaryButton, SuggestionChip } from './ui'
 import { formatCurrency, inputClass } from '../lib/format'
-import { isCardEnvelopeWant, isWantIncludedInCardPlan } from '../lib/scenario'
+import {
+  isCardEnvelopeWant,
+  isWantIncludedInCardPlan,
+  orderWantsForPlanning,
+} from '../lib/scenario'
 import { useCardsStore, useMetrics, useScenarioStore } from '../context/financasStore'
 import { BUDGET_AREA_COLORS } from '../types/constants'
 
@@ -28,6 +32,7 @@ export function WantsManager() {
     updateWantAmount,
     setWantPaidWith,
     setWantIncludedInCardPlan,
+    moveWant,
   } = useScenarioStore()
   const {
     totalWantsAmount,
@@ -49,6 +54,14 @@ export function WantsManager() {
   const cardEnvelopeAmount = wants
     .filter(isCardEnvelopeWant)
     .reduce((sum, want) => sum + want.plannedAmount, 0)
+  const orderedWants = orderWantsForPlanning(wants)
+  const includedWantIds = orderedWants
+    .filter((want) => isWantIncludedInCardPlan(want, orderedWants))
+    .map((want) => want.id)
+  const topLevelWantIds = orderedWants
+    .filter((want) => !isWantIncludedInCardPlan(want, orderedWants))
+    .map((want) => want.id)
+  const cardDetailBalance = cardEnvelopeAmount - cardIncludedWantsAmount
 
   const handleAdd = () => {
     if (!newName.trim()) return
@@ -117,15 +130,21 @@ export function WantsManager() {
               )
             )}
             {cardEnvelopeAmount > 0 && (
-              <div className="mt-3 grid gap-1.5 rounded-lg border border-dark-border-subtle bg-dark-surface/50 p-3 text-[11px] text-dark-text-muted sm:grid-cols-3">
+              <div className="mt-3 grid gap-1.5 rounded-lg border border-dark-border-subtle bg-dark-surface/50 p-3 text-[11px] text-dark-text-muted sm:grid-cols-2 xl:grid-cols-4">
                 <span>
                   Fatura planejada:{' '}
                   <strong className="text-dark-text">{formatCurrency(cardEnvelopeAmount)}</strong>
                 </span>
                 <span>
-                  Dentro do cartão:{' '}
+                  Detalhado no cartão:{' '}
                   <strong className="text-dark-text">
                     {formatCurrency(cardIncludedWantsAmount)}
+                  </strong>
+                </span>
+                <span>
+                  {cardDetailBalance >= 0 ? 'Ainda sem detalhe' : 'Detalhes acima do envelope'}:{' '}
+                  <strong className={cardDetailBalance >= 0 ? 'text-dark-text' : 'text-amber-300'}>
+                    {formatCurrency(Math.abs(cardDetailBalance))}
                   </strong>
                 </span>
                 <span>
@@ -165,20 +184,22 @@ export function WantsManager() {
 
         {wants.length > 0 && (
           <ul className="space-y-1.5">
-            {wants.map((want) => {
+            {orderedWants.map((want) => {
               const isEnvelope = isCardEnvelopeWant(want)
-              const isIncluded = isWantIncludedInCardPlan(want, wants)
+              const isIncluded = isWantIncludedInCardPlan(want, orderedWants)
+              const levelIds = isIncluded ? includedWantIds : topLevelWantIds
+              const levelIndex = levelIds.indexOf(want.id)
 
               return (
                 <li
                   key={want.id}
-                  className={`group flex items-center justify-between gap-3 rounded-lg px-3 py-2 ${
+                  className={`group flex flex-col items-stretch gap-2 rounded-lg px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 ${
                     isIncluded
                       ? 'ml-4 border-l-2 border-primary-500/40 bg-dark-surface/60'
                       : 'bg-dark-surface'
                   }`}
                 >
-                  <span className="min-w-0 flex-1 text-sm font-medium text-dark-text">
+                  <span className="w-full text-sm font-medium text-dark-text sm:min-w-0 sm:flex-1">
                     <span className="block truncate">{want.name}</span>
                     {isIncluded && (
                       <span className="mt-0.5 block text-[11px] font-normal text-primary-300/80">
@@ -187,11 +208,13 @@ export function WantsManager() {
                     )}
                     {isEnvelope && cardIncludedWantsAmount > 0 && (
                       <span className="mt-0.5 block text-[11px] font-normal text-dark-text-muted">
-                        inclui {formatCurrency(cardIncludedWantsAmount)} em assinaturas/detalhes
+                        inclui {includedWantIds.length}{' '}
+                        {includedWantIds.length === 1 ? 'detalhe' : 'detalhes'} somando{' '}
+                        {formatCurrency(cardIncludedWantsAmount)}
                       </span>
                     )}
                   </span>
-                  <div className="flex shrink-0 items-center gap-1.5">
+                  <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-1.5 sm:w-auto sm:flex-nowrap">
                     <button
                       type="button"
                       onClick={() =>
@@ -229,12 +252,34 @@ export function WantsManager() {
                         {isIncluded ? 'dentro' : 'fora'}
                       </button>
                     )}
-                    <div className="w-32">
+                    <div className="w-28 sm:w-32">
                       <CurrencyInput
                         value={want.plannedAmount}
                         onChange={(next) => updateWantAmount(want.id, next)}
                         className="!py-1.5"
                       />
+                    </div>
+                    <div className="flex" aria-label={`Ordenar ${want.name}`}>
+                      <button
+                        type="button"
+                        onClick={() => moveWant(want.id, -1)}
+                        disabled={levelIndex <= 0}
+                        className="rounded-md p-1 text-dark-text-muted transition-colors hover:bg-dark-card hover:text-dark-text disabled:cursor-not-allowed disabled:opacity-20"
+                        aria-label={`Mover ${want.name} para cima`}
+                        title={isEnvelope ? 'Mover o Cartão e seus detalhes para cima' : 'Mover para cima'}
+                      >
+                        <ChevronUp size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveWant(want.id, 1)}
+                        disabled={levelIndex >= levelIds.length - 1}
+                        className="rounded-md p-1 text-dark-text-muted transition-colors hover:bg-dark-card hover:text-dark-text disabled:cursor-not-allowed disabled:opacity-20"
+                        aria-label={`Mover ${want.name} para baixo`}
+                        title={isEnvelope ? 'Mover o Cartão e seus detalhes para baixo' : 'Mover para baixo'}
+                      >
+                        <ChevronDown size={14} />
+                      </button>
                     </div>
                     <button
                       onClick={() => removeWant(want.id)}

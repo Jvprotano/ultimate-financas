@@ -14,6 +14,7 @@ import {
   cloneScenario,
   convertLegacyScenario,
   createDefaultScenario,
+  moveWantInPlanningOrder,
   normalizeScenario,
   type LegacyScenario,
 } from '../lib/scenario'
@@ -274,6 +275,16 @@ export function useScenarios() {
     [updateActiveScenario],
   )
 
+  const moveWant = useCallback(
+    (id: string, direction: -1 | 1) => {
+      updateActiveScenario((scenario) => ({
+        ...scenario,
+        wants: moveWantInPlanningOrder(scenario.wants, id, direction),
+      }))
+    },
+    [updateActiveScenario],
+  )
+
   // Descontos em folha -------------------------------------------------------
 
   const addDeduction = useCallback(
@@ -417,6 +428,7 @@ export function useScenarios() {
     applyWantAmounts,
     setWantPaidWith,
     setWantIncludedInCardPlan,
+    moveWant,
     deductions: activeScenario.deductions,
     addDeduction,
     removeDeduction,
