@@ -43,7 +43,7 @@ export function CardImportPanel({
         onChange={(event) => onTextChange(event.target.value)}
         aria-label="Conteúdo da planilha"
         placeholder={'Descrição\tData\tCartão\tFatura\tÉ meu\tRestante\tÁrea\nYoutube premium\t20/06\tItaú\t53,90\t53,90\t0\tdesejo'}
-        className="mt-4 min-h-[200px] w-full rounded-lg border border-dark-border bg-dark-input px-4 py-3 font-mono text-xs text-dark-text outline-none transition-all focus:border-primary-500 focus:ring-2 focus:ring-primary-500/25"
+        className="app-field mt-4 min-h-[200px] w-full px-4 py-3 font-mono text-xs"
       />
       <div className="mt-4 flex flex-wrap items-end gap-3 rounded-lg border border-dark-border bg-dark-surface p-3">
         <label className="block min-w-[150px] flex-1">
@@ -57,7 +57,7 @@ export function CardImportPanel({
             <option value="next">Próxima fatura · pagar em {formatMonthLong(nextDueMonth)}</option>
           </select>
         </label>
-        <label className="flex h-[46px] min-w-[200px] flex-1 cursor-pointer items-center gap-2 rounded-lg border border-dark-border bg-dark-input px-3 text-sm text-dark-text-secondary transition-colors hover:text-dark-text">
+        <label className="flex h-[46px] min-w-[200px] flex-1 cursor-pointer items-center gap-2 rounded-xl border border-dark-border bg-dark-input px-3 text-sm text-dark-text-secondary transition-colors hover:border-dark-text-muted/40 hover:text-dark-text">
           <input
             type="checkbox"
             checked={replace}

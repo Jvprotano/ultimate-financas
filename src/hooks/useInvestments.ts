@@ -19,7 +19,7 @@ import {
   type InvestmentPurpose,
 } from '../lib/investments'
 import { normalizeGoal, summarizeGoals, type GoalContext } from '../lib/goals'
-import { finiteNumber, ledgerBalance, nowIso, readJson, uid } from '../lib/shared'
+import { finiteNumber, ledgerBalance, monthKey, nowIso, readJson, uid } from '../lib/shared'
 import { ACTIVE_SCENARIO_STORAGE_KEY, SCENARIOS_STORAGE_KEY } from './useScenarios'
 
 const EMERGENCY_FUND_STORAGE_KEY = 'uf_emergency_fund_v1'
@@ -95,14 +95,29 @@ function loadInitialHoldings(): FinancialHolding[] {
   return Array.isArray(stored) ? stored.map(normalizeHolding) : []
 }
 
+function validCycleMonth(value: string, fallback: string) {
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(value) ? value : fallback
+}
+
 /** Aplica um aporte/retirada a um livro-razão, limitando a saída ao saldo. */
-function applyLedgerMove(transactions: LedgerEntry[], amount: number, note?: string) {
+function applyLedgerMove(
+  transactions: LedgerEntry[],
+  amount: number,
+  note: string | undefined,
+  cycleMonth: string,
+) {
   const balance = ledgerBalance(transactions)
   const delta = amount < 0 ? -Math.min(-amount, balance) : amount
   if (delta === 0) return null
   return [
     ...transactions,
-    { id: uid(), amount: delta, date: nowIso(), note: note?.trim() || undefined },
+    {
+      id: uid(),
+      amount: delta,
+      cycleMonth,
+      date: nowIso(),
+      note: note?.trim() || undefined,
+    },
   ]
 }
 
@@ -114,6 +129,7 @@ function applyLedgerMove(transactions: LedgerEntry[], amount: number, note?: str
 export function useInvestments(
   liabilities = 0,
   { securedLiabilities = 0, physicalAssets = 0 } = {},
+  activeCycleMonth = monthKey(),
 ) {
   const [storedFund, setStoredFund] = useLocalStorage<EmergencyFundState>(
     EMERGENCY_FUND_STORAGE_KEY,
@@ -327,7 +343,8 @@ export function useInvestments(
 
   // Aporte/retirada: ajusta também o valor de mercado (retirada limitada a ele).
   const addHoldingTransaction = useCallback(
-    (holdingId: string, amount: number, note?: string) => {
+    (holdingId: string, amount: number, note?: string, cycleMonth = activeCycleMonth) => {
+      const competence = validCycleMonth(cycleMonth, activeCycleMonth)
       setHoldings((prev) =>
         (Array.isArray(prev) ? prev : []).map((raw) => {
           const holding = normalizeHolding(raw)
@@ -338,14 +355,41 @@ export function useInvestments(
             ...holding,
             transactions: [
               ...holding.transactions,
-              { id: uid(), amount: delta, date: nowIso(), note: note?.trim() || undefined },
+              {
+                id: uid(),
+                amount: delta,
+                cycleMonth: competence,
+                date: nowIso(),
+                note: note?.trim() || undefined,
+              },
             ],
             marketValue: Math.max(0, holding.marketValue + delta),
           }
         }),
       )
     },
-    [setHoldings],
+    [activeCycleMonth, setHoldings],
+  )
+
+  const setHoldingTransactionCycle = useCallback(
+    (holdingId: string, transactionId: string, cycleMonth: string) => {
+      const competence = validCycleMonth(cycleMonth, activeCycleMonth)
+      setHoldings((prev) =>
+        (Array.isArray(prev) ? prev : []).map((raw) => {
+          const holding = normalizeHolding(raw)
+          if (holding.id !== holdingId) return holding
+          return {
+            ...holding,
+            transactions: holding.transactions.map((transaction) =>
+              transaction.id === transactionId
+                ? { ...transaction, cycleMonth: competence }
+                : transaction,
+            ),
+          }
+        }),
+      )
+    },
+    [activeCycleMonth, setHoldings],
   )
 
   const removeHoldingTransaction = useCallback(
@@ -424,20 +468,46 @@ export function useInvestments(
    * continua no bucket legado e será migrada logo depois.
    */
   const addEmergencyFundTransaction = useCallback(
-    (amount: number, note?: string) => {
+    (amount: number, note?: string, cycleMonth = activeCycleMonth) => {
+      const competence = validCycleMonth(cycleMonth, activeCycleMonth)
       const firstReserve = reserveHoldings[0]
       if (firstReserve) {
-        addHoldingTransaction(firstReserve.id, amount, note)
+        addHoldingTransaction(firstReserve.id, amount, note, competence)
         return
       }
       setStoredFund((prev) => {
         const fund = normalizeEmergencyFund(prev)
-        const transactions = applyLedgerMove(fund.transactions, amount, note)
+        const transactions = applyLedgerMove(fund.transactions, amount, note, competence)
         if (!transactions) return fund
         return { ...fund, transactions, current: ledgerBalance(transactions) }
       })
     },
-    [addHoldingTransaction, reserveHoldings, setStoredFund],
+    [activeCycleMonth, addHoldingTransaction, reserveHoldings, setStoredFund],
+  )
+
+  const setEmergencyFundTransactionCycle = useCallback(
+    (id: string, cycleMonth: string) => {
+      const reserve = reserveHoldings.find((holding) =>
+        holding.transactions.some((transaction) => transaction.id === id),
+      )
+      if (reserve) {
+        setHoldingTransactionCycle(reserve.id, id, cycleMonth)
+        return
+      }
+      const competence = validCycleMonth(cycleMonth, activeCycleMonth)
+      setStoredFund((prev) => {
+        const fund = normalizeEmergencyFund(prev)
+        return {
+          ...fund,
+          transactions: fund.transactions.map((transaction) =>
+            transaction.id === id
+              ? { ...transaction, cycleMonth: competence }
+              : transaction,
+          ),
+        }
+      })
+    },
+    [activeCycleMonth, reserveHoldings, setHoldingTransactionCycle, setStoredFund],
   )
 
   const removeEmergencyFundTransaction = useCallback(
@@ -616,11 +686,12 @@ export function useInvestments(
   )
 
   const addGoalTransaction = useCallback(
-    (goalId: string, amount: number, note?: string) => {
+    (goalId: string, amount: number, note?: string, cycleMonth = activeCycleMonth) => {
+      const competence = validCycleMonth(cycleMonth, activeCycleMonth)
       setGoals((prev) =>
         prev.map((goal) => {
           if (goal.id !== goalId) return goal
-          const transactions = applyLedgerMove(goal.transactions, amount, note)
+          const transactions = applyLedgerMove(goal.transactions, amount, note, competence)
           if (!transactions) return goal
           const balance = ledgerBalance(transactions)
           return {
@@ -634,7 +705,28 @@ export function useInvestments(
         }),
       )
     },
-    [setGoals],
+    [activeCycleMonth, setGoals],
+  )
+
+  const setGoalTransactionCycle = useCallback(
+    (goalId: string, transactionId: string, cycleMonth: string) => {
+      const competence = validCycleMonth(cycleMonth, activeCycleMonth)
+      setGoals((prev) =>
+        prev.map((goal) =>
+          goal.id === goalId
+            ? {
+                ...goal,
+                transactions: goal.transactions.map((transaction) =>
+                  transaction.id === transactionId
+                    ? { ...transaction, cycleMonth: competence }
+                    : transaction,
+                ),
+              }
+            : goal,
+        ),
+      )
+    },
+    [activeCycleMonth, setGoals],
   )
 
   const removeGoalTransaction = useCallback(
@@ -712,6 +804,7 @@ export function useInvestments(
     portfolioHoldings,
     addEmergencyFundTransaction,
     removeEmergencyFundTransaction,
+    setEmergencyFundTransactionCycle,
     setEmergencyFundTargetMonths,
 
     holdings,
@@ -722,6 +815,7 @@ export function useInvestments(
     removeHolding,
     addHoldingTransaction,
     removeHoldingTransaction,
+    setHoldingTransactionCycle,
     setMarketValue,
     addClass,
     renameClass,
@@ -736,5 +830,6 @@ export function useInvestments(
     removeGoal,
     addGoalTransaction,
     removeGoalTransaction,
+    setGoalTransactionCycle,
   }
 }

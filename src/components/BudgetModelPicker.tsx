@@ -93,7 +93,7 @@ export function BudgetModelPicker() {
                       max="100"
                       value={customModel[field]}
                       onChange={(e) => handleCustomChange(field, parseInt(e.target.value) || 0)}
-                      className="w-full rounded-lg border border-dark-border bg-dark-input px-3 py-2 text-center text-sm font-semibold tabular-nums text-dark-text transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/25"
+                      className="app-field w-full px-3 py-2 text-center text-sm font-semibold tabular-nums"
                     />
                     <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-dark-text-muted">
                       %

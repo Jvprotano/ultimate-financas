@@ -56,6 +56,9 @@ export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): Mo
     costsPlanned: finiteNumber(raw?.costsPlanned, finiteNumber(raw?.costs)),
     wants: finiteNumber(raw?.wants),
     invested: finiteNumber(raw?.invested),
+    // Snapshots antigos não preservavam as metas de investimento e cartão.
+    // Igualar ao realizado mantém o passado neutro em vez de inventar desvios.
+    investedPlanned: finiteNumber(raw?.investedPlanned, finiteNumber(raw?.invested)),
     balance: finiteNumber(raw?.balance),
     savingsRate: finiteNumber(raw?.savingsRate),
     costsByCategory: categories,
@@ -68,6 +71,7 @@ export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): Mo
     netWorth: finiteNumber(raw?.netWorth),
     emergencyFund: finiteNumber(raw?.emergencyFund),
     cardPersonalTotal: finiteNumber(raw?.cardPersonalTotal),
+    cardPlanned: finiteNumber(raw?.cardPlanned, finiteNumber(raw?.cardPersonalTotal)),
     cardByArea,
     cashLeftover: finiteNumber(raw?.cashLeftover),
     note: raw?.note?.trim() || undefined,
@@ -87,6 +91,9 @@ export function buildHistoryPoints(snapshots: MonthlySnapshot[]): HistoryPoint[]
         snapshot.grossAssets - (snapshot.liabilities - snapshot.securedLiabilities),
       netWorthDelta: previous ? snapshot.netWorth - previous.netWorth : null,
       costsDelta: previous ? snapshot.costs - previous.costs : null,
+      wantsDelta: previous ? snapshot.wants - previous.wants : null,
+      investedDelta: previous ? snapshot.invested - previous.invested : null,
+      cardDelta: previous ? snapshot.cardPersonalTotal - previous.cardPersonalTotal : null,
     }
   })
 }

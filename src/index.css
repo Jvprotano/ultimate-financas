@@ -15,16 +15,16 @@
   --color-primary-950: #022c22;
 
   /* Superfícies e tinta — neutro escuro com leve tom frio */
-  --color-dark-bg: #0b0d0c;
-  --color-dark-card: #131715;
-  --color-dark-surface: #191e1b;
-  --color-dark-border: #262d29;
-  --color-dark-border-subtle: #1d2420;
-  --color-dark-input: #0f1311;
-  --color-dark-hover: #1c2320;
-  --color-dark-text: #eef2f0;
-  --color-dark-text-secondary: #a7b3ad;
-  --color-dark-text-muted: #75867f;
+  --color-dark-bg: #080b0a;
+  --color-dark-card: #101512;
+  --color-dark-surface: #171d1a;
+  --color-dark-border: #29332e;
+  --color-dark-border-subtle: #1b2420;
+  --color-dark-input: #0b100e;
+  --color-dark-hover: #1b2520;
+  --color-dark-text: #f1f5f2;
+  --color-dark-text-secondary: #aebbb4;
+  --color-dark-text-muted: #788b82;
 
   --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
@@ -46,7 +46,10 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     min-height: 100vh;
-    background: var(--color-dark-bg);
+    background:
+      radial-gradient(circle at 50% -12rem, rgba(16, 185, 129, 0.11), transparent 34rem),
+      linear-gradient(180deg, #0a0e0c 0%, var(--color-dark-bg) 42%, #070908 100%);
+    background-attachment: fixed;
     color: var(--color-dark-text);
   }
 
@@ -64,6 +67,23 @@
   select,
   textarea {
     font: inherit;
+  }
+
+  input,
+  select,
+  textarea {
+    color-scheme: dark;
+  }
+
+  input[type="month"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    filter: brightness(1.35) saturate(0.7);
+    opacity: 0.62;
+    transition: opacity 150ms ease;
+  }
+
+  input[type="month"]:hover::-webkit-calendar-picker-indicator {
+    opacity: 0.95;
   }
 
   /* Um anel visível só para navegação por teclado: o app é usado com atalhos e
@@ -102,11 +122,53 @@
   ::-webkit-scrollbar-thumb:hover {
     background: #34403a;
   }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 }
 
 @layer utilities {
   /* Números alinham verticalmente em tabelas e métricas */
   .tabular-nums {
     font-variant-numeric: tabular-nums;
+  }
+
+  .app-panel-shadow {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.025) inset,
+      0 18px 50px rgba(0, 0, 0, 0.16);
+  }
+
+  .app-field {
+    border-radius: 0.75rem;
+    border: 1px solid var(--color-dark-border);
+    background: color-mix(in srgb, var(--color-dark-input) 92%, transparent);
+    color: var(--color-dark-text);
+    transition:
+      border-color 150ms ease,
+      background-color 150ms ease,
+      box-shadow 150ms ease;
+  }
+
+  .app-field:hover {
+    border-color: color-mix(in srgb, var(--color-dark-text-muted) 45%, var(--color-dark-border));
+  }
+
+  .app-field:focus {
+    border-color: var(--color-primary-500);
+    background: var(--color-dark-input);
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12);
+    outline: none;
   }
 }

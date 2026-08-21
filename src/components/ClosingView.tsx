@@ -121,7 +121,7 @@ export function ClosingView({
 
   if (metrics.availableForBudget <= 0) {
     return (
-      <div className="flex flex-col items-center rounded-xl border border-dark-border bg-dark-card px-6 py-16 text-center">
+      <div className="app-panel-shadow flex flex-col items-center rounded-2xl border border-dark-border bg-dark-card/95 px-6 py-16 text-center">
         <h2 className="text-xl font-semibold tracking-tight text-dark-text">Comece pelo salário</h2>
         <p className="mt-2 max-w-md text-sm leading-relaxed text-dark-text-muted">
           Informe sua renda e seus custos em Planejar para montar o ciclo.
@@ -152,7 +152,7 @@ export function ClosingView({
         <PanelHeader
           title={`Ciclo ${formatMonthLong(activeCycle.month)}`}
           icon={<CalendarCheck size={16} />}
-          description={`O salário do fim de ${formatMonthLong(salaryMonth)} financia este ciclo. Veja primeiro o que entrou, o que já está comprometido e quanto ainda está livre.`}
+          description={`O salário do fim de ${formatMonthLong(salaryMonth)} financia este ciclo. Desejos ficam fora dos compromissos-base para mostrar quanto ainda pode ser alocado.`}
         />
         <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           <StatTile
@@ -166,30 +166,48 @@ export function ClosingView({
             tone="positive"
           />
           <StatTile
-            label="Já comprometido"
-            value={currentInvoiceKnown ? formatCurrency(financialCycle.commitmentsDueNow) : '—'}
-            detail="fatura, contas, desejos em conta, aporte e extraordinários"
+            label="Compromissos antes de Desejos"
+            value={currentInvoiceKnown ? formatCurrency(financialCycle.commitmentsBeforeWants) : '—'}
+            detail="fatura anterior, contas atuais, aporte e extraordinários"
           />
           <StatTile
-            label="Livre neste ciclo"
+            label="Disponível para Desejos"
             value={
               currentInvoiceKnown
-                ? formatCurrency(
-                    financialCycle.shortfall > 0
-                      ? -financialCycle.shortfall
-                      : financialCycle.safeToSpend,
-                  )
+                ? formatCurrency(financialCycle.discretionaryAvailable)
                 : '—'
             }
-            detail="depois de tudo que sai deste salário"
-            tone={financialCycle.shortfall > 0 ? 'negative' : 'accent'}
+            detail="para dividir entre qualidade de vida, viagens ou outra prioridade"
+            tone={financialCycle.discretionaryShortfall > 0 ? 'negative' : 'accent'}
           />
           <StatTile
-            label={`Fatura que vence em ${formatMonthLong(activeCycle.month)}`}
-            value={currentInvoiceKnown ? formatCurrency(cashFlow.invoiceToPay) : '—'}
-            detail={`gastos de ${formatMonthLong(financialCycle.spendingMonth)}`}
+            label="Depois dos Desejos planejados"
+            value={currentInvoiceKnown ? formatCurrency(financialCycle.cashAfterDue) : '—'}
+            detail={`${formatCurrency(cashFlow.wantsOnAccount)} já alocados fora do cartão`}
+            tone={financialCycle.cashAfterDue < -0.005 ? 'negative' : 'positive'}
           />
         </div>
+
+        {currentInvoiceKnown && (
+          <dl className="mt-3 grid gap-x-5 gap-y-2 rounded-lg border border-dark-border-subtle bg-dark-surface/35 px-3 py-3 text-xs sm:grid-cols-2 xl:grid-cols-4">
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-dark-text-muted">Fatura anterior</dt>
+              <dd className="tabular-nums text-dark-text">{formatCurrency(cashFlow.invoiceToPay)}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-dark-text-muted">Contas atuais</dt>
+              <dd className="tabular-nums text-dark-text">{formatCurrency(cashFlow.costsOnAccount)}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-dark-text-muted">Aporte programado</dt>
+              <dd className="tabular-nums text-dark-text">{formatCurrency(cashFlow.directInvestment)}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-dark-text-muted">Extraordinários pagos</dt>
+              <dd className="tabular-nums text-dark-text">{formatCurrency(cashFlow.extraExpense)}</dd>
+            </div>
+          </dl>
+        )}
 
         {!currentInvoiceKnown && (
           <div className="mt-4 flex flex-col gap-3 rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3 py-3 text-xs leading-relaxed text-amber-100/90 sm:flex-row sm:items-center sm:justify-between">

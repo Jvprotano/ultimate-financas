@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react'
-import { History, Pencil, Trash2, TrendingUp } from 'lucide-react'
+import { ChartColumn, History, Pencil, Trash2, TrendingUp } from 'lucide-react'
 import { CurrencyInput } from './CurrencyInput'
 import {
   EmptyState,
@@ -15,11 +15,19 @@ import {
 import {
   formatCurrency,
   formatMonthKey,
+  formatSignedCurrency,
   inputClass,
 } from '../lib/format'
 import { useHistoryStore } from '../context/financasStore'
 import type { HistoryPoint, SnapshotPatch } from '../types'
-import { BUDGET_AREA_COLORS, CHART_PALETTE } from '../types/constants'
+import {
+  BUDGET_AREA_COLORS,
+  BUDGET_AREA_LABELS,
+  BUDGET_AREAS,
+  COST_CATEGORIES,
+} from '../types/constants'
+import { PlanActualChart } from './history/PlanActualChart'
+import { NetWorthEvolutionChart } from './history/NetWorthEvolutionChart'
 
 /**
  * Correção de um mês já fechado. Refechar substituiria tudo pelos números de
@@ -35,8 +43,10 @@ function SnapshotEditorContent({ point, onClose }: { point: HistoryPoint; onClos
     { label: 'Entradas extras', value: point.extraIncome, key: 'extraIncome' },
     { label: 'Saídas extraordinárias', value: point.extraExpense, key: 'extraExpense' },
     { label: 'Custos', value: point.costs, key: 'costs' },
+    { label: 'Plano de custos', value: point.costsPlanned, key: 'costsPlanned' },
     { label: 'Desejos', value: point.wants, key: 'wants' },
     { label: 'Investido', value: point.invested, key: 'invested' },
+    { label: 'Meta de investimento', value: point.investedPlanned, key: 'investedPlanned' },
     { label: 'Ativos financeiros', value: point.grossAssets, key: 'grossAssets' },
     { label: 'Bens', value: point.physicalAssets, key: 'physicalAssets' },
     { label: 'Dívidas', value: point.liabilities, key: 'liabilities' },
@@ -49,6 +59,11 @@ function SnapshotEditorContent({ point, onClose }: { point: HistoryPoint; onClos
       label: 'Fatura do ciclo (minha parte)',
       value: point.cardPersonalTotal,
       key: 'cardPersonalTotal',
+    },
+    {
+      label: 'Plano do cartão',
+      value: point.cardPlanned,
+      key: 'cardPlanned',
     },
   ]
 
@@ -141,6 +156,215 @@ function HistoryActions({
   )
 }
 
+function PlanVariance({
+  label,
+  planned,
+  actual,
+  higherIsBetter = false,
+}: {
+  label: string
+  planned: number
+  actual: number
+  higherIsBetter?: boolean
+}) {
+  const delta = actual - planned
+  const onTarget = Math.abs(delta) <= 0.005
+  const favorable = higherIsBetter ? delta >= 0 : delta <= 0
+
+  return (
+    <div className="rounded-xl border border-dark-border-subtle bg-dark-input/30 px-3.5 py-3.5 shadow-inner shadow-black/10">
+      <span className="block text-[11px] font-medium uppercase tracking-wider text-dark-text-muted">
+        {label}
+      </span>
+      <strong className="mt-1 block text-base font-semibold tabular-nums text-dark-text">
+        {formatCurrency(actual)}
+      </strong>
+      <span className="mt-1 block text-[11px] text-dark-text-muted">
+        plano {formatCurrency(planned)}
+      </span>
+      <span
+        className={`mt-1.5 block text-xs font-semibold tabular-nums ${
+          onTarget
+            ? 'text-dark-text-muted'
+            : favorable
+              ? 'text-primary-400'
+              : 'text-rose-400'
+        }`}
+      >
+        {onTarget ? 'No planejado' : formatSignedCurrency(delta)}
+      </span>
+    </div>
+  )
+}
+
+function CompactPlanDelta({
+  planned,
+  actual,
+  higherIsBetter = false,
+}: {
+  planned: number
+  actual: number
+  higherIsBetter?: boolean
+}) {
+  const delta = actual - planned
+  if (Math.abs(delta) <= 0.005) return null
+  const favorable = higherIsBetter ? delta >= 0 : delta <= 0
+
+  return (
+    <span
+      className={`mt-0.5 block text-[10px] font-medium tabular-nums ${
+        favorable ? 'text-primary-400' : 'text-rose-400'
+      }`}
+      title={`Planejado ${formatCurrency(planned)}`}
+    >
+      {formatSignedCurrency(delta)} vs plano
+    </span>
+  )
+}
+
+function MonthChange({
+  label,
+  current,
+  delta,
+  higherIsBetter = false,
+  neutralDirection = false,
+}: {
+  label: string
+  current: number
+  delta: number
+  higherIsBetter?: boolean
+  neutralDirection?: boolean
+}) {
+  const stable = Math.abs(delta) <= 0.005
+  const favorable = higherIsBetter ? delta >= 0 : delta <= 0
+  const tone = stable
+    ? 'text-dark-text-muted'
+    : neutralDirection
+      ? 'text-amber-300'
+      : favorable
+        ? 'text-primary-400'
+        : 'text-rose-400'
+
+  return (
+    <div className="rounded-xl border border-dark-border-subtle bg-dark-input/25 px-3.5 py-3 shadow-inner shadow-black/10">
+      <span className="block text-[11px] text-dark-text-muted">{label}</span>
+      <div className="mt-1 flex items-end justify-between gap-2">
+        <strong className="text-sm font-semibold tabular-nums text-dark-text">
+          {formatCurrency(current)}
+        </strong>
+        <span className={`text-[11px] font-semibold tabular-nums ${tone}`}>
+          {stable ? 'sem mudança' : formatSignedCurrency(delta)}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function LatestMonthComparison({ points }: { points: HistoryPoint[] }) {
+  const latest = points.at(-1)
+  if (!latest) return null
+  const previous = points.at(-2)
+
+  const categoryChanges = previous
+    ? [
+        ...COST_CATEGORIES.map(({ key, label }) => ({
+          id: `cost-${key}`,
+          group: 'Custo',
+          label,
+          current: latest.costsByCategory[key] ?? 0,
+          delta: (latest.costsByCategory[key] ?? 0) - (previous.costsByCategory[key] ?? 0),
+        })),
+        ...BUDGET_AREAS.map((area) => ({
+          id: `card-${area}`,
+          group: 'Cartão',
+          label: BUDGET_AREA_LABELS[area],
+          current: latest.cardByArea[area] ?? 0,
+          delta: (latest.cardByArea[area] ?? 0) - (previous.cardByArea[area] ?? 0),
+        })),
+      ]
+        .filter((item) => Math.abs(item.delta) > 0.005)
+        .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+        .slice(0, 6)
+    : []
+
+  return (
+    <Panel>
+      <PanelHeader
+        title={`${formatMonthKey(latest.month)}: fechamento contra o plano`}
+        icon={<ChartColumn size={16} />}
+        description="O sinal mostra realizado menos planejado. Em gastos, positivo e vermelho significa estouro; em investimentos, superar a meta é favorável."
+      />
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        <PlanVariance label="Custos" planned={latest.costsPlanned} actual={latest.costs} />
+        <PlanVariance label="Cartão" planned={latest.cardPlanned} actual={latest.cardPersonalTotal} />
+        <PlanVariance
+          label="Investimentos"
+          planned={latest.investedPlanned}
+          actual={latest.invested}
+          higherIsBetter
+        />
+      </div>
+
+      <div className="mt-5 border-t border-dark-border-subtle pt-5">
+        <PlanActualChart points={points} />
+      </div>
+
+      {previous && (
+        <div className="mt-5 border-t border-dark-border-subtle pt-5">
+          <h3 className="text-sm font-semibold text-dark-text">
+            Mudança desde {formatMonthKey(previous.month)}
+          </h3>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <MonthChange label="Custos" current={latest.costs} delta={latest.costsDelta ?? 0} />
+            <MonthChange
+              label="Desejos alocados"
+              current={latest.wants}
+              delta={latest.wantsDelta ?? 0}
+              neutralDirection
+            />
+            <MonthChange
+              label="Fatura pessoal"
+              current={latest.cardPersonalTotal}
+              delta={latest.cardDelta ?? 0}
+            />
+            <MonthChange
+              label="Investido"
+              current={latest.invested}
+              delta={latest.investedDelta ?? 0}
+              higherIsBetter
+            />
+          </div>
+
+          {categoryChanges.length > 0 && (
+            <div className="mt-4">
+              <span className="text-[11px] font-medium uppercase tracking-wider text-dark-text-muted">
+                Maiores variações por categoria
+              </span>
+              <div className="mt-2 grid gap-x-6 gap-y-2 sm:grid-cols-2">
+                {categoryChanges.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between gap-3 text-xs">
+                    <span className="min-w-0 truncate text-dark-text-secondary">
+                      <span className="text-dark-text-muted">{item.group}</span> · {item.label}
+                    </span>
+                    <span
+                      className={`shrink-0 font-medium tabular-nums ${
+                        item.delta > 0 ? 'text-rose-400' : 'text-primary-400'
+                      }`}
+                      title={`Agora ${formatCurrency(item.current)}`}
+                    >
+                      {formatSignedCurrency(item.delta)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </Panel>
+  )
+}
+
 /** Só leitura do passado — o fechamento do mês corrente vive na aba Ciclo. */
 export function HistoryView() {
   const history = useHistoryStore()
@@ -150,24 +374,6 @@ export function HistoryView() {
   const labels = points.map((point) => formatMonthKey(point.month))
   const hasLiabilities = points.some((point) => point.liabilities > 0)
   const hasPhysicalAssets = points.some((point) => point.physicalAssets > 0)
-  const netWorthSeries: TrendSeries[] = [
-    {
-      id: 'financial',
-      label: hasLiabilities || hasPhysicalAssets ? 'Patrimônio financeiro' : 'Patrimônio',
-      color: CHART_PALETTE.aqua,
-      values: points.map((point) => point.financialNetWorth),
-    },
-    ...(hasLiabilities || hasPhysicalAssets
-      ? [
-          {
-            id: 'net-worth',
-            label: 'Patrimônio líquido total',
-            color: CHART_PALETTE.blue,
-            values: points.map((point) => point.netWorth),
-          },
-        ]
-      : []),
-  ]
   const flowSeries: TrendSeries[] = [
     {
       id: 'costs',
@@ -236,16 +442,18 @@ export function HistoryView() {
         />
       </div>
 
+      <LatestMonthComparison points={points} />
+
       <div className="grid gap-4 xl:grid-cols-2">
-        <Panel>
+        <Panel className="min-w-0">
           <PanelHeader title="Evolução do patrimônio" icon={<TrendingUp size={16} />} />
           <div className="mt-4">
-            <TrendChart labels={labels} series={netWorthSeries} height={220} />
+            <NetWorthEvolutionChart points={points} />
           </div>
         </Panel>
 
-        <Panel>
-          <PanelHeader title="Para onde foi a renda" />
+        <Panel className="min-w-0">
+          <PanelHeader title="Evolução dos gastos e aportes" />
           <div className="mt-4">
             <TrendChart labels={labels} series={flowSeries} height={220} />
           </div>
@@ -284,14 +492,29 @@ export function HistoryView() {
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-dark-text-muted">Custos + desejos</dt>
-                    <dd className="mt-0.5 tabular-nums text-dark-text">
-                      {formatCurrency(point.costs + point.wants)}
-                    </dd>
+                    <dt className="text-dark-text-muted">Custos</dt>
+                    <dd className="mt-0.5 tabular-nums text-dark-text">{formatCurrency(point.costs)}</dd>
+                    <CompactPlanDelta planned={point.costsPlanned} actual={point.costs} />
                   </div>
                   <div>
                     <dt className="text-dark-text-muted">Investido</dt>
                     <dd className="mt-0.5 tabular-nums text-dark-text">{formatCurrency(point.invested)}</dd>
+                    <CompactPlanDelta
+                      planned={point.investedPlanned}
+                      actual={point.invested}
+                      higherIsBetter
+                    />
+                  </div>
+                  <div>
+                    <dt className="text-dark-text-muted">Fatura pessoal</dt>
+                    <dd className="mt-0.5 tabular-nums text-dark-text">
+                      {formatCurrency(point.cardPersonalTotal)}
+                    </dd>
+                    <CompactPlanDelta planned={point.cardPlanned} actual={point.cardPersonalTotal} />
+                  </div>
+                  <div>
+                    <dt className="text-dark-text-muted">Desejos alocados</dt>
+                    <dd className="mt-0.5 tabular-nums text-dark-text">{formatCurrency(point.wants)}</dd>
                   </div>
                   <div>
                     <dt className="text-dark-text-muted">Poupança</dt>
@@ -409,26 +632,25 @@ export function HistoryView() {
                           {point.costsDelta > 0 ? '↑' : '↓'}
                         </span>
                       )}
-                      {Math.abs(point.costs - point.costsPlanned) > 0.005 && (
-                        <span
-                          className="ml-1 text-[11px] text-dark-text-muted"
-                          title={`Plano era ${formatCurrency(point.costsPlanned)}`}
-                        >
-                          *
-                        </span>
-                      )}
+                      <CompactPlanDelta planned={point.costsPlanned} actual={point.costs} />
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-dark-text-secondary">
                       {formatCurrency(point.wants)}
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-dark-text-secondary">
                       {formatCurrency(point.invested)}
+                      <CompactPlanDelta
+                        planned={point.investedPlanned}
+                        actual={point.invested}
+                        higherIsBetter
+                      />
                     </td>
                     <td
                       className="px-4 py-2.5 text-right tabular-nums text-dark-text-secondary"
                       title="Sua parte efetivamente devida na fatura que encerrou o ciclo"
                     >
                       {point.cardPersonalTotal > 0 ? formatCurrency(point.cardPersonalTotal) : '—'}
+                      <CompactPlanDelta planned={point.cardPlanned} actual={point.cardPersonalTotal} />
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-dark-text-secondary">
                       {point.savingsRate.toFixed(0)}%

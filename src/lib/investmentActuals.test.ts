@@ -76,6 +76,51 @@ describe('calculateMonthlyInvestmentActuals', () => {
     expect(result.directNet).toBe(0)
   })
 
+  it('usa o ciclo financeiro mesmo quando a data real pertence a outro mês', () => {
+    const holdings = [
+      holding({
+        transactions: [
+          {
+            id: 'h1',
+            amount: 1_000,
+            date: '2026-08-30T12:00:00.000Z',
+            cycleMonth: '2026-09',
+          },
+        ],
+      }),
+    ]
+    const september = calculateMonthlyInvestmentActuals({
+      month: '2026-09',
+      emergencyFund,
+      holdings,
+      goals: [],
+    })
+    const august = calculateMonthlyInvestmentActuals({
+      month: '2026-08',
+      emergencyFund,
+      holdings,
+      goals: [],
+    })
+
+    expect(september.directNet).toBe(1_000)
+    expect(august.directNet).toBe(0)
+  })
+
+  it('mantém o mês da data como fallback para lançamentos antigos', () => {
+    const result = calculateMonthlyInvestmentActuals({
+      month: '2026-08',
+      emergencyFund,
+      holdings: [
+        holding({
+          transactions: [{ id: 'legacy', amount: 700, date: '2026-08-30T12:00:00.000Z' }],
+        }),
+      ],
+      goals: [],
+    })
+
+    expect(result.directNet).toBe(700)
+  })
+
   it('não conta saldo/aporte inicial como poupança do mês', () => {
     const result = calculateMonthlyInvestmentActuals({
       month: '2026-08',

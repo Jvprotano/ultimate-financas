@@ -12,13 +12,13 @@ export function CycleSwitcher() {
 
   return (
     <div
-      className="flex h-[38px] items-center rounded-lg border border-dark-border/70 bg-transparent px-0.5 text-sm text-dark-text-muted"
+      className="flex h-10 items-center rounded-xl border border-dark-border/80 bg-dark-surface/55 px-1 text-sm text-dark-text-muted shadow-sm shadow-black/15"
       title={`Ciclo ${cycle.month}`}
     >
       <button
         type="button"
         onClick={() => shiftCycle(-1)}
-        className="rounded-md p-1.5 transition-colors hover:bg-dark-hover hover:text-dark-text"
+        className="rounded-lg p-1.5 transition-colors hover:bg-dark-hover hover:text-dark-text"
         aria-label="Ciclo anterior"
       >
         <ChevronLeft size={14} />
@@ -30,7 +30,7 @@ export function CycleSwitcher() {
       <button
         type="button"
         onClick={() => shiftCycle(1)}
-        className="rounded-md p-1.5 transition-colors hover:bg-dark-hover hover:text-dark-text"
+        className="rounded-lg p-1.5 transition-colors hover:bg-dark-hover hover:text-dark-text"
         aria-label="Próximo ciclo"
       >
         <ChevronRight size={14} />

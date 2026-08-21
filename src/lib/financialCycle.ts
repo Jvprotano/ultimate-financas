@@ -29,6 +29,8 @@ export interface FinancialCycleSummary {
   plannedNextInvoice: number
   /** Obrigações que vencem agora, já incluindo desejos em conta. */
   commitmentsDueNow: number
+  /** Fatura, contas, aporte e extraordinários: tudo que vem antes de alocar Desejos. */
+  commitmentsBeforeWants: number
   cashAfterDue: number
   /**
    * Prévia da fatura do próximo ciclo (`max` do lançado e do plano).
@@ -68,9 +70,9 @@ export function calculateFinancialCycle(input: FinancialCycleInput): FinancialCy
   const reservedForNextInvoice = Math.max(input.nextInvoicePersonal, input.plannedNextInvoice)
 
   // Pool discricionário: só o que este salário precisa cobrir agora.
-  const obligationsWithoutWants =
+  const commitmentsBeforeWants =
     input.invoiceToPay + input.costsOnAccount + input.directInvestment + input.extraExpense
-  const discretionaryAvailable = input.income - obligationsWithoutWants
+  const discretionaryAvailable = input.income - commitmentsBeforeWants
 
   return {
     cashMonth: input.cashMonth,
@@ -85,6 +87,7 @@ export function calculateFinancialCycle(input: FinancialCycleInput): FinancialCy
     nextInvoicePersonal: input.nextInvoicePersonal,
     plannedNextInvoice: input.plannedNextInvoice,
     commitmentsDueNow,
+    commitmentsBeforeWants,
     cashAfterDue,
     reservedForNextInvoice,
     availableAfterReservations: cashAfterDue,

@@ -1,0 +1,23 @@
+# Contexto permanente do produto
+
+## Autonomia de produto
+
+- Esta aplicacao e pessoal e tem um unico usuario. Ao trabalhar nela, existe autorizacao para repensar qualquer aba, fluxo, estrutura visual ou modelo de dados quando isso produzir uma decisao financeira mais clara, confiavel e util.
+- Nao preserve uma estrutura apenas por ela ja existir. Mudancas amplas e inovacao sao bem-vindas dentro do problema solicitado, inclusive recriar uma aba quando a arquitetura atual limitar o resultado.
+- Antes de introduzir uma biblioteca ou recurso externo, verifique documentacao atual, compatibilidade, custo e ganho concreto. Prefira comportamento integrado e dados corretos a melhorias apenas cosmeticas.
+- Essa liberdade nao autoriza desviar para modulos sem relacao com o pedido ativo. Mantenha o escopo orientado ao problema financeiro que o usuario trouxe.
+
+## Principios financeiros
+
+- Previsao nao e dinheiro disponivel. Identifique claramente plano, realizado, caixa, patrimonio e projecao.
+- Desejos sao a verba discricionaria que resta depois da fatura anterior, contas correntes, aporte programado e movimentos extraordinarios. Nao conte Desejos como obrigacao ao calcular quanto ainda pode ser alocado a eles.
+- Historico e leitura do passado. Fechamento do mes corrente e uma acao operacional separada, executada na aba Ciclo.
+- O ciclo ativo e a competencia financeira padrao dos lancamentos. A data real serve para auditoria e calculos de tempo; so use outro ciclo quando o usuario o escolher explicitamente.
+- O envelope Cartao inclui seus itens filhos; nunca some esses detalhes novamente.
+
+## Sistema visual
+
+- Preserve a linguagem escura, calma e objetiva do FinTano. Use profundidade sutil, verde apenas para acento/estado positivo e cores quentes apenas para alertas reais.
+- Evolua primeiro tokens e componentes compartilhados; evite controles isolados com aparencia nativa ou classes unicas quando o mesmo padrao pode atender outras telas.
+- Formularios devem ter rotulos persistentes, exemplos em placeholders e hierarquia clara entre acao, contexto e configuracao. Competencia de ciclo faz parte da movimentacao, nao e metadado solto.
+- Trate 390px como largura minima de revisao. Nenhuma tela pode depender de hover ou criar rolagem horizontal para funcionar.

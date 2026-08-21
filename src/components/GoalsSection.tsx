@@ -6,7 +6,7 @@ import { EmptyState, Meter, Panel, PanelHeader, PrimaryButton, SecondaryButton, 
 import { formatCurrency, formatMonthKey, formatMonths, inputClass } from '../lib/format'
 import { INCLUSION_LABELS } from '../lib/goals'
 import { monthKey } from '../lib/shared'
-import { useInvestmentsStore } from '../context/financasStore'
+import { useFinancasStore, useInvestmentsStore } from '../context/financasStore'
 import type { GoalInclusion, GoalKind, GoalSummary } from '../types'
 
 const NET_WORTH_INCLUSIONS: GoalInclusion[] = [
@@ -94,7 +94,8 @@ function FundingSources({ goal }: { goal: GoalSummary }) {
 }
 
 function GoalRow({ goal }: { goal: GoalSummary }) {
-  const { addGoalTransaction, removeGoalTransaction, removeGoal, updateGoal, toggleGoalInclusion, summary } = useInvestmentsStore()
+  const { addGoalTransaction, removeGoalTransaction, setGoalTransactionCycle, removeGoal, updateGoal, toggleGoalInclusion, summary } = useInvestmentsStore()
+  const { activeCycle } = useFinancasStore()
   const [expanded, setExpanded] = useState(false)
   const kind = goal.kind ?? 'funding'
   const lateBy = goal.monthsLeft !== null && goal.monthsLeft < 0 ? -goal.monthsLeft : 0
@@ -156,8 +157,24 @@ function GoalRow({ goal }: { goal: GoalSummary }) {
         <summary className="cursor-pointer text-xs font-medium text-dark-text-secondary">Dinheiro sem posição cadastrada</summary>
         <p className="mt-2 text-[11px] leading-relaxed text-dark-text-muted">Use somente para dinheiro guardado fora das posições acima. Se ele está em CDB, ETF ou caixinha, cadastre a posição e destine o valor para evitar uma origem indefinida.</p>
         <div className="mt-3 space-y-3">
-          <LedgerMoveForm onMove={(amount, note) => addGoalTransaction(goal.id, amount, note)} inLabel="Guardar" outLabel="Resgatar" disableOut={goal.ownBalance <= 0} />
-          <LedgerList transactions={goal.transactions} onRemove={(id) => removeGoalTransaction(goal.id, id)} inLabel="Guardado" outLabel="Resgatado" />
+          <LedgerMoveForm
+            onMove={(amount, note, cycleMonth) =>
+              addGoalTransaction(goal.id, amount, note, cycleMonth)
+            }
+            inLabel="Guardar"
+            outLabel="Resgatar"
+            disableOut={goal.ownBalance <= 0}
+            cycleMonth={activeCycle.month}
+          />
+          <LedgerList
+            transactions={goal.transactions}
+            onRemove={(id) => removeGoalTransaction(goal.id, id)}
+            onCycleMonthChange={(id, cycleMonth) =>
+              setGoalTransactionCycle(goal.id, id, cycleMonth)
+            }
+            inLabel="Guardado"
+            outLabel="Resgatado"
+          />
         </div>
       </details>}
 

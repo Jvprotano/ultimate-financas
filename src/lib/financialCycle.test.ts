@@ -18,6 +18,7 @@ describe('calculateFinancialCycle', () => {
     expect(cycle.spendingMonth).toBe('2026-07')
     expect(cycle.nextSpendingMonth).toBe('2026-08')
     expect(cycle.commitmentsDueNow).toBe(7_000)
+    expect(cycle.commitmentsBeforeWants).toBe(7_000)
     expect(cycle.cashAfterDue).toBe(3_000)
     // Prévia do próximo ciclo — não reduz o liberado deste salário.
     expect(cycle.reservedForNextInvoice).toBe(1_500)
@@ -66,6 +67,7 @@ describe('calculateFinancialCycle', () => {
     expect(cycle.reservedForNextInvoice).toBe(2_800)
     // Este ciclo: 8800 − 2800 − 4170 − 700 − 1494 = −364
     expect(cycle.shortfall).toBe(364)
+    expect(cycle.commitmentsBeforeWants).toBe(8_464)
     // Pool ignora os R$ 700 de desejos em conta: 8800 − 2800 − 4170 − 1494 = 336
     expect(cycle.discretionaryAvailable).toBe(336)
     expect(cycle.discretionaryShortfall).toBe(0)

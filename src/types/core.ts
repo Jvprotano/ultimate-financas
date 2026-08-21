@@ -9,6 +9,9 @@ export type PaymentMethod = 'card' | 'account'
 export interface LedgerEntry {
   id: string
   amount: number
+  /** Ciclo financeiro ao qual a movimentação pertence (AAAA-MM). */
+  cycleMonth?: string
+  /** Momento real do registro, mantido para auditoria e cálculos de retorno. */
   date: string
   note?: string
 }

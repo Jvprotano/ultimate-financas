@@ -3,6 +3,7 @@ import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useCreditCards } from './useCreditCards'
 import { useHistory } from './useHistory'
+import { useInvestments } from './useInvestments'
 import type { MonthlySnapshot } from '../types'
 
 const snapshot: Omit<MonthlySnapshot, 'id' | 'closedAt'> = {
@@ -19,6 +20,7 @@ const snapshot: Omit<MonthlySnapshot, 'id' | 'closedAt'> = {
   costsPlanned: 1900,
   wants: 500,
   invested: 1000,
+  investedPlanned: 900,
   balance: 1800,
   savingsRate: 18.18,
   costsByCategory: { moradia: 1200 },
@@ -29,6 +31,7 @@ const snapshot: Omit<MonthlySnapshot, 'id' | 'closedAt'> = {
   netWorth: 10000,
   emergencyFund: 5000,
   cardPersonalTotal: 700,
+  cardPlanned: 650,
   cardByArea: { desejos: 700 },
   cashLeftover: 1800,
 }
@@ -67,5 +70,41 @@ describe('jornadas financeiras persistidas', () => {
     expect(cards.result.current.summary.currentPersonalTotal).toBe(0)
     expect(cards.result.current.lastPaidInvoice?.personalTotal).toBe(300)
     expect(localStorage.getItem('uf_history_v1')).toBeNull()
+  })
+
+  it('grava aportes no ciclo ativo e permite escolher outra competência', () => {
+    const investments = renderHook(() => useInvestments(0, {}, '2026-09'))
+    act(() => {
+      investments.result.current.addHolding({
+        name: 'Tesouro Selic',
+        assetClassId: 'renda-fixa',
+      })
+    })
+    const holdingId = investments.result.current.holdings[0].id
+
+    act(() => {
+      investments.result.current.addHoldingTransaction(holdingId, 1_000, 'Aporte do salário')
+      investments.result.current.addHoldingTransaction(
+        holdingId,
+        250,
+        'Ajuste retroativo',
+        '2026-08',
+      )
+    })
+
+    const transactions = investments.result.current.holdings[0].transactions
+    expect(transactions.map((transaction) => transaction.cycleMonth)).toEqual([
+      '2026-09',
+      '2026-08',
+    ])
+
+    act(() => {
+      investments.result.current.setHoldingTransactionCycle(
+        holdingId,
+        transactions[0].id,
+        '2026-10',
+      )
+    })
+    expect(investments.result.current.holdings[0].transactions[0].cycleMonth).toBe('2026-10')
   })
 })

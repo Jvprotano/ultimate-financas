@@ -20,6 +20,7 @@ import { DebtsManager } from './DebtsManager'
 import {
   DonutChart,
   EmptyState,
+  FormField,
   GainLabel,
   Panel,
   PanelHeader,
@@ -54,8 +55,10 @@ function PositionRow({ holding }: { holding: FinancialHoldingSummary }) {
     removeHolding,
     addHoldingTransaction,
     removeHoldingTransaction,
+    setHoldingTransactionCycle,
     setMarketValue,
   } = useInvestmentsStore()
+  const { activeCycle } = useFinancasStore()
   const [expanded, setExpanded] = useState(false)
   const purpose = holdingPurpose(holding)
   const assetClass = investmentClasses.find((item) => item.id === holding.assetClassId)
@@ -66,9 +69,9 @@ function PositionRow({ holding }: { holding: FinancialHoldingSummary }) {
   )
   const missingLocation = !holding.institution?.trim()
 
-  return <div className="rounded-xl border border-dark-border/70 bg-dark-surface/40">
-    <button type="button" onClick={() => setExpanded((prev) => !prev)} aria-expanded={expanded} className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-white/[0.03]">
-      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${purpose === 'emergency_fund' ? 'bg-blue-500/10 text-blue-300' : 'bg-primary-500/10 text-primary-300'}`}>
+  return <div className={`overflow-hidden rounded-2xl border bg-dark-surface/35 transition-colors ${expanded ? 'border-dark-text-muted/30' : 'border-dark-border/70 hover:border-dark-text-muted/25'}`}>
+    <button type="button" onClick={() => setExpanded((prev) => !prev)} aria-expanded={expanded} className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.025]">
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${purpose === 'emergency_fund' ? 'border-blue-500/15 bg-blue-500/[0.07] text-blue-300' : 'border-primary-500/15 bg-primary-500/[0.07] text-primary-300'}`}>
         {purpose === 'emergency_fund' ? <Shield size={15} /> : <Landmark size={15} />}
       </span>
       <div className="min-w-0 flex-1">
@@ -92,28 +95,50 @@ function PositionRow({ holding }: { holding: FinancialHoldingSummary }) {
       <ChevronDown size={15} className={`shrink-0 text-dark-text-muted transition-transform ${expanded ? 'rotate-180' : ''}`} />
     </button>
 
-    {expanded && <div className="space-y-3 border-t border-dark-border/60 px-4 py-4">
+    {expanded && <div className="space-y-4 border-t border-dark-border/60 bg-dark-card/40 px-4 py-4">
       <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
-        <div className="rounded-md bg-dark-input/60 px-2.5 py-2"><span className="block text-dark-text-muted">Aportado</span><strong className="tabular-nums text-dark-text">{formatCurrency(holding.invested)}</strong></div>
-        <div className="rounded-md bg-dark-input/60 px-2.5 py-2"><span className="block text-dark-text-muted">Rendimento</span><strong><GainLabel gain={holding.gain} pct={holding.invested > 0 ? holding.gainPct : null} /></strong></div>
-        <div className="col-span-2 rounded-md bg-dark-input/60 px-2.5 py-2 sm:col-span-1"><span className="block text-dark-text-muted">Retorno anualizado</span><strong className="tabular-nums text-dark-text">{holding.annualizedPct === null ? '—' : `${holding.annualizedPct >= 0 ? '+' : ''}${holding.annualizedPct.toFixed(1)}%`}</strong></div>
+        <div className="rounded-xl border border-dark-border-subtle bg-dark-input/45 px-3 py-2.5"><span className="block text-dark-text-muted">Aportado</span><strong className="mt-0.5 block tabular-nums text-dark-text">{formatCurrency(holding.invested)}</strong></div>
+        <div className="rounded-xl border border-dark-border-subtle bg-dark-input/45 px-3 py-2.5"><span className="block text-dark-text-muted">Rendimento</span><strong className="mt-0.5 block"><GainLabel gain={holding.gain} pct={holding.invested > 0 ? holding.gainPct : null} /></strong></div>
+        <div className="col-span-2 rounded-xl border border-dark-border-subtle bg-dark-input/45 px-3 py-2.5 sm:col-span-1"><span className="block text-dark-text-muted">Retorno anualizado</span><strong className="mt-0.5 block tabular-nums text-dark-text">{holding.annualizedPct === null ? '—' : `${holding.annualizedPct >= 0 ? '+' : ''}${holding.annualizedPct.toFixed(1)}%`}</strong></div>
       </div>
 
-      <LedgerMoveForm onMove={(amount, note) => addHoldingTransaction(holding.id, amount, note)} inLabel="Aportar" outLabel="Resgatar" disableOut={holding.marketValue <= 0} />
+      <LedgerMoveForm
+        onMove={(amount, note, cycleMonth) =>
+          addHoldingTransaction(holding.id, amount, note, cycleMonth)
+        }
+        inLabel="Aportar"
+        outLabel="Resgatar"
+        disableOut={holding.marketValue <= 0}
+        cycleMonth={activeCycle.month}
+      />
 
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        <label className="block"><span className="mb-1 block text-[11px] text-dark-text-muted">Saldo atual</span><CurrencyInput value={holding.marketValue} onChange={(value) => setMarketValue(holding.id, value)} className="!py-1.5" /></label>
-        <label className="block"><span className="mb-1 block text-[11px] text-dark-text-muted">Classe</span><select value={holding.assetClassId} onChange={(event) => updateHolding(holding.id, { assetClassId: event.target.value })} className={`${inputClass} h-[38px]`}>{investmentClasses.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        <label className="block"><span className="mb-1 block text-[11px] text-dark-text-muted">Finalidade</span><select value={purpose} onChange={(event) => updateHolding(holding.id, { purpose: event.target.value as InvestmentPurpose })} className={`${inputClass} h-[38px]`}><option value="portfolio">Carteira / metas</option><option value="emergency_fund">Reserva de emergência</option></select></label>
+      <div className="rounded-2xl border border-dark-border/70 bg-dark-input/20 p-3 sm:p-4">
+        <div className="mb-3">
+          <h4 className="text-xs font-semibold text-dark-text">Dados da posição</h4>
+          <p className="mt-0.5 text-[11px] leading-relaxed text-dark-text-muted">Saldo, classificação e identificação do produto.</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <FormField label="Saldo atual" hint="marcação a mercado"><CurrencyInput value={holding.marketValue} onChange={(value) => setMarketValue(holding.id, value)} className="!py-2" /></FormField>
+          <FormField label="Classe"><select value={holding.assetClassId} onChange={(event) => updateHolding(holding.id, { assetClassId: event.target.value })} className={`${inputClass} h-[42px]`}>{investmentClasses.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField>
+          <FormField label="Finalidade"><select value={purpose} onChange={(event) => updateHolding(holding.id, { purpose: event.target.value as InvestmentPurpose })} className={`${inputClass} h-[42px]`}><option value="portfolio">Carteira / metas</option><option value="emergency_fund">Reserva de emergência</option></select></FormField>
+          <FormField label="Produto"><input value={holding.name} onChange={(event) => updateHolding(holding.id, { name: event.target.value })} className={`${inputClass} !py-2`} placeholder="Ex.: CDB Itaú 110% CDI" /></FormField>
+          <FormField label="Instituição"><input value={holding.institution ?? ''} onChange={(event) => updateHolding(holding.id, { institution: event.target.value })} className={`${inputClass} !py-2`} placeholder="Ex.: Itaú, XP, Nubank" /></FormField>
+          <FormField label="Referência"><input value={holding.benchmark ?? ''} onChange={(event) => updateHolding(holding.id, { benchmark: event.target.value })} className={`${inputClass} !py-2`} placeholder="Ex.: 110% CDI" /></FormField>
+          <FormField label="Liquidez"><input value={holding.liquidity ?? ''} onChange={(event) => updateHolding(holding.id, { liquidity: event.target.value })} className={`${inputClass} !py-2`} placeholder="Ex.: D+0" /></FormField>
+        </div>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2">
-        <input value={holding.name} onChange={(event) => updateHolding(holding.id, { name: event.target.value })} className={`${inputClass} !py-1.5`} placeholder="Produto — ex.: CDB Itaú 110% CDI" aria-label="Nome da posição" />
-        <input value={holding.institution ?? ''} onChange={(event) => updateHolding(holding.id, { institution: event.target.value })} className={`${inputClass} !py-1.5`} placeholder="Instituição — ex.: Itaú, XP, Nubank" aria-label="Instituição" />
-        <input value={holding.benchmark ?? ''} onChange={(event) => updateHolding(holding.id, { benchmark: event.target.value })} className={`${inputClass} !py-1.5`} placeholder="Referência — ex.: 110% CDI" aria-label="Referência" />
-        <input value={holding.liquidity ?? ''} onChange={(event) => updateHolding(holding.id, { liquidity: event.target.value })} className={`${inputClass} !py-1.5`} placeholder="Liquidez — ex.: D+0" aria-label="Liquidez" />
+      <LedgerList
+        transactions={holding.transactions}
+        onRemove={(id) => removeHoldingTransaction(holding.id, id)}
+        onCycleMonthChange={(id, cycleMonth) =>
+          setHoldingTransactionCycle(holding.id, id, cycleMonth)
+        }
+        inLabel="Aporte"
+        outLabel="Resgate"
+      />
+      <div className="border-t border-dark-border-subtle pt-3">
+        <button type="button" onClick={() => removeHolding(holding.id)} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-dark-text-muted transition-colors hover:bg-rose-500/[0.06] hover:text-rose-400"><Trash2 size={13} /> Excluir posição</button>
       </div>
-      <LedgerList transactions={holding.transactions} onRemove={(id) => removeHoldingTransaction(holding.id, id)} inLabel="Aporte" outLabel="Resgate" />
-      <button type="button" onClick={() => removeHolding(holding.id)} className="inline-flex items-center gap-1.5 text-xs font-medium text-dark-text-muted hover:text-rose-400"><Trash2 size={13} /> Excluir posição</button>
     </div>}
   </div>
 }
@@ -260,8 +285,13 @@ export function InvestmentsManager() {
       <StatTile label="Rendimento financeiro" value={`${summary.financialGain >= 0 ? '+' : '−'} ${formatCurrency(Math.abs(summary.financialGain))}`} detail={summary.financialInvested > 0 ? `${((summary.financialGain / summary.financialInvested) * 100).toFixed(1)}% sobre o aportado · ${activeGoals} meta${activeGoals === 1 ? '' : 's'} aberta${activeGoals === 1 ? '' : 's'}` : undefined} tone={summary.financialGain >= 0 ? 'positive' : 'negative'} />
     </div>
 
-    <nav aria-label="Seções do patrimônio" className="grid grid-cols-3 rounded-xl border border-dark-border bg-dark-card p-1 sm:grid-cols-6">
-      {SECTION_OPTIONS.map((option) => <button key={option.value} type="button" onClick={() => setSection(option.value)} aria-current={section === option.value ? 'page' : undefined} className={`rounded-lg px-2 py-2 text-xs font-medium transition-colors ${section === option.value ? 'bg-white/[0.06] text-dark-text shadow-sm' : 'text-dark-text-muted hover:text-dark-text'}`}>{option.label}</button>)}
+    <nav aria-label="Seções do patrimônio">
+      <SegmentedControl
+        options={SECTION_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+        value={section}
+        onChange={setSection}
+        columnsClassName="grid-cols-3 sm:grid-cols-6"
+      />
     </nav>
 
     {section === 'overview' && <Overview onNavigate={setSection} />}

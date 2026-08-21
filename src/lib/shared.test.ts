@@ -93,6 +93,16 @@ describe('normalizeLedger', () => {
   it('valor inválido zera e a movimentação é descartada', () => {
     expect(normalizeLedger([{ id: 'a', amount: Number.NaN }])).toEqual([])
   })
+
+  it('preserva apenas competências de ciclo válidas', () => {
+    const ledger = normalizeLedger([
+      { id: 'a', amount: 100, date: '2026-08-30T00:00:00.000Z', cycleMonth: '2026-09' },
+      { id: 'b', amount: 200, date: '2026-08-30T00:00:00.000Z', cycleMonth: 'setembro' },
+    ])
+
+    expect(ledger[0].cycleMonth).toBe('2026-09')
+    expect(ledger[1].cycleMonth).toBeUndefined()
+  })
 })
 
 describe('ledgerBalance', () => {

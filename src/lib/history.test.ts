@@ -31,6 +31,16 @@ describe('normalizeSnapshot — compatibilidade', () => {
     expect(normalized.costsPlanned).toBe(3_000)
   })
 
+  it('snapshot antigo sem metas de cartão e investimento fica neutro', () => {
+    const normalized = normalizeSnapshot({
+      month: '2026-06',
+      invested: 1_200,
+      cardPersonalTotal: 2_400,
+    })
+    expect(normalized.investedPlanned).toBe(1_200)
+    expect(normalized.cardPlanned).toBe(2_400)
+  })
+
   it('snapshot antigo sem dívidas trata o patrimônio gravado como ativos', () => {
     const normalized = normalizeSnapshot({ month: '2026-06', netWorth: 5_000 })
     expect(normalized.grossAssets).toBe(5_000)
@@ -95,6 +105,9 @@ describe('buildHistoryPoints', () => {
     ])
     expect(points[1].netWorthDelta).toBe(1_900)
     expect(points[1].costsDelta).toBe(400)
+    expect(points[1].wantsDelta).toBe(0)
+    expect(points[1].investedDelta).toBe(0)
+    expect(points[1].cardDelta).toBe(0)
   })
 
   it('o financeiro do mês exclui bens e a dívida que os garante', () => {

@@ -5,7 +5,7 @@ import type {
   LedgerEntry,
 } from '../types'
 import { holdingPurpose } from './investments'
-import { normalizeText } from './shared'
+import { ledgerEntryCycleMonth, normalizeText } from './shared'
 
 export interface MonthlyInvestmentActuals {
   month: string
@@ -27,7 +27,7 @@ function isOpeningBalance(entry: LedgerEntry) {
 
 function monthlyLedgerNet(entries: LedgerEntry[], month: string) {
   return entries.reduce((sum, entry) => {
-    if (!entry.date.startsWith(month) || isOpeningBalance(entry)) return sum
+    if (ledgerEntryCycleMonth(entry) !== month || isOpeningBalance(entry)) return sum
     return sum + entry.amount
   }, 0)
 }

@@ -46,7 +46,7 @@ export function ScenarioSwitcher() {
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
-        className="flex items-center gap-2 rounded-lg border border-dark-border bg-dark-surface px-3 py-2 text-sm font-medium text-dark-text transition-colors hover:border-dark-text-muted/40"
+        className="flex h-10 items-center gap-2 rounded-xl border border-dark-border bg-dark-surface/80 px-3 text-sm font-medium text-dark-text shadow-sm shadow-black/15 transition-colors hover:border-dark-text-muted/40 hover:bg-dark-hover"
       >
         <Layers3 size={14} className="text-dark-text-muted" />
         <span className="max-w-36 truncate">{activeScenario?.name ?? 'Cenário'}</span>
@@ -57,7 +57,7 @@ export function ScenarioSwitcher() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-xl border border-dark-border bg-dark-card shadow-xl shadow-black/40">
+        <div className="app-panel-shadow absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-2xl border border-dark-border bg-dark-card/98">
           <div className="max-h-72 overflow-y-auto p-1.5">
             {scenarios.map((scenario) => {
               const summary = summaries.find((item) => item.id === scenario.id)
@@ -73,7 +73,7 @@ export function ScenarioSwitcher() {
                         if (event.key === 'Enter') finishEditing()
                         if (event.key === 'Escape') setEditingId(null)
                       }}
-                      className="min-w-0 flex-1 rounded-md border border-dark-border bg-dark-input px-2 py-1.5 text-sm text-dark-text outline-none focus:border-primary-500"
+                      className="app-field min-w-0 flex-1 !rounded-lg px-2 py-1.5 text-sm"
                       aria-label="Novo nome do cenário"
                       autoFocus
                     />

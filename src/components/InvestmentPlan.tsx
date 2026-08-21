@@ -170,7 +170,7 @@ export function InvestmentPlan() {
                           onChange={(e) =>
                             handlePercentageChange(slice.id, parseInt(e.target.value) || 0)
                           }
-                          className="w-full rounded-md border border-dark-border bg-dark-input py-1 pl-2 pr-4 text-right text-xs font-medium tabular-nums text-dark-text outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/25"
+                          className="app-field w-full !rounded-lg py-1 pl-2 pr-4 text-right text-xs font-medium tabular-nums"
                           aria-label={`Percentual de ${slice.name}`}
                         />
                         <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-dark-text-muted">

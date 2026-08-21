@@ -48,17 +48,17 @@ export function Card({
 
   return (
     <section
-      className={`overflow-hidden rounded-xl border border-dark-border bg-dark-card ${className}`}
+      className={`app-panel-shadow overflow-hidden rounded-2xl border border-dark-border/90 bg-dark-card/95 ${className}`}
     >
       <HeaderTag
         {...(collapsible
           ? { type: 'button' as const, onClick: toggleCollapse, 'aria-expanded': !collapsed }
           : {})}
-        className={`flex w-full items-center gap-2.5 px-5 py-4 text-left ${
+        className={`flex w-full items-center gap-3 px-4 py-4 text-left sm:px-5 ${
           collapsed ? '' : 'border-b border-dark-border-subtle'
         } ${collapsible ? 'select-none transition-colors hover:bg-dark-hover/40' : ''}`}
       >
-        <span className="shrink-0 text-dark-text-muted">{icon}</span>
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.045] bg-white/[0.035] text-dark-text-muted">{icon}</span>
         <h2 className="flex-1 text-[15px] font-semibold tracking-tight text-dark-text">{title}</h2>
         {headerExtra && (
           <span
@@ -78,7 +78,7 @@ export function Card({
           />
         )}
       </HeaderTag>
-      {!collapsed && <div className="p-5">{children}</div>}
+      {!collapsed && <div className="p-4 sm:p-5">{children}</div>}
     </section>
   )
 }

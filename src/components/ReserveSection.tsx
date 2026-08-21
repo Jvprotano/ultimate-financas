@@ -4,6 +4,7 @@ import { CurrencyInput } from './CurrencyInput'
 import { LedgerList, LedgerMoveForm } from './Ledger'
 import {
   EmptyState,
+  FormField,
   GainLabel,
   Meter,
   Panel,
@@ -14,7 +15,7 @@ import {
   Tag,
 } from './ui'
 import { formatCurrency, inputClass } from '../lib/format'
-import { useInvestmentsStore, useMetrics } from '../context/financasStore'
+import { useFinancasStore, useInvestmentsStore, useMetrics } from '../context/financasStore'
 import type { FinancialHoldingSummary } from '../lib/investments'
 import { CHART_PALETTE } from '../types/constants'
 
@@ -27,18 +28,20 @@ function ReservePositionRow({ holding }: { holding: FinancialHoldingSummary }) {
     removeHolding,
     addHoldingTransaction,
     removeHoldingTransaction,
+    setHoldingTransactionCycle,
     setMarketValue,
   } = useInvestmentsStore()
+  const { activeCycle } = useFinancasStore()
   const [expanded, setExpanded] = useState(false)
   const assetClass = investmentClasses.find((item) => item.id === holding.assetClassId)
 
   return (
-    <div className="rounded-lg border border-dark-border/60 bg-dark-surface/40">
+    <div className={`overflow-hidden rounded-2xl border bg-dark-surface/35 transition-colors ${expanded ? 'border-dark-text-muted/30' : 'border-dark-border/70 hover:border-dark-text-muted/25'}`}>
       <button
         type="button"
         onClick={() => setExpanded((prev) => !prev)}
         aria-expanded={expanded}
-        className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-white/[0.03]"
+        className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.025]"
       >
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-dark-text">{holding.name}</p>
@@ -71,19 +74,19 @@ function ReservePositionRow({ holding }: { holding: FinancialHoldingSummary }) {
       </button>
 
       {expanded && (
-        <div className="space-y-3 border-t border-dark-border/60 px-3 py-3">
+        <div className="space-y-4 border-t border-dark-border/60 bg-dark-card/40 px-4 py-4">
           <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
-            <div className="rounded-md bg-dark-input/60 px-2.5 py-1.5">
+            <div className="rounded-xl border border-dark-border-subtle bg-dark-input/45 px-3 py-2.5">
               <span className="block text-dark-text-muted">Aportado</span>
               <strong className="tabular-nums text-dark-text">{formatCurrency(holding.invested)}</strong>
             </div>
-            <div className="rounded-md bg-dark-input/60 px-2.5 py-1.5">
+            <div className="rounded-xl border border-dark-border-subtle bg-dark-input/45 px-3 py-2.5">
               <span className="block text-dark-text-muted">Rendimento</span>
               <strong>
                 <GainLabel gain={holding.gain} pct={holding.invested > 0 ? holding.gainPct : null} />
               </strong>
             </div>
-            <div className="rounded-md bg-dark-input/60 px-2.5 py-1.5">
+            <div className="col-span-2 rounded-xl border border-dark-border-subtle bg-dark-input/45 px-3 py-2.5 sm:col-span-1">
               <span className="block text-dark-text-muted">Retorno anualizado</span>
               <strong className="tabular-nums text-dark-text">
                 {holding.annualizedPct === null
@@ -94,28 +97,30 @@ function ReservePositionRow({ holding }: { holding: FinancialHoldingSummary }) {
           </div>
 
           <LedgerMoveForm
-            onMove={(amount, note) => addHoldingTransaction(holding.id, amount, note)}
+            onMove={(amount, note, cycleMonth) =>
+              addHoldingTransaction(holding.id, amount, note, cycleMonth)
+            }
             inLabel="Aportar"
             outLabel="Resgatar"
             disableOut={holding.marketValue <= 0}
             notePlaceholder="Nota (opcional) — ex.: aporte mensal, resgate emergencial"
+            cycleMonth={activeCycle.month}
           />
 
-          <div className="grid gap-2 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dark-text-muted">
-                Saldo atual
-              </span>
+          <div className="rounded-2xl border border-dark-border/70 bg-dark-input/20 p-3 sm:p-4">
+            <div className="mb-3">
+              <h4 className="text-xs font-semibold text-dark-text">Dados da reserva</h4>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-dark-text-muted">Identifique onde está o dinheiro e em quanto tempo ele fica disponível.</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+            <FormField label="Saldo atual" hint="marcação a mercado">
               <CurrencyInput
                 value={holding.marketValue}
                 onChange={(value) => setMarketValue(holding.id, value)}
                 className="!py-2"
               />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-dark-text-muted">
-                Classe do ativo
-              </span>
+            </FormField>
+            <FormField label="Classe do ativo">
               <select
                 value={holding.assetClassId}
                 onChange={(event) => updateHolding(holding.id, { assetClassId: event.target.value })}
@@ -127,55 +132,62 @@ function ReservePositionRow({ holding }: { holding: FinancialHoldingSummary }) {
                   </option>
                 ))}
               </select>
-            </label>
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-2">
+            </FormField>
+            <FormField label="Produto">
             <input
               value={holding.name}
               onChange={(event) => updateHolding(holding.id, { name: event.target.value })}
               className={`${inputClass} !py-1.5`}
-              placeholder="Produto — ex.: CDB liquidez diária"
-              aria-label="Produto da reserva"
+              placeholder="Ex.: CDB liquidez diária"
             />
+            </FormField>
+            <FormField label="Instituição">
             <input
               value={holding.institution ?? ''}
               onChange={(event) => updateHolding(holding.id, { institution: event.target.value })}
               className={`${inputClass} !py-1.5`}
-              placeholder="Instituição — ex.: Inter, Itaú, XP"
-              aria-label="Instituição da reserva"
+              placeholder="Ex.: Inter, Itaú, XP"
             />
+            </FormField>
+            <FormField label="Referência">
             <input
               value={holding.benchmark ?? ''}
               onChange={(event) => updateHolding(holding.id, { benchmark: event.target.value })}
               className={`${inputClass} !py-1.5`}
-              placeholder="Referência — ex.: 100% CDI"
-              aria-label="Referência da reserva"
+              placeholder="Ex.: 100% CDI"
             />
+            </FormField>
+            <FormField label="Liquidez">
             <input
               value={holding.liquidity ?? ''}
               onChange={(event) => updateHolding(holding.id, { liquidity: event.target.value })}
               className={`${inputClass} !py-1.5`}
-              placeholder="Liquidez — ex.: D+0"
-              aria-label="Liquidez da reserva"
+              placeholder="Ex.: D+0"
             />
+            </FormField>
+            </div>
           </div>
 
           <LedgerList
             transactions={holding.transactions}
             onRemove={(id) => removeHoldingTransaction(holding.id, id)}
+            onCycleMonthChange={(id, cycleMonth) =>
+              setHoldingTransactionCycle(holding.id, id, cycleMonth)
+            }
             inLabel="Aporte"
             outLabel="Resgate"
           />
 
-          <button
-            type="button"
-            onClick={() => removeHolding(holding.id)}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-dark-text-muted transition-colors hover:text-rose-400"
-          >
-            <Trash2 size={13} />
-            Excluir posição da reserva
-          </button>
+          <div className="border-t border-dark-border-subtle pt-3">
+            <button
+              type="button"
+              onClick={() => removeHolding(holding.id)}
+              className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-dark-text-muted transition-colors hover:bg-rose-500/[0.06] hover:text-rose-400"
+            >
+              <Trash2 size={13} />
+              Excluir posição da reserva
+            </button>
+          </div>
         </div>
       )}
     </div>

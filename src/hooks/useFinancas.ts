@@ -46,7 +46,7 @@ export function useFinancas() {
   const investments = useInvestments(debts.summary.totalBalance, {
     securedLiabilities: debts.summary.securedBalance,
     physicalAssets: assets.summary.totalValue,
-  })
+  }, activeCycle.month)
   const history = useHistory(activeCycle.month)
   const forecast = useForecast(activeCycle.month)
   const actuals = useActuals(scenarios.activeScenario.costs, activeCycle.month)
@@ -334,6 +334,7 @@ export function useFinancas() {
         costsPlanned: actuals.summary.plannedCosts,
         wants: metrics.totalWantsAmount,
         invested: investmentActuals.total,
+        investedPlanned: metrics.totalPlannedInvestment,
         balance,
         savingsRate: investmentActuals.savingsRate,
         costsByCategory,
@@ -346,6 +347,7 @@ export function useFinancas() {
         // Para o ciclo operacional, Cartão = a minha parte da fatura usada para
         // encerrar o mês. Antecipados já removidos da fatura não são somados de novo.
         cardPersonalTotal: cardCycleAccounting.invoiceFormedByCycle.personalTotal,
+        cardPlanned: metrics.plannedOnCard,
         cardByArea,
         cashLeftover: cashFlow.leftover,
         note,

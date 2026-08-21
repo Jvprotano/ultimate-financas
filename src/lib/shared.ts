@@ -63,13 +63,28 @@ export function monthsBetween(from: string, to: string): number {
 export function normalizeLedger(raw: unknown, fallbackDate = nowIso()): LedgerEntry[] {
   if (!Array.isArray(raw)) return []
   return raw
-    .map((tx: Partial<LedgerEntry> | undefined) => ({
-      id: tx?.id || uid(),
-      amount: finiteNumber(tx?.amount),
-      date: tx?.date || fallbackDate,
-      note: tx?.note?.trim() || undefined,
-    }))
+    .map((tx: Partial<LedgerEntry> | undefined) => {
+      const cycleMonth =
+        typeof tx?.cycleMonth === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(tx.cycleMonth)
+          ? tx.cycleMonth
+          : undefined
+      return {
+        id: tx?.id || uid(),
+        amount: finiteNumber(tx?.amount),
+        date: tx?.date || fallbackDate,
+        note: tx?.note?.trim() || undefined,
+        cycleMonth,
+      }
+    })
     .filter((tx) => tx.amount !== 0)
+}
+
+/**
+ * Competência financeira do lançamento. Dados antigos não tinham ciclo;
+ * nesses casos preservamos o comportamento histórico usando o mês da data.
+ */
+export function ledgerEntryCycleMonth(entry: LedgerEntry): string {
+  return entry.cycleMonth ?? entry.date.slice(0, 7)
 }
 
 export function ledgerBalance(transactions: LedgerEntry[]): number {

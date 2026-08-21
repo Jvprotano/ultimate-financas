@@ -55,6 +55,6 @@ export function formatDate(iso: string): string {
 }
 
 export const inputClass =
-  'w-full rounded-lg border border-dark-border bg-dark-input px-3 py-2.5 text-sm text-dark-text transition-colors placeholder:text-dark-text-muted focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/25'
+  'app-field w-full px-3 py-2.5 text-sm placeholder:text-dark-text-muted'
 
 export const selectClass = inputClass

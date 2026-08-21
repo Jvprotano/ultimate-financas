@@ -44,7 +44,7 @@ export function CurrencyInput({
         onChange={handleChange}
         onBlur={onBlur}
         placeholder={placeholder}
-        className={`w-full rounded-lg border border-dark-border bg-dark-input py-2.5 pl-10 pr-3 text-right text-sm font-medium tabular-nums text-dark-text transition-colors placeholder:text-dark-text-muted focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/25 ${className}`}
+        className={`app-field w-full py-2.5 pl-10 pr-3 text-right text-sm font-medium tabular-nums placeholder:text-dark-text-muted ${className}`}
       />
     </div>
   )

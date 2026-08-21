@@ -104,7 +104,8 @@ function TabBar({
 }) {
   return (
     <nav
-      className={`grid grid-cols-3 gap-1 rounded-lg border border-dark-border bg-dark-surface p-1 sm:grid-cols-6 ${className}`}
+      className={`grid grid-cols-3 gap-1 rounded-xl border border-dark-border/90 bg-dark-card/85 p-1.5 shadow-inner shadow-black/20 sm:grid-cols-6 ${className}`}
+      aria-label="Navegação principal"
     >
       {VIEWS.map(({ id, label, icon: Icon }) => {
         const secondary = SECONDARY_VIEWS.has(id)
@@ -115,12 +116,12 @@ function TabBar({
             type="button"
             onClick={() => setActiveView(id)}
             aria-current={active ? 'page' : undefined}
-            className={`inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors ${
+            className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-2.5 py-2 text-sm font-medium transition-[background-color,border-color,color,box-shadow] ${
               active
-                ? 'bg-dark-hover text-dark-text shadow-sm'
+                ? 'border-primary-500/15 bg-primary-500/[0.075] text-primary-100 shadow-sm shadow-black/20'
                 : secondary
-                  ? 'text-dark-text-muted/70 hover:text-dark-text-muted'
-                  : 'text-dark-text-muted hover:text-dark-text'
+                  ? 'border-transparent text-dark-text-muted/65 hover:bg-white/[0.025] hover:text-dark-text-muted'
+                  : 'border-transparent text-dark-text-muted hover:bg-white/[0.025] hover:text-dark-text'
             }`}
           >
             <Icon size={14} className={secondary && !active ? 'opacity-70' : undefined} />
@@ -174,7 +175,7 @@ function AppMenu({
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="rounded-lg border border-dark-border bg-dark-surface p-2 text-dark-text-muted transition-colors hover:text-dark-text"
+        className="rounded-xl border border-dark-border bg-dark-surface/80 p-2.5 text-dark-text-muted shadow-sm shadow-black/15 transition-colors hover:border-dark-text-muted/40 hover:bg-dark-hover hover:text-dark-text"
         aria-label="Mais opções"
         aria-expanded={open}
       >
@@ -405,11 +406,14 @@ function AppShell() {
   }
 
   return (
-    <div className="min-h-screen bg-dark-bg text-dark-text">
-      <header className="sticky top-0 z-40 border-b border-dark-border-subtle bg-dark-bg/90 backdrop-blur-xl">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
-          <h1 className="hidden shrink-0 truncate text-[15px] font-semibold tracking-tight text-dark-text sm:block">
-            FinTano
+    <div className="min-h-screen text-dark-text">
+      <header className="sticky top-0 z-40 border-b border-dark-border-subtle bg-dark-bg/78 shadow-[0_1px_0_rgba(255,255,255,0.015)] backdrop-blur-2xl">
+        <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-3 px-4 py-2 sm:px-6">
+          <h1 className="flex shrink-0 items-center gap-2.5 truncate text-[15px] font-semibold tracking-tight text-dark-text">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-primary-400/15 bg-primary-500/[0.08] text-sm font-bold text-primary-300 shadow-inner shadow-primary-300/[0.04]">
+              F
+            </span>
+            <span className="hidden sm:inline">FinTano</span>
           </h1>
 
           <TabBar activeView={activeView} setActiveView={setActiveView} className="hidden md:grid" />
@@ -438,7 +442,7 @@ function AppShell() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl space-y-4 px-4 py-5 sm:px-6">
+      <main className="mx-auto max-w-7xl space-y-5 px-4 py-5 sm:px-6 sm:py-7">
         {persistence.hasError && (
           <div
             role="alert"
@@ -488,7 +492,7 @@ function AppShell() {
 
         <Suspense
           fallback={
-            <div className="rounded-xl border border-dark-border bg-dark-card p-8 text-center text-sm text-dark-text-muted">
+            <div className="app-panel-shadow rounded-2xl border border-dark-border bg-dark-card/95 p-8 text-center text-sm text-dark-text-muted">
               Carregando dados…
             </div>
           }
@@ -500,8 +504,8 @@ function AppShell() {
         </Suspense>
       </main>
 
-      <footer className="border-t border-dark-border-subtle">
-        <div className="mx-auto max-w-6xl px-4 py-4 text-center text-xs text-dark-text-muted sm:px-6">
+      <footer className="mt-8 border-t border-dark-border-subtle bg-dark-bg/35">
+        <div className="mx-auto max-w-7xl px-4 py-5 text-center text-xs text-dark-text-muted sm:px-6">
           Dados salvos apenas neste navegador ({scenarios.scenarios.length}{' '}
           {scenarios.scenarios.length === 1 ? 'cenário' : 'cenários'}). Exporte um backup para
           guardar uma cópia. Aperte <kbd className="font-mono">?</kbd> para ver os atalhos.

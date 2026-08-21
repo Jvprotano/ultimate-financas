@@ -35,7 +35,7 @@ export function Panel({
 }) {
   return (
     <section
-      className={`rounded-xl border border-dark-border bg-dark-card ${padded ? 'p-5' : ''} ${className}`}
+      className={`app-panel-shadow rounded-2xl border border-dark-border/90 bg-dark-card/95 ${padded ? 'p-4 sm:p-5' : ''} ${className}`}
     >
       {children}
     </section>
@@ -57,15 +57,23 @@ export function PanelHeader({
   className?: string
 }) {
   return (
-    <div className={`flex flex-wrap items-center gap-3 ${className}`}>
-      {icon && <span className="shrink-0 text-dark-text-muted">{icon}</span>}
-      <div className="min-w-0 flex-1">
-        <h3 className="text-sm font-semibold tracking-tight text-dark-text">{title}</h3>
+    <div className={`flex flex-wrap items-start gap-3 ${className}`}>
+      {icon && (
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.045] bg-white/[0.035] text-dark-text-muted shadow-inner shadow-white/[0.02]">
+          {icon}
+        </span>
+      )}
+      <div className="min-w-0 flex-1 basis-56">
+        <h3 className="text-[15px] font-semibold tracking-tight text-dark-text">{title}</h3>
         {description && (
-          <p className="mt-0.5 text-xs leading-relaxed text-dark-text-muted">{description}</p>
+          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-dark-text-muted">{description}</p>
         )}
       </div>
-      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+      {actions && (
+        <div className="ml-auto flex shrink-0 items-center gap-2 max-sm:ml-11 max-sm:-mt-1 max-sm:w-[calc(100%-2.75rem)]">
+          {actions}
+        </div>
+      )}
     </div>
   )
 }
@@ -82,14 +90,41 @@ export function EmptyState({
   action?: ReactNode
 }) {
   return (
-    <div className="flex flex-col items-center rounded-xl border border-dashed border-dark-border bg-dark-card/40 px-6 py-12 text-center">
-      {icon && <span className="mb-3 text-dark-text-muted/50">{icon}</span>}
+    <div className="flex flex-col items-center rounded-2xl border border-dashed border-dark-border bg-dark-input/25 px-6 py-12 text-center shadow-inner shadow-black/10">
+      {icon && (
+        <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-dark-border-subtle bg-dark-surface text-dark-text-muted/70">
+          {icon}
+        </span>
+      )}
       <strong className="text-sm font-semibold text-dark-text">{title}</strong>
       {children && (
         <p className="mt-1.5 max-w-md text-sm leading-relaxed text-dark-text-muted">{children}</p>
       )}
       {action && <div className="mt-5">{action}</div>}
     </div>
+  )
+}
+
+/** Campo com rótulo persistente; placeholder fica reservado a exemplo ou formato. */
+export function FormField({
+  label,
+  hint,
+  children,
+  className = '',
+}: {
+  label: string
+  hint?: string
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <label className={`block min-w-0 ${className}`}>
+      <span className="mb-1.5 flex items-baseline justify-between gap-2 text-[11px] font-medium text-dark-text-secondary">
+        <span>{label}</span>
+        {hint && <span className="text-[10px] font-normal text-dark-text-muted">{hint}</span>}
+      </span>
+      {children}
+    </label>
   )
 }
 
@@ -594,14 +629,23 @@ export function StatTile({
     negative: 'text-rose-400',
     accent: 'text-primary-400',
   }[tone]
+  const surfaceClass = {
+    neutral: 'border-dark-border/90 bg-dark-card/95',
+    positive: 'border-primary-500/20 bg-[linear-gradient(145deg,rgba(16,185,129,0.075),rgba(16,185,129,0.018)_58%,transparent)]',
+    warning: 'border-amber-500/20 bg-[linear-gradient(145deg,rgba(245,158,11,0.07),rgba(245,158,11,0.015)_58%,transparent)]',
+    caution: 'border-orange-500/20 bg-[linear-gradient(145deg,rgba(249,115,22,0.07),rgba(249,115,22,0.015)_58%,transparent)]',
+    negative: 'border-rose-500/20 bg-[linear-gradient(145deg,rgba(244,63,94,0.07),rgba(244,63,94,0.015)_58%,transparent)]',
+    accent: 'border-primary-500/20 bg-[linear-gradient(145deg,rgba(16,185,129,0.075),rgba(16,185,129,0.018)_58%,transparent)]',
+  }[tone]
 
   return (
-    <div className={`rounded-xl border border-dark-border bg-dark-card px-4 py-3.5 ${className}`}>
+    <div className={`app-panel-shadow relative overflow-hidden rounded-2xl border px-4 py-3.5 ${surfaceClass} ${className}`}>
+      <span className="pointer-events-none absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-white/[0.08] to-transparent" />
       <span className="block text-[11px] font-medium uppercase tracking-wider text-dark-text-muted">
         {label}
       </span>
       <strong
-        className={`mt-1 block text-lg font-semibold leading-tight tracking-tight tabular-nums ${valueClass}`}
+        className={`mt-1.5 block text-xl font-semibold leading-tight tracking-[-0.025em] tabular-nums ${valueClass}`}
       >
         {value}
       </strong>
@@ -651,7 +695,7 @@ export function PrimaryButton({
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-40 ${className}`}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-xl border border-primary-400/20 bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(5,150,105,0.18)] transition-[background-color,transform,box-shadow] hover:-translate-y-px hover:bg-primary-500 hover:shadow-[0_10px_28px_rgba(5,150,105,0.24)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 ${className}`}
     >
       {children}
     </button>
@@ -673,15 +717,15 @@ export function SecondaryButton({
 }) {
   const toneClass =
     tone === 'danger'
-      ? 'border-dark-border text-dark-text-secondary hover:border-rose-500/40 hover:text-rose-300'
-      : 'border-dark-border text-dark-text-secondary hover:border-dark-text-muted/50 hover:text-dark-text'
+      ? 'border-dark-border text-dark-text-secondary hover:border-rose-500/40 hover:bg-rose-500/[0.06] hover:text-rose-300'
+      : 'border-dark-border text-dark-text-secondary hover:border-dark-text-muted/50 hover:bg-dark-hover hover:text-dark-text'
 
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-lg border bg-dark-surface px-3.5 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${toneClass} ${className}`}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-xl border bg-dark-surface/80 px-3.5 py-2 text-sm font-medium shadow-sm shadow-black/10 transition-[background-color,border-color,color,transform] hover:-translate-y-px active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 ${toneClass} ${className}`}
     >
       {children}
     </button>
@@ -694,7 +738,7 @@ export function SuggestionChip({ label, onClick }: { label: string; onClick: () 
     <button
       type="button"
       onClick={onClick}
-      className="rounded-full border border-dark-border bg-dark-surface px-3 py-1 text-xs text-dark-text-secondary transition-colors hover:border-primary-500/50 hover:text-primary-300"
+      className="rounded-full border border-dark-border bg-dark-surface/80 px-3 py-1 text-xs text-dark-text-secondary shadow-sm shadow-black/10 transition-colors hover:border-primary-500/50 hover:bg-primary-500/[0.05] hover:text-primary-300"
     >
       + {label}
     </button>
@@ -713,7 +757,7 @@ export function Tag({
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full bg-dark-input px-2 py-0.5 text-[11px] font-medium text-dark-text-secondary ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border border-white/[0.045] bg-dark-input/85 px-2 py-0.5 text-[11px] font-medium text-dark-text-secondary shadow-sm shadow-black/10 ${className}`}
     >
       {color && <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} />}
       {children}
@@ -727,26 +771,29 @@ export function SegmentedControl<T extends string | number | boolean>({
   value,
   onChange,
   className = '',
+  columnsClassName = '',
 }: {
   options: { value: T; label: ReactNode }[]
   value: T
   onChange: (value: T) => void
   className?: string
+  /** Permite quebra responsiva, por exemplo `grid-cols-3 sm:grid-cols-6`. */
+  columnsClassName?: string
 }) {
   return (
     <div
-      className={`grid gap-1 rounded-lg border border-dark-border bg-dark-input p-1 ${className}`}
-      style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
+      className={`grid gap-1 rounded-xl border border-dark-border/90 bg-dark-input/80 p-1.5 shadow-inner shadow-black/15 ${columnsClassName} ${className}`}
+      style={columnsClassName ? undefined : { gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
     >
       {options.map((option) => (
         <button
           key={String(option.value)}
           type="button"
           onClick={() => onChange(option.value)}
-          className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+          className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-[background-color,border-color,color,box-shadow] ${
             value === option.value
-              ? 'bg-dark-surface text-dark-text shadow-sm'
-              : 'text-dark-text-muted hover:text-dark-text'
+              ? 'border-white/[0.055] bg-dark-surface text-dark-text shadow-sm shadow-black/25'
+              : 'border-transparent text-dark-text-muted hover:bg-white/[0.025] hover:text-dark-text'
           }`}
         >
           {option.label}
@@ -869,7 +916,7 @@ export function ConfirmationDialog({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
-        className="w-full max-w-md rounded-xl border border-dark-border bg-dark-card p-5 shadow-2xl shadow-black/50"
+        className="app-panel-shadow w-full max-w-md rounded-2xl border border-dark-border bg-dark-card p-5 shadow-2xl shadow-black/50"
       >
         <h2 id={titleId} className="text-base font-semibold tracking-tight text-dark-text">
           {title}

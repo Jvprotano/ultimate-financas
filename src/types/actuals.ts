@@ -53,6 +53,7 @@ export interface MonthlySnapshot {
   costsPlanned: number
   wants: number
   invested: number
+  investedPlanned: number
   balance: number
   savingsRate: number
   costsByCategory: Partial<Record<CostCategory, number>>
@@ -63,6 +64,7 @@ export interface MonthlySnapshot {
   netWorth: number
   emergencyFund: number
   cardPersonalTotal: number
+  cardPlanned: number
   cardByArea: Partial<Record<BudgetArea, number>>
   cashLeftover: number
   note?: string
@@ -72,6 +74,9 @@ export interface HistoryPoint extends MonthlySnapshot {
   financialNetWorth: number
   netWorthDelta: number | null
   costsDelta: number | null
+  wantsDelta: number | null
+  investedDelta: number | null
+  cardDelta: number | null
 }
 
 export type SnapshotPatch = Partial<
@@ -82,14 +87,17 @@ export type SnapshotPatch = Partial<
     | 'extraIncome'
     | 'extraExpense'
     | 'costs'
+    | 'costsPlanned'
     | 'wants'
     | 'invested'
+    | 'investedPlanned'
     | 'grossAssets'
     | 'physicalAssets'
     | 'liabilities'
     | 'securedLiabilities'
     | 'emergencyFund'
     | 'cardPersonalTotal'
+    | 'cardPlanned'
     | 'cashLeftover'
     | 'note'
   >
