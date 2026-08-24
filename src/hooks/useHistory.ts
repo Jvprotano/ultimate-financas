@@ -1,24 +1,60 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { useLocalStorage } from './useLocalStorage'
 import type { MonthlySnapshot, SnapshotPatch } from '../types'
 import {
   averageMonthlyCosts,
   buildHistoryPoints,
   calculateHistoryStats,
+  migrateSnapshotInvestmentProjection,
   normalizeSnapshot,
+  projectHistoryInvestments,
 } from '../lib/history'
+import {
+  hasInvestmentLedgerActivity,
+  type InvestmentLedgerSource,
+} from '../lib/investmentActuals'
 import { monthKey, nowIso, uid } from '../lib/shared'
 
 const HISTORY_STORAGE_KEY = 'uf_history_v1'
 
-export function useHistory(cycleMonth = monthKey()) {
+export function useHistory(cycleMonth = monthKey(), investmentSource?: InvestmentLedgerSource) {
   const [stored, setStored] = useLocalStorage<MonthlySnapshot[]>(HISTORY_STORAGE_KEY, [])
   const snapshots = useMemo(
     () => (Array.isArray(stored) ? stored.map(normalizeSnapshot) : []),
     [stored],
   )
-  const points = useMemo(() => buildHistoryPoints(snapshots), [snapshots])
+  const ledgerHasActivity = useMemo(
+    () => (investmentSource ? hasInvestmentLedgerActivity(investmentSource) : false),
+    [investmentSource],
+  )
+  const projectedSnapshots = useMemo(
+    () =>
+      investmentSource
+        ? projectHistoryInvestments(snapshots, investmentSource)
+        : snapshots,
+    [investmentSource, snapshots],
+  )
+  const points = useMemo(() => buildHistoryPoints(projectedSnapshots), [projectedSnapshots])
   const stats = useMemo(() => calculateHistoryStats(points), [points])
+
+  // Uma vez que um backup legado prova ter um livro-razão real, grava a marca
+  // de migração. Assim, remover o último aporte depois também projeta zero em
+  // vez de fazer o snapshot antigo reaparecer.
+  useEffect(() => {
+    if (
+      !investmentSource ||
+      !ledgerHasActivity ||
+      !snapshots.some((snapshot) => snapshot.investmentProjectionVersion < 1)
+    ) {
+      return
+    }
+
+    setStored((prev) =>
+      (Array.isArray(prev) ? prev : []).map((snapshot) =>
+        migrateSnapshotInvestmentProjection(normalizeSnapshot(snapshot)),
+      ),
+    )
+  }, [investmentSource, ledgerHasActivity, setStored, snapshots])
 
   /** Fecha um mês. Refechar o mesmo mês substitui o registro anterior. */
   const closeMonth = useCallback(
@@ -82,13 +118,24 @@ export function useHistory(cycleMonth = monthKey()) {
             extraIncomeEntries,
             extraExpenseEntries,
           })
+          const invested = merged.payrollInvested + merged.directInvestedAtClose
           return {
             ...merged,
+            invested,
+            investmentPlanCaptured:
+              patch.investedPlanned === undefined ? merged.investmentPlanCaptured : true,
             netWorth: merged.grossAssets + merged.physicalAssets - merged.liabilities,
             savingsRate:
               merged.availableForBudget + merged.extraIncome > 0
-                ? (merged.invested / (merged.availableForBudget + merged.extraIncome)) * 100
+                ? (invested / (merged.availableForBudget + merged.extraIncome)) * 100
                 : 0,
+            balance:
+              merged.paycheckInAccount +
+              merged.extraIncome -
+              merged.extraExpense -
+              merged.costs -
+              merged.wants -
+              merged.directInvestedAtClose,
           }
         }),
       )

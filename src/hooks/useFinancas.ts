@@ -47,7 +47,15 @@ export function useFinancas() {
     securedLiabilities: debts.summary.securedBalance,
     physicalAssets: assets.summary.totalValue,
   }, activeCycle.month)
-  const history = useHistory(activeCycle.month)
+  const historyInvestmentSource = useMemo(
+    () => ({
+      emergencyFund: investments.emergencyFund,
+      holdings: investments.holdings,
+      goals: investments.goals,
+    }),
+    [investments.emergencyFund, investments.goals, investments.holdings],
+  )
+  const history = useHistory(activeCycle.month, historyInvestmentSource)
   const forecast = useForecast(activeCycle.month)
   const actuals = useActuals(scenarios.activeScenario.costs, activeCycle.month)
 
@@ -333,7 +341,11 @@ export function useFinancas() {
         costs,
         costsPlanned: actuals.summary.plannedCosts,
         wants: metrics.totalWantsAmount,
+        payrollInvested: investmentActuals.payroll,
+        directInvestedAtClose: investmentActuals.directNet,
+        investmentProjectionVersion: 1,
         invested: investmentActuals.total,
+        investmentPlanCaptured: true,
         investedPlanned: metrics.totalPlannedInvestment,
         balance,
         savingsRate: investmentActuals.savingsRate,

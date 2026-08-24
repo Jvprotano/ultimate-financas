@@ -3,9 +3,13 @@ import {
   averageMonthlyCosts,
   buildHistoryPoints,
   calculateHistoryStats,
+  calculateNetWorthChange,
+  calculateNetWorthComposition,
   normalizeSnapshot,
+  projectHistoryInvestments,
 } from './history'
 import type { MonthlySnapshot } from '../types'
+import type { InvestmentLedgerSource } from './investmentActuals'
 
 function snapshot(overrides: Partial<MonthlySnapshot> = {}): MonthlySnapshot {
   return normalizeSnapshot({
@@ -80,6 +84,122 @@ describe('normalizeSnapshot — compatibilidade', () => {
     expect(normalized.extraIncome).toBe(850)
     expect(normalized.extraIncomeEntries[0].name).toBe('Banco de horas')
   })
+
+  it('separa a previdência e o aporte direto de snapshots legados', () => {
+    const normalized = normalizeSnapshot({
+      month: '2026-08',
+      availableForBudget: 9_340,
+      paycheckInAccount: 8_800,
+      invested: 1_540,
+    })
+
+    expect(normalized.payrollInvested).toBe(540)
+    expect(normalized.directInvestedAtClose).toBe(1_000)
+    expect(normalized.investmentProjectionVersion).toBe(0)
+    expect(normalized.investmentPlanCaptured).toBe(false)
+  })
+})
+
+describe('projectHistoryInvestments', () => {
+  const source = (cycleMonth: string): InvestmentLedgerSource => ({
+    emergencyFund: { current: 1_000, targetMonths: 3, transactions: [] },
+    holdings: [
+      {
+        id: 'reserve',
+        name: 'Reserva',
+        assetClassId: 'renda-fixa',
+        purpose: 'emergency_fund',
+        marketValue: 1_000,
+        transactions: [
+          {
+            id: 'investment',
+            amount: 1_000,
+            date: '2026-08-17T12:00:00.000Z',
+            cycleMonth,
+          },
+        ],
+      },
+    ],
+    goals: [],
+  })
+
+  const closedMonth = (month: string) =>
+    snapshot({
+      id: month,
+      month,
+      availableForBudget: 9_340,
+      paycheckInAccount: 8_800,
+      extraIncome: 0,
+      extraExpense: 0,
+      costs: 4_000,
+      wants: 1_000,
+      payrollInvested: 540,
+      directInvestedAtClose: month === '2026-08' ? 1_000 : 0,
+      investmentProjectionVersion: 1,
+      invested: month === '2026-08' ? 1_540 : 540,
+      investmentPlanCaptured: true,
+      balance: 0,
+      grossAssets: month === '2026-08' ? 3_030.1 : 4_030.1,
+    })
+
+  it('move o realizado entre ciclos sem reescrever o patrimônio fechado', () => {
+    const snapshots = [closedMonth('2026-08'), closedMonth('2026-09')]
+    const before = projectHistoryInvestments(snapshots, source('2026-08'))
+    const after = projectHistoryInvestments(snapshots, source('2026-09'))
+
+    expect(before.map((point) => point.invested)).toEqual([1_540, 540])
+    expect(after.map((point) => point.invested)).toEqual([540, 1_540])
+    expect(after.map((point) => point.balance)).toEqual([3_800, 2_800])
+    expect(after.map((point) => point.grossAssets)).toEqual([3_030.1, 4_030.1])
+    expect(after[0].savingsRate).toBeCloseTo((540 / 9_340) * 100)
+  })
+
+  it('preserva o snapshot legado quando ainda não existe livro-razão material', () => {
+    const legacy = normalizeSnapshot({
+      month: '2026-08',
+      availableForBudget: 5_000,
+      paycheckInAccount: 5_000,
+      invested: 1_200,
+    })
+    const emptySource: InvestmentLedgerSource = {
+      emergencyFund: { current: 0, targetMonths: 3, transactions: [] },
+      holdings: [],
+      goals: [],
+    }
+
+    expect(projectHistoryInvestments([legacy], emptySource)[0].invested).toBe(1_200)
+  })
+
+  it('mantém neutra a comparação quando o snapshot legado não capturou a meta', () => {
+    const legacy = normalizeSnapshot({
+      month: '2026-07',
+      availableForBudget: 9_340,
+      paycheckInAccount: 8_800,
+      invested: 1_868,
+    })
+
+    const [projected] = projectHistoryInvestments([legacy], source('2026-08'))
+
+    expect(projected.invested).toBe(540)
+    expect(projected.investedPlanned).toBe(540)
+  })
+
+  it('mantém o livro-razão autoritativo após a migração, inclusive em zero', () => {
+    const migrated = normalizeSnapshot({
+      month: '2026-08',
+      availableForBudget: 5_500,
+      paycheckInAccount: 5_000,
+      invested: 1_500,
+      investmentProjectionVersion: 1,
+    })
+    const emptySource: InvestmentLedgerSource = {
+      emergencyFund: { current: 0, targetMonths: 3, transactions: [] },
+      holdings: [],
+      goals: [],
+    }
+
+    expect(projectHistoryInvestments([migrated], emptySource)[0].invested).toBe(500)
+  })
 })
 
 describe('buildHistoryPoints', () => {
@@ -100,8 +220,8 @@ describe('buildHistoryPoints', () => {
 
   it('a variação é contra o mês fechado anterior', () => {
     const points = buildHistoryPoints([
-      snapshot({ id: 'a', month: '2026-06', netWorth: 5_000, costs: 3_500 }),
-      snapshot({ id: 'b', month: '2026-07', netWorth: 6_900, costs: 3_900 }),
+      snapshot({ id: 'a', month: '2026-06', grossAssets: 5_000, netWorth: 5_000, costs: 3_500 }),
+      snapshot({ id: 'b', month: '2026-07', grossAssets: 6_900, netWorth: 6_900, costs: 3_900 }),
     ])
     expect(points[1].netWorthDelta).toBe(1_900)
     expect(points[1].costsDelta).toBe(400)
@@ -123,12 +243,101 @@ describe('buildHistoryPoints', () => {
     // Só o cartão de 5 mil pesa no dinheiro; o financiamento não.
     expect(point.financialNetWorth).toBe(33_400)
   })
+
+  it('reconcilia o total pelas fontes mesmo quando o campo redundante está obsoleto', () => {
+    const [point] = buildHistoryPoints([
+      snapshot({
+        grossAssets: 3_030.1,
+        physicalAssets: 490_000,
+        liabilities: 272_471.66,
+        securedLiabilities: 272_471.66,
+        netWorth: 1,
+      }),
+    ])
+
+    expect(point.netWorth).toBeCloseTo(220_558.44)
+  })
+})
+
+describe('composição e evolução do patrimônio', () => {
+  const july = snapshot({
+    id: 'july',
+    month: '2026-07',
+    grossAssets: 2_030.09,
+    physicalAssets: 490_000,
+    liabilities: 272_471.66,
+    securedLiabilities: 272_471.66,
+    netWorth: 219_558.43,
+    invested: 540,
+  })
+  const august = snapshot({
+    id: 'august',
+    month: '2026-08',
+    grossAssets: 3_030.1,
+    physicalAssets: 490_000,
+    liabilities: 272_471.66,
+    securedLiabilities: 272_471.66,
+    netWorth: 220_558.44,
+    invested: 2_170.09,
+  })
+
+  it('reproduz a composição dos fechamentos de julho e agosto', () => {
+    const julyComposition = calculateNetWorthComposition(july)
+    const augustComposition = calculateNetWorthComposition(august)
+
+    expect(julyComposition.financialNetWorth).toBeCloseTo(2_030.09)
+    expect(julyComposition.propertyEquity).toBeCloseTo(217_528.34)
+    expect(julyComposition.netWorth).toBeCloseTo(219_558.43)
+    expect(augustComposition.financialAssets).toBeCloseTo(3_030.1)
+    expect(augustComposition.netWorth).toBeCloseTo(220_558.44)
+  })
+
+  it('explica os R$ 1.000,01 como mudança do saldo financeiro', () => {
+    const change = calculateNetWorthChange(july, august)
+
+    expect(change.financialAssetsChange).toBeCloseTo(1_000.01)
+    expect(change.physicalAssetsChange).toBe(0)
+    expect(change.debtEffect).toBe(0)
+    expect(change.netWorthChange).toBeCloseTo(1_000.01)
+    expect(
+      change.financialAssetsChange + change.physicalAssetsChange + change.debtEffect,
+    ).toBeCloseTo(change.netWorthChange)
+  })
+
+  it('mantém investimento por competência separado da mudança de saldo', () => {
+    const points = buildHistoryPoints([july, august])
+
+    expect(points.map((point) => point.invested)).toEqual([540, 2_170.09])
+    expect(points[1].netWorthDelta).toBeCloseTo(1_000.01)
+  })
+
+  it('trata redução de dívida como contribuição positiva', () => {
+    const previous = snapshot({
+      grossAssets: 50_000,
+      physicalAssets: 200_000,
+      liabilities: 100_000,
+      securedLiabilities: 100_000,
+    })
+    const latest = snapshot({
+      grossAssets: 50_000,
+      physicalAssets: 200_000,
+      liabilities: 90_000,
+      securedLiabilities: 90_000,
+    })
+
+    expect(calculateNetWorthChange(previous, latest)).toMatchObject({
+      financialAssetsChange: 0,
+      physicalAssetsChange: 0,
+      debtEffect: 10_000,
+      netWorthChange: 10_000,
+    })
+  })
 })
 
 describe('calculateHistoryStats', () => {
   const points = buildHistoryPoints([
-    snapshot({ id: 'a', month: '2026-05', costs: 3_000, netWorth: 4_000, savingsRate: 10, cardPersonalTotal: 1_000 }),
-    snapshot({ id: 'b', month: '2026-06', costs: 4_000, netWorth: 5_000, savingsRate: 30, cardPersonalTotal: 2_000 }),
+    snapshot({ id: 'a', month: '2026-05', costs: 3_000, grossAssets: 4_000, netWorth: 4_000, savingsRate: 10, cardPersonalTotal: 1_000 }),
+    snapshot({ id: 'b', month: '2026-06', costs: 4_000, grossAssets: 5_000, netWorth: 5_000, savingsRate: 30, cardPersonalTotal: 2_000 }),
   ])
 
   it('médias são aritméticas sobre os meses fechados', () => {
@@ -159,8 +368,8 @@ describe('calculateHistoryStats', () => {
 
   it('patrimônio inicial zero não gera percentual infinito', () => {
     const zeroStart = buildHistoryPoints([
-      snapshot({ id: 'a', month: '2026-05', netWorth: 0 }),
-      snapshot({ id: 'b', month: '2026-06', netWorth: 1_000 }),
+      snapshot({ id: 'a', month: '2026-05', grossAssets: 0, netWorth: 0 }),
+      snapshot({ id: 'b', month: '2026-06', grossAssets: 1_000, netWorth: 1_000 }),
     ])
     expect(calculateHistoryStats(zeroStart).netWorthGrowthPct).toBe(0)
   })

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { calculateMonthlyInvestmentActuals } from './investmentActuals'
+import {
+  calculateMonthlyInvestmentActuals,
+  hasInvestmentLedgerActivity,
+} from './investmentActuals'
 import type { EmergencyFundState, FinancialGoal, InvestmentHolding } from '../types'
 
 const emergencyFund: EmergencyFundState = {
@@ -159,5 +162,26 @@ describe('calculateMonthlyInvestmentActuals', () => {
     })
 
     expect(result.directNet).toBe(0)
+  })
+
+  it('não trata saldo de abertura como atividade mensal autoritativa', () => {
+    expect(
+      hasInvestmentLedgerActivity({
+        emergencyFund,
+        holdings: [
+          holding({
+            transactions: [
+              {
+                id: 'opening',
+                amount: 1_000,
+                date: '2026-08-01T12:00:00.000Z',
+                note: 'Saldo inicial',
+              },
+            ],
+          }),
+        ],
+        goals: [],
+      }),
+    ).toBe(false)
   })
 })

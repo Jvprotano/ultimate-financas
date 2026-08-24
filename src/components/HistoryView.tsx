@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react'
-import { ChartColumn, History, Pencil, Trash2, TrendingUp } from 'lucide-react'
+import { ChartColumn, History, Pencil, Trash2 } from 'lucide-react'
 import { CurrencyInput } from './CurrencyInput'
 import {
   EmptyState,
@@ -9,8 +9,6 @@ import {
   SecondaryButton,
   StatTile,
   Tag,
-  TrendChart,
-  type TrendSeries,
 } from './ui'
 import {
   formatCurrency,
@@ -18,16 +16,14 @@ import {
   formatSignedCurrency,
   inputClass,
 } from '../lib/format'
-import { useHistoryStore } from '../context/financasStore'
+import { useHistoryStore, useInvestmentsStore } from '../context/financasStore'
 import type { HistoryPoint, SnapshotPatch } from '../types'
 import {
-  BUDGET_AREA_COLORS,
   BUDGET_AREA_LABELS,
   BUDGET_AREAS,
   COST_CATEGORIES,
 } from '../types/constants'
-import { PlanActualChart } from './history/PlanActualChart'
-import { NetWorthEvolutionChart } from './history/NetWorthEvolutionChart'
+import { HistoryOverview } from './history/HistoryOverview'
 
 /**
  * Correção de um mês já fechado. Refechar substituiria tudo pelos números de
@@ -45,7 +41,7 @@ function SnapshotEditorContent({ point, onClose }: { point: HistoryPoint; onClos
     { label: 'Custos', value: point.costs, key: 'costs' },
     { label: 'Plano de custos', value: point.costsPlanned, key: 'costsPlanned' },
     { label: 'Desejos', value: point.wants, key: 'wants' },
-    { label: 'Investido', value: point.invested, key: 'invested' },
+    { label: 'Previdência em folha', value: point.payrollInvested, key: 'payrollInvested' },
     { label: 'Meta de investimento', value: point.investedPlanned, key: 'investedPlanned' },
     { label: 'Ativos financeiros', value: point.grossAssets, key: 'grossAssets' },
     { label: 'Bens', value: point.physicalAssets, key: 'physicalAssets' },
@@ -91,7 +87,9 @@ function SnapshotEditorContent({ point, onClose }: { point: HistoryPoint; onClos
           </label>
         </div>
         <p className="mt-2.5 text-[11px] leading-relaxed text-dark-text-muted">
-          A taxa de poupança e o patrimônio líquido são recalculados a partir do que você editar.
+          Aportes e resgates seguem a competência do livro-razão em Patrimônio. Aqui você
+          corrige a previdência em folha e os valores congelados no fechamento. A taxa de
+          poupança, o saldo e o patrimônio líquido são recalculados a partir dessas fontes.
           “Fatura do ciclo” é a sua parte efetivamente paga na fatura usada para encerrar o mês.
           Valores antecipados já retirados da fatura não são somados novamente. Financeiro: {formatCurrency(point.financialNetWorth)} · líquido total:{' '}
           {formatCurrency(point.grossAssets + point.physicalAssets - point.liabilities)}.
@@ -222,44 +220,6 @@ function CompactPlanDelta({
   )
 }
 
-function MonthChange({
-  label,
-  current,
-  delta,
-  higherIsBetter = false,
-  neutralDirection = false,
-}: {
-  label: string
-  current: number
-  delta: number
-  higherIsBetter?: boolean
-  neutralDirection?: boolean
-}) {
-  const stable = Math.abs(delta) <= 0.005
-  const favorable = higherIsBetter ? delta >= 0 : delta <= 0
-  const tone = stable
-    ? 'text-dark-text-muted'
-    : neutralDirection
-      ? 'text-amber-300'
-      : favorable
-        ? 'text-primary-400'
-        : 'text-rose-400'
-
-  return (
-    <div className="rounded-xl border border-dark-border-subtle bg-dark-input/25 px-3.5 py-3 shadow-inner shadow-black/10">
-      <span className="block text-[11px] text-dark-text-muted">{label}</span>
-      <div className="mt-1 flex items-end justify-between gap-2">
-        <strong className="text-sm font-semibold tabular-nums text-dark-text">
-          {formatCurrency(current)}
-        </strong>
-        <span className={`text-[11px] font-semibold tabular-nums ${tone}`}>
-          {stable ? 'sem mudança' : formatSignedCurrency(delta)}
-        </span>
-      </div>
-    </div>
-  )
-}
-
 function LatestMonthComparison({ points }: { points: HistoryPoint[] }) {
   const latest = points.at(-1)
   if (!latest) return null
@@ -305,60 +265,28 @@ function LatestMonthComparison({ points }: { points: HistoryPoint[] }) {
         />
       </div>
 
-      <div className="mt-5 border-t border-dark-border-subtle pt-5">
-        <PlanActualChart points={points} />
-      </div>
-
-      {previous && (
-        <div className="mt-5 border-t border-dark-border-subtle pt-5">
-          <h3 className="text-sm font-semibold text-dark-text">
-            Mudança desde {formatMonthKey(previous.month)}
-          </h3>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            <MonthChange label="Custos" current={latest.costs} delta={latest.costsDelta ?? 0} />
-            <MonthChange
-              label="Desejos alocados"
-              current={latest.wants}
-              delta={latest.wantsDelta ?? 0}
-              neutralDirection
-            />
-            <MonthChange
-              label="Fatura pessoal"
-              current={latest.cardPersonalTotal}
-              delta={latest.cardDelta ?? 0}
-            />
-            <MonthChange
-              label="Investido"
-              current={latest.invested}
-              delta={latest.investedDelta ?? 0}
-              higherIsBetter
-            />
-          </div>
-
-          {categoryChanges.length > 0 && (
-            <div className="mt-4">
-              <span className="text-[11px] font-medium uppercase tracking-wider text-dark-text-muted">
-                Maiores variações por categoria
-              </span>
-              <div className="mt-2 grid gap-x-6 gap-y-2 sm:grid-cols-2">
-                {categoryChanges.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between gap-3 text-xs">
-                    <span className="min-w-0 truncate text-dark-text-secondary">
-                      <span className="text-dark-text-muted">{item.group}</span> · {item.label}
-                    </span>
-                    <span
-                      className={`shrink-0 font-medium tabular-nums ${
-                        item.delta > 0 ? 'text-rose-400' : 'text-primary-400'
-                      }`}
-                      title={`Agora ${formatCurrency(item.current)}`}
-                    >
-                      {formatSignedCurrency(item.delta)}
-                    </span>
-                  </div>
-                ))}
+      {previous && categoryChanges.length > 0 && (
+        <div className="mt-4 border-t border-dark-border-subtle pt-4">
+          <span className="text-[11px] font-medium uppercase tracking-wider text-dark-text-muted">
+            Maiores mudanças desde {formatMonthKey(previous.month)}
+          </span>
+          <div className="mt-2 grid gap-x-6 gap-y-2 sm:grid-cols-2">
+            {categoryChanges.map((item) => (
+              <div key={item.id} className="flex items-center justify-between gap-3 text-xs">
+                <span className="min-w-0 truncate text-dark-text-secondary">
+                  <span className="text-dark-text-muted">{item.group}</span> · {item.label}
+                </span>
+                <span
+                  className={`shrink-0 font-medium tabular-nums ${
+                    item.delta > 0 ? 'text-rose-400' : 'text-primary-400'
+                  }`}
+                  title={`Agora ${formatCurrency(item.current)}`}
+                >
+                  {formatSignedCurrency(item.delta)}
+                </span>
               </div>
-            </div>
-          )}
+            ))}
+          </div>
         </div>
       )}
     </Panel>
@@ -368,40 +296,21 @@ function LatestMonthComparison({ points }: { points: HistoryPoint[] }) {
 /** Só leitura do passado — o fechamento do mês corrente vive na aba Ciclo. */
 export function HistoryView() {
   const history = useHistoryStore()
+  const investments = useInvestmentsStore()
   const { points, stats } = history
   const [editingId, setEditingId] = useState<string | null>(null)
 
-  const labels = points.map((point) => formatMonthKey(point.month))
   const hasLiabilities = points.some((point) => point.liabilities > 0)
   const hasPhysicalAssets = points.some((point) => point.physicalAssets > 0)
-  const flowSeries: TrendSeries[] = [
-    {
-      id: 'costs',
-      label: 'Custos',
-      color: BUDGET_AREA_COLORS.necessidades,
-      values: points.map((point) => point.costs),
-    },
-    {
-      id: 'wants',
-      label: 'Desejos',
-      color: BUDGET_AREA_COLORS.desejos,
-      values: points.map((point) => point.wants),
-    },
-    {
-      id: 'invested',
-      label: 'Investido',
-      color: BUDGET_AREA_COLORS.investimentos,
-      values: points.map((point) => point.invested),
-    },
-  ]
 
   const reversed = [...points].reverse()
+  const latestPoint = points.at(-1)
 
   if (points.length === 0) {
     return (
       <EmptyState icon={<History size={26} />} title="Nenhum mês fechado ainda">
         O histórico só mostra o que você já fechou. Vá em Ciclo para registrar o mês
-        corrente — a partir do segundo fechamento aparecem a evolução do patrimônio e o custo
+        corrente — a partir do segundo fechamento aparecem comparações entre ciclos e o custo
         médio real.
       </EmptyState>
     )
@@ -425,40 +334,41 @@ export function HistoryView() {
           }
         />
         <StatTile
-          label="Poupança média"
-          value={`${stats.averageSavingsRate.toFixed(0)}%`}
-          detail={`${formatCurrency(stats.averageInvested)}/mês investidos`}
+          label="Aporte médio"
+          value={formatCurrency(stats.averageInvested)}
+          detail={`${stats.averageSavingsRate.toFixed(1)}% da renda por ciclo`}
           tone="accent"
         />
         <StatTile
-          label="Patrimônio"
-          value={`${stats.netWorthGrowth >= 0 ? '+' : '−'} ${formatCurrency(Math.abs(stats.netWorthGrowth))}`}
+          label="Último aporte"
+          value={formatCurrency(latestPoint?.invested ?? 0)}
           detail={
             stats.months > 1
-              ? `${stats.netWorthGrowthPct >= 0 ? '+' : ''}${stats.netWorthGrowthPct.toFixed(1)}% no período`
-              : 'feche mais um mês para comparar'
+              ? `${formatSignedCurrency(latestPoint?.investedDelta ?? 0)} vs ${formatMonthKey(points.at(-2)?.month ?? '')}`
+              : formatMonthKey(latestPoint?.month ?? '')
           }
-          tone={stats.netWorthGrowth >= 0 ? 'positive' : 'negative'}
+          tone={
+            !latestPoint || Math.abs(latestPoint.invested) <= 0.005
+              ? 'neutral'
+              : latestPoint.invested > 0
+                ? 'positive'
+                : 'negative'
+          }
         />
       </div>
 
       <LatestMonthComparison points={points} />
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Panel className="min-w-0">
-          <PanelHeader title="Evolução do patrimônio" icon={<TrendingUp size={16} />} />
-          <div className="mt-4">
-            <NetWorthEvolutionChart points={points} />
-          </div>
-        </Panel>
-
-        <Panel className="min-w-0">
-          <PanelHeader title="Evolução dos gastos e aportes" />
-          <div className="mt-4">
-            <TrendChart labels={labels} series={flowSeries} height={220} />
-          </div>
-        </Panel>
-      </div>
+      <HistoryOverview
+        points={points}
+        current={{
+          financialAssets: investments.summary.financialAssets,
+          financialNetWorth: investments.summary.financialNetWorth,
+          physicalAssets: investments.summary.physicalAssets,
+          securedLiabilities: investments.summary.securedLiabilities,
+          netWorth: investments.summary.netWorth,
+        }}
+      />
 
       <Panel padded={false}>
         <h3 className="border-b border-dark-border-subtle px-5 py-4 text-sm font-semibold tracking-tight text-dark-text">

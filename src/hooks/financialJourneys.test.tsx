@@ -5,6 +5,7 @@ import { useCreditCards } from './useCreditCards'
 import { useHistory } from './useHistory'
 import { useInvestments } from './useInvestments'
 import type { MonthlySnapshot } from '../types'
+import type { InvestmentLedgerSource } from '../lib/investmentActuals'
 
 const snapshot: Omit<MonthlySnapshot, 'id' | 'closedAt'> = {
   month: '2026-08',
@@ -19,7 +20,11 @@ const snapshot: Omit<MonthlySnapshot, 'id' | 'closedAt'> = {
   costs: 2000,
   costsPlanned: 1900,
   wants: 500,
+  payrollInvested: 0,
+  directInvestedAtClose: 1000,
+  investmentProjectionVersion: 1,
   invested: 1000,
+  investmentPlanCaptured: true,
   investedPlanned: 900,
   balance: 1800,
   savingsRate: 18.18,
@@ -34,6 +39,30 @@ const snapshot: Omit<MonthlySnapshot, 'id' | 'closedAt'> = {
   cardPlanned: 650,
   cardByArea: { desejos: 700 },
   cashLeftover: 1800,
+}
+
+function historyInvestmentSource(cycleMonth: string): InvestmentLedgerSource {
+  return {
+    emergencyFund: { current: 1_000, targetMonths: 3, transactions: [] },
+    holdings: [
+      {
+        id: 'reserve',
+        name: 'Reserva',
+        assetClassId: 'renda-fixa',
+        purpose: 'emergency_fund',
+        marketValue: 1_000,
+        transactions: [
+          {
+            id: 'aporte',
+            amount: 1_000,
+            date: '2026-08-17T12:00:00.000Z',
+            cycleMonth,
+          },
+        ],
+      },
+    ],
+    goals: [],
+  }
 }
 
 describe('jornadas financeiras persistidas', () => {
@@ -106,5 +135,34 @@ describe('jornadas financeiras persistidas', () => {
       )
     })
     expect(investments.result.current.holdings[0].transactions[0].cycleMonth).toBe('2026-10')
+  })
+
+  it('migra o snapshot legado e reflete a troca de competência no histórico', () => {
+    const legacy = {
+      ...snapshot,
+      id: 'august',
+      closedAt: '2026-08-21T22:48:06.372Z',
+      availableForBudget: 9_340,
+      paycheckInAccount: 8_800,
+      invested: 1_540,
+    } as Record<string, unknown>
+    delete legacy.payrollInvested
+    delete legacy.directInvestedAtClose
+    delete legacy.investmentProjectionVersion
+    localStorage.setItem('uf_history_v1', JSON.stringify([legacy]))
+
+    const history = renderHook(
+      ({ cycleMonth }) => useHistory('2026-09', historyInvestmentSource(cycleMonth)),
+      { initialProps: { cycleMonth: '2026-08' } },
+    )
+
+    expect(history.result.current.points[0].invested).toBe(1_540)
+    expect(
+      JSON.parse(localStorage.getItem('uf_history_v1') ?? '[]')[0].investmentProjectionVersion,
+    ).toBe(1)
+
+    history.rerender({ cycleMonth: '2026-09' })
+    expect(history.result.current.points[0].invested).toBe(540)
+    expect(history.result.current.points[0].grossAssets).toBe(snapshot.grossAssets)
   })
 })

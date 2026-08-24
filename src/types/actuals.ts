@@ -52,11 +52,20 @@ export interface MonthlySnapshot {
   costs: number
   costsPlanned: number
   wants: number
+  /** Previdência descontada em folha, congelada no fechamento do ciclo. */
+  payrollInvested: number
+  /** Aporte líquido do livro-razão no instante do fechamento, mantido para auditoria. */
+  directInvestedAtClose: number
+  /** A partir da versão 1, o realizado direto é projetado do livro-razão atual. */
+  investmentProjectionVersion: number
   invested: number
+  /** Distingue uma meta realmente fechada do fallback neutro de snapshots antigos. */
+  investmentPlanCaptured: boolean
   investedPlanned: number
   balance: number
   savingsRate: number
   costsByCategory: Partial<Record<CostCategory, number>>
+  /** Nome legado no storage: representa somente ativos financeiros. */
   grossAssets: number
   physicalAssets: number
   liabilities: number
@@ -71,7 +80,10 @@ export interface MonthlySnapshot {
 }
 
 export interface HistoryPoint extends MonthlySnapshot {
+  financialAssets: number
+  unsecuredLiabilities: number
   financialNetWorth: number
+  propertyEquity: number
   netWorthDelta: number | null
   costsDelta: number | null
   wantsDelta: number | null
@@ -89,7 +101,7 @@ export type SnapshotPatch = Partial<
     | 'costs'
     | 'costsPlanned'
     | 'wants'
-    | 'invested'
+    | 'payrollInvested'
     | 'investedPlanned'
     | 'grossAssets'
     | 'physicalAssets'

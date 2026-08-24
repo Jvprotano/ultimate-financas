@@ -7,6 +7,13 @@ import type {
 } from '../types'
 import { BUDGET_AREAS } from '../types/constants'
 import { finiteNumber, monthKey, normalizeExtraIncomeEntries, uid } from './shared'
+import {
+  calculateMonthlyInvestmentActuals,
+  hasInvestmentLedgerActivity,
+  type InvestmentLedgerSource,
+} from './investmentActuals'
+
+const INVESTMENT_PROJECTION_VERSION = 1
 
 export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): MonthlySnapshot {
   const categories: Partial<Record<CostCategory, number>> = {}
@@ -26,6 +33,20 @@ export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): Mo
 
   const extraIncomeEntries = normalizeExtraIncomeEntries(raw?.extraIncomeEntries)
   const extraExpenseEntries = normalizeExtraIncomeEntries(raw?.extraExpenseEntries)
+  const availableForBudget = finiteNumber(raw?.availableForBudget)
+  const paycheckInAccount = finiteNumber(raw?.paycheckInAccount)
+  const invested = finiteNumber(raw?.invested)
+  // Em ambos os modos salariais, a diferença entre a base e o valor que cai na
+  // conta é a previdência do usuário. Isso migra snapshots anteriores sem
+  // consultar o cenário atual e reescrever a folha do passado.
+  const payrollInvested = finiteNumber(
+    raw?.payrollInvested,
+    Math.max(0, availableForBudget - paycheckInAccount),
+  )
+  const investmentPlanCaptured =
+    typeof raw?.investmentPlanCaptured === 'boolean'
+      ? raw.investmentPlanCaptured
+      : typeof raw?.investedPlanned === 'number' && Number.isFinite(raw.investedPlanned)
 
   return {
     id: raw?.id || uid(),
@@ -33,8 +54,8 @@ export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): Mo
     closedAt: raw?.closedAt || new Date().toISOString(),
     scenarioId: raw?.scenarioId || '',
     scenarioName: raw?.scenarioName || 'Cenário',
-    availableForBudget: finiteNumber(raw?.availableForBudget),
-    paycheckInAccount: finiteNumber(raw?.paycheckInAccount),
+    availableForBudget,
+    paycheckInAccount,
     extraIncome: Math.max(
       0,
       finiteNumber(
@@ -55,7 +76,14 @@ export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): Mo
     // Snapshots antigos não separavam plano de realizado: eram a mesma coisa.
     costsPlanned: finiteNumber(raw?.costsPlanned, finiteNumber(raw?.costs)),
     wants: finiteNumber(raw?.wants),
-    invested: finiteNumber(raw?.invested),
+    payrollInvested,
+    directInvestedAtClose: finiteNumber(raw?.directInvestedAtClose, invested - payrollInvested),
+    investmentProjectionVersion:
+      finiteNumber(raw?.investmentProjectionVersion) >= INVESTMENT_PROJECTION_VERSION
+        ? INVESTMENT_PROJECTION_VERSION
+        : 0,
+    invested,
+    investmentPlanCaptured,
     // Snapshots antigos não preservavam as metas de investimento e cartão.
     // Igualar ao realizado mantém o passado neutro em vez de inventar desvios.
     investedPlanned: finiteNumber(raw?.investedPlanned, finiteNumber(raw?.invested)),
@@ -78,18 +106,151 @@ export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): Mo
   }
 }
 
+/** Marca um snapshot legado como apto a acompanhar o livro-razão. */
+export function migrateSnapshotInvestmentProjection(snapshot: MonthlySnapshot): MonthlySnapshot {
+  return {
+    ...snapshot,
+    investmentProjectionVersion: INVESTMENT_PROJECTION_VERSION,
+  }
+}
+
+/**
+ * Projeção híbrida do Histórico:
+ * - plano, patrimônio, fatura e demais fatos continuam congelados;
+ * - aportes/resgates diretos acompanham a competência atual do livro-razão;
+ * - previdência em folha permanece a que foi registrada no fechamento.
+ *
+ * Snapshots legados só passam a usar a projeção quando existe atividade real
+ * no livro-razão. Depois de migrados, continuam projetados mesmo se todas as
+ * movimentações forem removidas, para que zero também seja um resultado válido.
+ */
+export function projectHistoryInvestments(
+  snapshots: MonthlySnapshot[],
+  source: InvestmentLedgerSource,
+): MonthlySnapshot[] {
+  const ledgerIsAuthoritative =
+    hasInvestmentLedgerActivity(source) ||
+    snapshots.some(
+      (snapshot) => snapshot.investmentProjectionVersion >= INVESTMENT_PROJECTION_VERSION,
+    )
+
+  if (!ledgerIsAuthoritative) return snapshots
+
+  return snapshots.map((snapshot) => {
+    const directInvested = calculateMonthlyInvestmentActuals({
+      ...source,
+      month: snapshot.month,
+    }).directNet
+    const invested = snapshot.payrollInvested + directInvested
+    const incomeBase = snapshot.availableForBudget + snapshot.extraIncome
+
+    return {
+      ...snapshot,
+      invested,
+      investedPlanned: snapshot.investmentPlanCaptured ? snapshot.investedPlanned : invested,
+      savingsRate: incomeBase > 0 ? (invested / incomeBase) * 100 : 0,
+      balance:
+        snapshot.paycheckInAccount +
+        snapshot.extraIncome -
+        snapshot.extraExpense -
+        snapshot.costs -
+        snapshot.wants -
+        directInvested,
+    }
+  })
+}
+
+export interface NetWorthComposition {
+  financialAssets: number
+  unsecuredLiabilities: number
+  financialNetWorth: number
+  physicalAssets: number
+  securedLiabilities: number
+  propertyEquity: number
+  liabilities: number
+  netWorth: number
+}
+
+export interface NetWorthChangeBreakdown {
+  financialAssetsChange: number
+  physicalAssetsChange: number
+  debtEffect: number
+  netWorthChange: number
+}
+
+/**
+ * Reconcilia o patrimônio a partir das fontes congeladas no fechamento.
+ * `grossAssets` é um nome legado: ele guarda apenas reserva, carteira e metas.
+ */
+export function calculateNetWorthComposition(
+  snapshot: MonthlySnapshot,
+): NetWorthComposition {
+  const financialAssets = Math.max(0, snapshot.grossAssets)
+  const physicalAssets = Math.max(0, snapshot.physicalAssets)
+  const liabilities = Math.max(0, snapshot.liabilities)
+  const securedLiabilities = Math.min(
+    Math.max(0, liabilities),
+    Math.max(0, snapshot.securedLiabilities),
+  )
+  const unsecuredLiabilities = liabilities - securedLiabilities
+  const financialNetWorth = financialAssets - unsecuredLiabilities
+  const propertyEquity = physicalAssets - securedLiabilities
+
+  return {
+    financialAssets,
+    unsecuredLiabilities,
+    financialNetWorth,
+    physicalAssets,
+    securedLiabilities,
+    propertyEquity,
+    liabilities,
+    netWorth: financialNetWorth + propertyEquity,
+  }
+}
+
+/**
+ * Explica a mudança do patrimônio entre dois fechamentos. Reduzir uma dívida
+ * é efeito positivo; aumentar o saldo devedor é efeito negativo.
+ */
+export function calculateNetWorthChange(
+  previous: MonthlySnapshot,
+  latest: MonthlySnapshot,
+): NetWorthChangeBreakdown {
+  const previousComposition = calculateNetWorthComposition(previous)
+  const latestComposition = calculateNetWorthComposition(latest)
+  const financialAssetsChange =
+    latestComposition.financialAssets - previousComposition.financialAssets
+  const physicalAssetsChange = latestComposition.physicalAssets - previousComposition.physicalAssets
+  const debtEffect = previousComposition.liabilities - latestComposition.liabilities
+
+  return {
+    financialAssetsChange,
+    physicalAssetsChange,
+    debtEffect,
+    netWorthChange: latestComposition.netWorth - previousComposition.netWorth,
+  }
+}
+
 /** Ordem cronológica, com as variações em relação ao mês fechado anterior. */
 export function buildHistoryPoints(snapshots: MonthlySnapshot[]): HistoryPoint[] {
   const ordered = [...snapshots].sort((a, b) => a.month.localeCompare(b.month))
 
   return ordered.map((snapshot, index) => {
     const previous = index > 0 ? ordered[index - 1] : null
+    const composition = calculateNetWorthComposition(snapshot)
+    const previousComposition = previous ? calculateNetWorthComposition(previous) : null
     return {
       ...snapshot,
-      // Bens e o financiamento que os garante saem da conta: sobra o dinheiro.
-      financialNetWorth:
-        snapshot.grossAssets - (snapshot.liabilities - snapshot.securedLiabilities),
-      netWorthDelta: previous ? snapshot.netWorth - previous.netWorth : null,
+      // O Histórico exibe a equação das fontes, não um total redundante que
+      // possa ter ficado obsoleto em snapshots antigos.
+      netWorth: composition.netWorth,
+      financialAssets: composition.financialAssets,
+      unsecuredLiabilities: composition.unsecuredLiabilities,
+      financialNetWorth: composition.financialNetWorth,
+      propertyEquity: composition.propertyEquity,
+      netWorthDelta: previousComposition
+        ? composition.netWorth - previousComposition.netWorth
+        : null,
       costsDelta: previous ? snapshot.costs - previous.costs : null,
       wantsDelta: previous ? snapshot.wants - previous.wants : null,
       investedDelta: previous ? snapshot.invested - previous.invested : null,

@@ -71,7 +71,7 @@ export function clearAllFinTanoStorage(storage: Storage = localStorage): void {
 export function buildBackupPayload(): BackupPayload {
   return {
     app: 'fintano',
-    version: 5,
+    version: 6,
     exportedAt: new Date().toISOString(),
     localStorage: getAppStorageEntries(),
   }

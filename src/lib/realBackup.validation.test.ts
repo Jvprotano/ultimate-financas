@@ -5,7 +5,14 @@ import { normalizeActuals } from './actuals'
 import { readBackupEntries, restoreEntries, type BackupPayload } from './backup'
 import { normalizeCardAccount, normalizeCreditCardEntry, normalizeCreditCardSettings } from './creditCards'
 import { normalizeExpectedEvent } from './forecast'
-import { normalizeSnapshot } from './history'
+import {
+  buildHistoryPoints,
+  calculateNetWorthChange,
+  normalizeSnapshot,
+  projectHistoryInvestments,
+} from './history'
+import { normalizeGoal } from './goals'
+import { normalizeEmergencyFund, normalizeHolding } from './investments'
 import { normalizeScenario } from './scenario'
 import type { CreditCardEntry, FinanceScenario, MonthlyActuals, MonthlySnapshot } from '../types'
 
@@ -38,13 +45,53 @@ describe.skipIf(!backupPath)('backup real informado para validação', () => {
     const cardAccounts = JSON.parse(source.uf_credit_card_accounts_v1) as object[]
     const events = JSON.parse(source.uf_expected_events_v1) as object[]
     const scenarios = JSON.parse(source.uf_scenarios_v3) as FinanceScenario[]
+    const holdings = JSON.parse(source.uf_investment_holdings_v1 ?? '[]') as object[]
+    const goals = JSON.parse(source.uf_goals_v1 ?? '[]') as object[]
+    const emergencyFund = JSON.parse(source.uf_emergency_fund_v1 ?? '{}') as object
+    const normalizedHistory = history.map(normalizeSnapshot)
 
     expect(actuals.map(normalizeActuals)).toHaveLength(actuals.length)
-    expect(history.map(normalizeSnapshot)).toHaveLength(history.length)
+    expect(normalizedHistory).toHaveLength(history.length)
     expect(cardEntries.map(normalizeCreditCardEntry)).toHaveLength(cardEntries.length)
     expect(cardAccounts.map(normalizeCardAccount)).toHaveLength(cardAccounts.length)
     expect(events.map(normalizeExpectedEvent)).toHaveLength(events.length)
     expect(scenarios.map(normalizeScenario)).toHaveLength(scenarios.length)
     expect(normalizeCreditCardSettings(JSON.parse(source.uf_credit_card_settings_v1))).toBeTruthy()
+    const projectedHistory = projectHistoryInvestments(normalizedHistory, {
+      emergencyFund: normalizeEmergencyFund(emergencyFund),
+      holdings: holdings.map((holding) => normalizeHolding(holding)),
+      goals: goals.map((goal, index) => normalizeGoal(goal, index)),
+    })
+
+    expect(
+      projectedHistory.every(
+        (snapshot) =>
+          Number.isFinite(snapshot.invested) &&
+          Number.isFinite(snapshot.savingsRate) &&
+          Number.isFinite(snapshot.balance),
+      ),
+    ).toBe(true)
+
+    const points = buildHistoryPoints(projectedHistory)
+    expect(
+      points.every(
+        (point) =>
+          Number.isFinite(point.financialAssets) &&
+          Number.isFinite(point.financialNetWorth) &&
+          Number.isFinite(point.propertyEquity) &&
+          Number.isFinite(point.netWorth),
+      ),
+    ).toBe(true)
+
+    for (let index = 1; index < projectedHistory.length; index += 1) {
+      const change = calculateNetWorthChange(
+        projectedHistory[index - 1],
+        projectedHistory[index],
+      )
+      expect(
+        change.financialAssetsChange + change.physicalAssetsChange + change.debtEffect,
+      ).toBeCloseTo(change.netWorthChange)
+      expect(points[index].netWorthDelta).toBeCloseTo(change.netWorthChange)
+    }
   })
 })

@@ -188,8 +188,15 @@ export function LedgerList({
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-3">
-        <span className="text-xs font-semibold text-dark-text">Histórico de movimentações</span>
-        <span className="rounded-full border border-dark-border bg-dark-input px-2 py-0.5 text-[10px] tabular-nums text-dark-text-muted">
+        <div className="min-w-0">
+          <span className="text-xs font-semibold text-dark-text">Histórico de movimentações</span>
+          {onCycleMonthChange && (
+            <p className="mt-0.5 text-[10px] leading-relaxed text-dark-text-muted">
+              Alterar a competência ou remover um registro recalcula os ciclos fechados.
+            </p>
+          )}
+        </div>
+        <span className="shrink-0 rounded-full border border-dark-border bg-dark-input px-2 py-0.5 text-[10px] tabular-nums text-dark-text-muted">
           {transactions.length} {transactions.length === 1 ? 'registro' : 'registros'}
         </span>
       </div>

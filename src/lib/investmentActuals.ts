@@ -1,10 +1,9 @@
 import type {
   EmergencyFundState,
   FinancialGoal,
-  InvestmentHolding,
   LedgerEntry,
 } from '../types'
-import { holdingPurpose } from './investments'
+import { holdingPurpose, type FinancialHolding } from './investments'
 import { ledgerEntryCycleMonth, normalizeText } from './shared'
 
 export interface MonthlyInvestmentActuals {
@@ -14,6 +13,12 @@ export interface MonthlyInvestmentActuals {
   goalsNet: number
   /** Movimentação líquida feita pela conta: aportes − retiradas. */
   directNet: number
+}
+
+export interface InvestmentLedgerSource {
+  emergencyFund: EmergencyFundState
+  holdings: FinancialHolding[]
+  goals: FinancialGoal[]
 }
 
 /**
@@ -32,17 +37,40 @@ function monthlyLedgerNet(entries: LedgerEntry[], month: string) {
   }, 0)
 }
 
+function materialEntries(input: InvestmentLedgerSource): LedgerEntry[] {
+  const reserveHoldings = input.holdings.filter(
+    (holding) => holdingPurpose(holding) === 'emergency_fund',
+  )
+  const reserveEntries =
+    reserveHoldings.length > 0
+      ? reserveHoldings.flatMap((holding) => holding.transactions)
+      : input.emergencyFund.transactions
+
+  return [
+    ...reserveEntries,
+    ...input.holdings
+      .filter((holding) => holdingPurpose(holding) === 'portfolio')
+      .flatMap((holding) => holding.transactions),
+    ...input.goals.flatMap((goal) => goal.transactions),
+  ].filter((entry) => !isOpeningBalance(entry))
+}
+
+/**
+ * Indica que o livro-razão já é a fonte dos aportes realizados. Saldos de
+ * abertura não bastam: eles posicionam o patrimônio, mas não contam como fluxo.
+ */
+export function hasInvestmentLedgerActivity(input: InvestmentLedgerSource): boolean {
+  return materialEntries(input).length > 0
+}
+
 /**
  * Quanto realmente foi colocado em patrimônio financeiro no mês, pelo caixa.
  *
  * A reserva agora usa o mesmo livro-razão das posições. O bucket antigo só é
  * consultado como fallback durante a migração de backups anteriores.
  */
-export function calculateMonthlyInvestmentActuals(input: {
+export function calculateMonthlyInvestmentActuals(input: InvestmentLedgerSource & {
   month: string
-  emergencyFund: EmergencyFundState
-  holdings: InvestmentHolding[]
-  goals: FinancialGoal[]
 }): MonthlyInvestmentActuals {
   const reserveHoldings = input.holdings.filter(
     (holding) => holdingPurpose(holding) === 'emergency_fund',
