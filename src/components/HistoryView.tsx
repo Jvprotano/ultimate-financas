@@ -24,6 +24,7 @@ import {
   COST_CATEGORIES,
 } from '../types/constants'
 import { HistoryOverview } from './history/HistoryOverview'
+import { HistoryTrendExplorer } from './history/HistoryTrendExplorer'
 
 /**
  * Correção de um mês já fechado. Refechar substituiria tudo pelos números de
@@ -369,6 +370,8 @@ export function HistoryView() {
           netWorth: investments.summary.netWorth,
         }}
       />
+
+      <HistoryTrendExplorer points={points} />
 
       <Panel padded={false}>
         <h3 className="border-b border-dark-border-subtle px-5 py-4 text-sm font-semibold tracking-tight text-dark-text">
