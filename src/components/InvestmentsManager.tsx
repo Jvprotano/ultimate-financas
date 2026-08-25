@@ -36,12 +36,11 @@ import type { FinancialHoldingSummary, InvestmentPurpose } from '../lib/investme
 import { holdingPurpose } from '../lib/investments'
 import { CHART_PALETTE, INVESTMENT_CLASS_PRESET_COLORS } from '../types/constants'
 
-type Section = 'overview' | 'holdings' | 'goals' | 'reserve' | 'assets' | 'debts'
+type Section = 'overview' | 'holdings' | 'reserve' | 'assets' | 'debts'
 
 const SECTION_OPTIONS: { value: Section; label: string }[] = [
   { value: 'overview', label: 'Visão geral' },
   { value: 'holdings', label: 'Posições' },
-  { value: 'goals', label: 'Metas' },
   { value: 'reserve', label: 'Reserva' },
   { value: 'assets', label: 'Bens' },
   { value: 'debts', label: 'Dívidas' },
@@ -242,10 +241,14 @@ function Overview({ onNavigate }: { onNavigate: (section: Section) => void }) {
     {(goalsWithoutSources.length > 0 || positionsWithoutInstitution.length > 0) && <Panel>
       <PanelHeader title="Próximos ajustes" icon={<AlertCircle size={16} />} description="Poucos dados faltam para o mapa ficar completo." />
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
-        {goalsWithoutSources.length > 0 && <button type="button" onClick={() => onNavigate('goals')} className="rounded-xl border border-dark-border/70 bg-dark-input/35 p-3 text-left hover:border-primary-500/35"><span className="flex items-center gap-2 text-xs font-semibold text-dark-text"><Flag size={14} className="text-violet-300" />Ligar {goalsWithoutSources.length} meta{goalsWithoutSources.length > 1 ? 's' : ''} a posições</span><span className="mt-1 block text-[11px] text-dark-text-muted">{goalsWithoutSources.map((goal) => goal.name).join(', ')}</span></button>}
+        {goalsWithoutSources.length > 0 && <a href="#patrimonio-metas" className="rounded-xl border border-dark-border/70 bg-dark-input/35 p-3 text-left hover:border-primary-500/35"><span className="flex items-center gap-2 text-xs font-semibold text-dark-text"><Flag size={14} className="text-violet-300" />Ligar {goalsWithoutSources.length} meta{goalsWithoutSources.length > 1 ? 's' : ''} a posições</span><span className="mt-1 block text-[11px] text-dark-text-muted">{goalsWithoutSources.map((goal) => goal.name).join(', ')}</span></a>}
         {positionsWithoutInstitution.length > 0 && <button type="button" onClick={() => onNavigate('holdings')} className="rounded-xl border border-dark-border/70 bg-dark-input/35 p-3 text-left hover:border-primary-500/35"><span className="flex items-center gap-2 text-xs font-semibold text-dark-text"><Building2 size={14} className="text-amber-300" />Informar instituição de {positionsWithoutInstitution.length} {positionsWithoutInstitution.length === 1 ? 'posição' : 'posições'}</span><span className="mt-1 block text-[11px] text-dark-text-muted">{positionsWithoutInstitution.map((holding) => holding.name).join(', ')}</span></button>}
       </div>
     </Panel>}
+
+    <div id="patrimonio-metas" className="scroll-mt-20">
+      <GoalsSection />
+    </div>
   </div>
 }
 
@@ -290,13 +293,12 @@ export function InvestmentsManager() {
         options={SECTION_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
         value={section}
         onChange={setSection}
-        columnsClassName="grid-cols-3 sm:grid-cols-6"
+        columnsClassName="grid-cols-3 sm:grid-cols-5"
       />
     </nav>
 
     {section === 'overview' && <Overview onNavigate={setSection} />}
     {section === 'holdings' && <PositionsPanel />}
-    {section === 'goals' && <GoalsSection />}
     {section === 'reserve' && <ReserveSection />}
     {section === 'assets' && <AssetsManager />}
     {section === 'debts' && <DebtsManager />}
