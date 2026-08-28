@@ -51,7 +51,7 @@ export function ActualsPanel() {
       <PanelHeader
         title={`Realizado de ${formatMonthLong(summary.month)}`}
         icon={<ClipboardCheck size={16} />}
-        description="Registre o que entrou, o que saiu e quanto foi destinado a Desejos."
+        description="Registre o que entrou, o que saiu e os Desejos destinados fora do cartão."
         actions={
           <>
             <span className="text-right">
@@ -106,9 +106,9 @@ export function ActualsPanel() {
       <div className="mt-5 border-t border-dark-border-subtle pt-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <div>
-            <h3 className="text-sm font-semibold text-dark-text">Desejos alocados</h3>
+            <h3 className="text-sm font-semibold text-dark-text">Desejos fora do cartão</h3>
             <p className="mt-0.5 text-xs text-dark-text-muted">
-              Quanto você realmente destinou a cada categoria neste ciclo.
+              Quanto você realmente destinou por conta, PIX, débito ou boleto neste ciclo.
             </p>
           </div>
           {informedWantsCount > 0 && (
@@ -121,9 +121,9 @@ export function ActualsPanel() {
 
         {wantRows.length === 0 ? (
           <div className="mt-4">
-            <EmptyState icon={<ClipboardCheck size={24} />} title="Nenhum Desejo cadastrado">
-              Cadastre as categorias em Planejar para registrar quanto foi destinado a cada uma
-              neste ciclo.
+            <EmptyState icon={<ClipboardCheck size={24} />} title="Nenhum Desejo fora do cartão">
+              Em Planejar, marque como Conta a categoria que precisa de realizado próprio. O que
+              estiver no cartão já vem da fatura.
             </EmptyState>
           </div>
         ) : (
@@ -134,17 +134,14 @@ export function ActualsPanel() {
                 return (
                   <li
                     key={row.want.id}
-                    className={`flex flex-wrap items-center gap-3 rounded-lg bg-dark-surface px-3 py-2 ${
-                      row.countsTowardTotal ? '' : 'ml-3 border-l border-violet-400/20'
-                    }`}
+                    className="flex flex-wrap items-center gap-3 rounded-lg bg-dark-surface px-3 py-2"
                   >
                     <span className="h-2 w-2 shrink-0 rounded-full bg-violet-400" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-dark-text">{row.want.name}</p>
                       <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-dark-text-muted">
                         <span>plano {formatCurrency(row.planned)}</span>
-                        {row.want.paidWith === 'account' ? <Tag>em conta</Tag> : <Tag>no cartão</Tag>}
-                        {!row.countsTowardTotal && <Tag>detalhe do envelope</Tag>}
+                        <Tag>fora do cartão</Tag>
                       </p>
                     </div>
                     {off && (
@@ -198,7 +195,7 @@ export function ActualsPanel() {
                       ? 'igual ao plano'
                       : `${wantsVariance > 0 ? 'acima' : 'abaixo'} em ${formatCurrency(Math.abs(wantsVariance))}`}
                   </strong>
-                  . Detalhes do envelope Cartão ficam no histórico, mas não são somados novamente.
+                  . O realizado do cartão permanece exclusivamente na fatura.
                 </>
               )}
             </p>

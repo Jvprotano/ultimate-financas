@@ -344,7 +344,7 @@ export function ClosingView({
             tone={costsStatus.tone}
           />
           <StatTile
-            label="Desejos alocados"
+            label="Desejos fora do cartão"
             value={formatCurrency(actuals.summary.effectiveWants)}
             detail={
               <PlanComparisonDetail
@@ -403,8 +403,8 @@ export function ClosingView({
                   Confirmar {formatMonthLong(activeCycle.month)}
                 </h3>
                 <p className="mt-1 text-xs leading-relaxed text-dark-text-muted">
-                  Histórico: custos {formatCurrency(actuals.summary.effectiveCosts)} · desejos{' '}
-                  {formatCurrency(actuals.summary.effectiveWants)} · fatura pessoal{' '}
+                  Histórico: custos {formatCurrency(actuals.summary.effectiveCosts)} · desejos fora
+                  do cartão {formatCurrency(actuals.summary.effectiveWants)} · fatura pessoal{' '}
                   {invoiceKnown ? formatCurrency(closingInvoiceDue) : 'não recuperada'} · investido{' '}
                   {formatCurrency(investmentActuals.total)}
                   {actuals.summary.extraIncomeTotal > 0.005 && (
@@ -457,7 +457,9 @@ export function ClosingView({
 
             {missingWantActualRows.length > 0 && (
               <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] px-3 py-2.5 text-xs leading-relaxed text-amber-100/85">
-                <strong className="text-amber-200">Desejos usando o planejamento:</strong>{' '}
+                <strong className="text-amber-200">
+                  Desejos fora do cartão usando o planejamento:
+                </strong>{' '}
                 {missingWantActualRows.map((row) => row.want.name).join(', ')}.
               </div>
             )}

@@ -91,7 +91,7 @@ describe('summarizeActuals', () => {
     expect(summary.rows).toEqual([])
   })
 
-  it('Desejos usam o realizado informado e preservam o plano separadamente', () => {
+  it('Desejos fora do cartão usam o realizado e preservam o plano separadamente', () => {
     const summary = summarizeActuals(
       costs,
       { month: '2026-07', costs: {}, wants: { cartao: 850, viagem: 500 } },
@@ -99,13 +99,13 @@ describe('summarizeActuals', () => {
       wants,
     )
 
-    expect(summary.plannedWants).toBe(1_400)
-    expect(summary.effectiveWants).toBe(1_350)
-    expect(summary.wantsVariance).toBe(-50)
-    expect(summary.informedWantsCount).toBe(2)
+    expect(summary.plannedWants).toBe(400)
+    expect(summary.effectiveWants).toBe(500)
+    expect(summary.wantsVariance).toBe(100)
+    expect(summary.informedWantsCount).toBe(1)
   })
 
-  it('detalhes dentro do envelope Cartão não são somados novamente', () => {
+  it('remove completamente Desejos pagos no cartão, inclusive seus detalhes', () => {
     const summary = summarizeActuals(
       costs,
       {
@@ -117,8 +117,8 @@ describe('summarizeActuals', () => {
       wants,
     )
 
-    expect(summary.effectiveWants).toBe(1_350)
-    expect(summary.wantRows.find((row) => row.want.id === 'streaming')?.countsTowardTotal).toBe(false)
+    expect(summary.effectiveWants).toBe(500)
+    expect(summary.wantRows.map((row) => row.want.id)).toEqual(['viagem'])
   })
 
   it('zero em um Desejo é realizado legítimo', () => {

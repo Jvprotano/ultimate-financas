@@ -47,6 +47,10 @@ export function useActuals(
     () => summarizeActuals(costs, forMonth, month, wants),
     [costs, forMonth, month, wants],
   )
+  const nonCardWantIds = useMemo(
+    () => new Set(summary.wantRows.map((row) => row.want.id)),
+    [summary.wantRows],
+  )
 
   const updateMonth = useCallback(
     (targetMonth: string, update: (current: MonthlyActuals) => MonthlyActuals) => {
@@ -78,13 +82,15 @@ export function useActuals(
   const setWantActual = useCallback(
     (wantId: string, amount: number | null, targetMonth = month) => {
       updateMonth(targetMonth, (current) => {
-        const nextWants = { ...current.wants }
+        const nextWants = Object.fromEntries(
+          Object.entries(current.wants).filter(([id]) => nonCardWantIds.has(id)),
+        )
         if (amount === null) delete nextWants[wantId]
         else nextWants[wantId] = Math.max(0, amount)
         return { ...current, wants: nextWants }
       })
     },
-    [month, updateMonth],
+    [month, nonCardWantIds, updateMonth],
   )
 
   /** Preenche todos os itens ainda vazios com o valor planejado. */
@@ -95,14 +101,16 @@ export function useActuals(
         for (const row of summary.rows) {
           if (!Object.hasOwn(filled, row.cost.id)) filled[row.cost.id] = row.planned
         }
-        const filledWants = { ...current.wants }
+        const filledWants = Object.fromEntries(
+          Object.entries(current.wants).filter(([id]) => nonCardWantIds.has(id)),
+        )
         for (const row of summary.wantRows) {
           if (!Object.hasOwn(filledWants, row.want.id)) filledWants[row.want.id] = row.planned
         }
         return { ...current, costs: filled, wants: filledWants }
       })
     },
-    [month, summary.rows, summary.wantRows, updateMonth],
+    [month, nonCardWantIds, summary.rows, summary.wantRows, updateMonth],
   )
 
   const clearCosts = useCallback(

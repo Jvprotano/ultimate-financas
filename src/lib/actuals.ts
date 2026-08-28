@@ -5,7 +5,7 @@ import type {
   MonthlyActuals,
   WantItem,
 } from '../types'
-import { isWantIncludedInCardPlan, personalCostValue } from './scenario'
+import { personalCostValue } from './scenario'
 import { finiteNumber, monthKey, normalizeExtraIncomeEntries } from './shared'
 
 // ---------------------------------------------------------------------------
@@ -68,23 +68,24 @@ export function summarizeActuals(
   const effectiveCosts = rows.reduce((sum, row) => sum + row.effective, 0)
   const plannedCosts = rows.reduce((sum, row) => sum + row.planned, 0)
   const informedWants = actuals?.wants ?? {}
-  const wantRows = wants.map((want) => {
-    const planned = Math.max(0, finiteNumber(want.plannedAmount))
-    const actual = Object.hasOwn(informedWants, want.id) ? informedWants[want.id] : null
-    const effective = actual ?? planned
-    const countsTowardTotal = !isWantIncludedInCardPlan(want, wants)
-    return {
-      want,
-      planned,
-      actual,
-      effective,
-      variance: effective - planned,
-      countsTowardTotal,
-    }
-  })
-  const countedWantRows = wantRows.filter((row) => row.countsTowardTotal)
-  const effectiveWants = countedWantRows.reduce((sum, row) => sum + row.effective, 0)
-  const plannedWants = countedWantRows.reduce((sum, row) => sum + row.planned, 0)
+  // O cartão já tem seu realizado na fatura. Esta lista registra somente o que
+  // foi destinado fora dele, evitando duas fontes para o mesmo dinheiro.
+  const wantRows = wants
+    .filter((want) => want.paidWith === 'account')
+    .map((want) => {
+      const planned = Math.max(0, finiteNumber(want.plannedAmount))
+      const actual = Object.hasOwn(informedWants, want.id) ? informedWants[want.id] : null
+      const effective = actual ?? planned
+      return {
+        want,
+        planned,
+        actual,
+        effective,
+        variance: effective - planned,
+      }
+    })
+  const effectiveWants = wantRows.reduce((sum, row) => sum + row.effective, 0)
+  const plannedWants = wantRows.reduce((sum, row) => sum + row.planned, 0)
 
   return {
     month,

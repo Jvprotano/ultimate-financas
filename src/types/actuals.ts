@@ -47,8 +47,6 @@ export interface ActualsSummary {
     actual: number | null
     effective: number
     variance: number
-    /** Filhos do envelope Cartão são detalhamento e não entram novamente no total. */
-    countsTowardTotal: boolean
   }[]
 }
 
@@ -58,7 +56,7 @@ export interface WantAllocationSnapshot {
   planned: number
   actual: number
   paidWith?: PaymentMethod
-  /** Evita somar novamente um detalhe que já pertence ao envelope Cartão. */
+  /** Campo legado usado para remover detalhamentos do cartão gravados pela versão inicial. */
   includedInCardPlan: boolean
 }
 
@@ -76,7 +74,7 @@ export interface MonthlySnapshot {
   extraExpenseEntries: ExtraExpenseEntry[]
   costs: number
   costsPlanned: number
-  /** Total efetivamente destinado a Desejos no ciclo. */
+  /** Total efetivamente destinado a Desejos fora do cartão no ciclo. */
   wants: number
   wantsPlanned: number
   wantAllocations: WantAllocationSnapshot[]

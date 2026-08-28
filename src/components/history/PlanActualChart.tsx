@@ -32,7 +32,7 @@ const METRICS: Record<
     actualIsGood: (planned, actual) => actual <= planned + 0.005,
   },
   wants: {
-    label: 'Desejos',
+    label: 'Desejos em conta',
     planned: (point) => point.wantsPlanned,
     actual: (point) => point.wants,
     actualIsGood: (planned, actual) => actual <= planned + 0.005,

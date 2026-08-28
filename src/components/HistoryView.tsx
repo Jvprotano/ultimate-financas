@@ -41,8 +41,8 @@ function SnapshotEditorContent({ point, onClose }: { point: HistoryPoint; onClos
     { label: 'Saídas extraordinárias', value: point.extraExpense, key: 'extraExpense' },
     { label: 'Custos', value: point.costs, key: 'costs' },
     { label: 'Plano de custos', value: point.costsPlanned, key: 'costsPlanned' },
-    { label: 'Desejos realizados', value: point.wants, key: 'wants' },
-    { label: 'Plano de Desejos', value: point.wantsPlanned, key: 'wantsPlanned' },
+    { label: 'Desejos fora do cartão', value: point.wants, key: 'wants' },
+    { label: 'Plano fora do cartão', value: point.wantsPlanned, key: 'wantsPlanned' },
     { label: 'Previdência em folha', value: point.payrollInvested, key: 'payrollInvested' },
     { label: 'Meta de investimento', value: point.investedPlanned, key: 'investedPlanned' },
     { label: 'Ativos financeiros', value: point.grossAssets, key: 'grossAssets' },
@@ -231,10 +231,7 @@ function WantAllocationDetails({
 }) {
   if (point.wantAllocations.length === 0) return null
   const title = point.wantAllocations
-    .map(
-      (allocation) =>
-        `${allocation.includedInCardPlan ? 'Detalhe do Cartão — ' : ''}${allocation.name}: ${formatCurrency(allocation.actual)}`,
-    )
+    .map((allocation) => `${allocation.name}: ${formatCurrency(allocation.actual)}`)
     .join(' · ')
 
   if (compact) {
@@ -244,10 +241,7 @@ function WantAllocationDetails({
         title={title}
       >
         {point.wantAllocations
-          .map(
-            (allocation) =>
-              `${allocation.includedInCardPlan ? '↳ ' : ''}${allocation.name} ${formatCurrency(allocation.actual)}`,
-          )
+          .map((allocation) => `${allocation.name} ${formatCurrency(allocation.actual)}`)
           .join(' · ')}
       </span>
     )
@@ -255,18 +249,14 @@ function WantAllocationDetails({
 
   return (
     <div className="col-span-2 border-t border-dark-border-subtle pt-2">
-      <span className="text-dark-text-muted">Distribuição de Desejos</span>
+      <span className="text-dark-text-muted">Distribuição fora do cartão</span>
       <ul className="mt-1.5 space-y-1">
         {point.wantAllocations.map((allocation) => (
           <li
             key={allocation.id}
-            className={`flex items-center justify-between gap-3 ${
-              allocation.includedInCardPlan ? 'pl-3 text-dark-text-muted' : 'text-dark-text-secondary'
-            }`}
+            className="flex items-center justify-between gap-3 text-dark-text-secondary"
           >
-            <span className="min-w-0 truncate">
-              {allocation.includedInCardPlan ? '↳ ' : ''}{allocation.name}
-            </span>
+            <span className="min-w-0 truncate">{allocation.name}</span>
             <span className="shrink-0 tabular-nums">{formatCurrency(allocation.actual)}</span>
           </li>
         ))}
@@ -302,7 +292,7 @@ function LatestMonthComparison({ points }: { points: HistoryPoint[] }) {
           )
           return {
             id: `want-${allocation.id}`,
-            group: allocation.includedInCardPlan ? 'Desejo no Cartão' : 'Desejo',
+            group: 'Desejo fora do cartão',
             label: allocation.name,
             current: allocation.actual,
             delta: allocation.actual - (before?.actual ?? 0),
@@ -323,7 +313,11 @@ function LatestMonthComparison({ points }: { points: HistoryPoint[] }) {
       />
       <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <PlanVariance label="Custos" planned={latest.costsPlanned} actual={latest.costs} />
-        <PlanVariance label="Desejos" planned={latest.wantsPlanned} actual={latest.wants} />
+        <PlanVariance
+          label="Desejos fora do cartão"
+          planned={latest.wantsPlanned}
+          actual={latest.wants}
+        />
         <PlanVariance label="Cartão" planned={latest.cardPlanned} actual={latest.cardPersonalTotal} />
         <PlanVariance
           label="Investimentos"
@@ -493,7 +487,7 @@ export function HistoryView() {
                     <CompactPlanDelta planned={point.cardPlanned} actual={point.cardPersonalTotal} />
                   </div>
                   <div>
-                    <dt className="text-dark-text-muted">Desejos alocados</dt>
+                    <dt className="text-dark-text-muted">Desejos fora do cartão</dt>
                     <dd className="mt-0.5 tabular-nums text-dark-text">{formatCurrency(point.wants)}</dd>
                     <CompactPlanDelta planned={point.wantsPlanned} actual={point.wants} />
                   </div>
@@ -540,7 +534,7 @@ export function HistoryView() {
                   Renda
                 </th>
                 <th className="px-4 py-2.5 text-right font-medium">Custos</th>
-                <th className="px-4 py-2.5 text-right font-medium">Desejos</th>
+                <th className="px-4 py-2.5 text-right font-medium">Desejos fora do cartão</th>
                 <th className="px-4 py-2.5 text-right font-medium">Investido</th>
                 <th
                   className="px-4 py-2.5 text-right font-medium"

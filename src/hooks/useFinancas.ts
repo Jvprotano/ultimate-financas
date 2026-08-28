@@ -352,7 +352,7 @@ export function useFinancas() {
           planned: row.planned,
           actual: row.effective,
           paidWith: row.want.paidWith,
-          includedInCardPlan: !row.countsTowardTotal,
+          includedInCardPlan: false,
         })),
         payrollInvested: investmentActuals.payroll,
         directInvestedAtClose: investmentActuals.directNet,

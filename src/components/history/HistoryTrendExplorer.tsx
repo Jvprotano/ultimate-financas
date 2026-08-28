@@ -36,7 +36,7 @@ const CURRENCY_SERIES: SeriesDefinition[] = [
   { id: 'invested', label: 'Aportes', color: CHART_PALETTE.aqua },
   { id: 'costs', label: 'Custos', color: CHART_PALETTE.blue },
   { id: 'card', label: 'Fatura', color: CHART_PALETTE.muted },
-  { id: 'wants', label: 'Desejos', color: CHART_PALETTE.violet },
+  { id: 'wants', label: 'Desejos em conta', color: CHART_PALETTE.violet },
 ]
 
 const VIEW_OPTIONS = [

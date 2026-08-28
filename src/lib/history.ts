@@ -33,8 +33,9 @@ export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): Mo
 
   const extraIncomeEntries = normalizeExtraIncomeEntries(raw?.extraIncomeEntries)
   const extraExpenseEntries = normalizeExtraIncomeEntries(raw?.extraExpenseEntries)
-  const wantAllocations = Array.isArray(raw?.wantAllocations)
-    ? raw.wantAllocations
+  const hasWantAllocationBreakdown = Array.isArray(raw?.wantAllocations)
+  const wantAllocations = hasWantAllocationBreakdown
+    ? (raw?.wantAllocations ?? [])
         .map((allocation) => ({
           id: typeof allocation?.id === 'string' && allocation.id ? allocation.id : uid(),
           name:
@@ -49,6 +50,10 @@ export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): Mo
               : undefined,
           includedInCardPlan: allocation?.includedInCardPlan === true,
         }))
+        .filter(
+          (allocation) =>
+            allocation.paidWith !== 'card' && !allocation.includedInCardPlan,
+        )
     : []
   const allocationsActual = wantAllocations
     .filter((allocation) => !allocation.includedInCardPlan)
@@ -98,9 +103,13 @@ export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): Mo
     costs: finiteNumber(raw?.costs),
     // Snapshots antigos não separavam plano de realizado: eram a mesma coisa.
     costsPlanned: finiteNumber(raw?.costsPlanned, finiteNumber(raw?.costs)),
-    wants: finiteNumber(raw?.wants, allocationsActual),
+    // Havendo detalhamento, ele é autoritativo e remove valores do cartão
+    // gravados pela primeira versão do realizado de Desejos.
+    wants: hasWantAllocationBreakdown ? allocationsActual : finiteNumber(raw?.wants),
     // Snapshots antigos guardavam somente um total, que era o próprio plano.
-    wantsPlanned: finiteNumber(raw?.wantsPlanned, finiteNumber(raw?.wants, allocationsPlanned)),
+    wantsPlanned: hasWantAllocationBreakdown
+      ? allocationsPlanned
+      : finiteNumber(raw?.wantsPlanned, finiteNumber(raw?.wants)),
     wantAllocations,
     payrollInvested,
     directInvestedAtClose: finiteNumber(raw?.directInvestedAtClose, invested - payrollInvested),

@@ -42,7 +42,7 @@ describe('normalizeSnapshot — compatibilidade', () => {
     expect(normalized.wantAllocations).toEqual([])
   })
 
-  it('preserva a distribuição de Desejos sem somar filhos do Cartão', () => {
+  it('remove do detalhamento histórico tudo o que pertence ao cartão', () => {
     const normalized = normalizeSnapshot({
       month: '2026-06',
       wantAllocations: [
@@ -73,9 +73,9 @@ describe('normalizeSnapshot — compatibilidade', () => {
       ],
     })
 
-    expect(normalized.wants).toBe(1_400)
-    expect(normalized.wantsPlanned).toBe(1_400)
-    expect(normalized.wantAllocations).toHaveLength(3)
+    expect(normalized.wants).toBe(500)
+    expect(normalized.wantsPlanned).toBe(400)
+    expect(normalized.wantAllocations.map((allocation) => allocation.id)).toEqual(['viagem'])
   })
 
   it('snapshot antigo sem metas de cartão e investimento fica neutro', () => {
