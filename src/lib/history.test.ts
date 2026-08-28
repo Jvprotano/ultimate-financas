@@ -35,6 +35,49 @@ describe('normalizeSnapshot — compatibilidade', () => {
     expect(normalized.costsPlanned).toBe(3_000)
   })
 
+  it('snapshot antigo sem plano de Desejos usa o total antigo como plano', () => {
+    const normalized = normalizeSnapshot({ month: '2026-06', wants: 700 })
+    expect(normalized.wants).toBe(700)
+    expect(normalized.wantsPlanned).toBe(700)
+    expect(normalized.wantAllocations).toEqual([])
+  })
+
+  it('preserva a distribuição de Desejos sem somar filhos do Cartão', () => {
+    const normalized = normalizeSnapshot({
+      month: '2026-06',
+      wantAllocations: [
+        {
+          id: 'cartao',
+          name: 'Cartão',
+          planned: 1_000,
+          actual: 900,
+          paidWith: 'card',
+          includedInCardPlan: false,
+        },
+        {
+          id: 'streaming',
+          name: 'Streaming',
+          planned: 100,
+          actual: 80,
+          paidWith: 'card',
+          includedInCardPlan: true,
+        },
+        {
+          id: 'viagem',
+          name: 'Viagem',
+          planned: 400,
+          actual: 500,
+          paidWith: 'account',
+          includedInCardPlan: false,
+        },
+      ],
+    })
+
+    expect(normalized.wants).toBe(1_400)
+    expect(normalized.wantsPlanned).toBe(1_400)
+    expect(normalized.wantAllocations).toHaveLength(3)
+  })
+
   it('snapshot antigo sem metas de cartão e investimento fica neutro', () => {
     const normalized = normalizeSnapshot({
       month: '2026-06',

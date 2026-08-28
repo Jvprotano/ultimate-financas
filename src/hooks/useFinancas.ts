@@ -57,7 +57,11 @@ export function useFinancas() {
   )
   const history = useHistory(activeCycle.month, historyInvestmentSource)
   const forecast = useForecast(activeCycle.month)
-  const actuals = useActuals(scenarios.activeScenario.costs, activeCycle.month)
+  const actuals = useActuals(
+    scenarios.activeScenario.costs,
+    scenarios.activeScenario.wants,
+    activeCycle.month,
+  )
 
   useEffect(() => {
     maybeCreateAutoBackup()
@@ -325,7 +329,7 @@ export function useFinancas() {
         actuals.summary.extraIncomeTotal -
         actuals.summary.extraExpenseTotal -
         costs -
-        metrics.totalWantsAmount -
+        actuals.summary.effectiveWants -
         investmentActuals.directNet
 
       const saved = history.closeMonth({
@@ -340,7 +344,16 @@ export function useFinancas() {
         extraExpenseEntries: actuals.summary.extraExpenses,
         costs,
         costsPlanned: actuals.summary.plannedCosts,
-        wants: metrics.totalWantsAmount,
+        wants: actuals.summary.effectiveWants,
+        wantsPlanned: actuals.summary.plannedWants,
+        wantAllocations: actuals.summary.wantRows.map((row) => ({
+          id: row.want.id,
+          name: row.want.name,
+          planned: row.planned,
+          actual: row.effective,
+          paidWith: row.want.paidWith,
+          includedInCardPlan: !row.countsTowardTotal,
+        })),
         payrollInvested: investmentActuals.payroll,
         directInvestedAtClose: investmentActuals.directNet,
         investmentProjectionVersion: 1,
@@ -361,7 +374,7 @@ export function useFinancas() {
         cardPersonalTotal: cardCycleAccounting.invoiceFormedByCycle.personalTotal,
         cardPlanned: metrics.plannedOnCard,
         cardByArea,
-        cashLeftover: cashFlow.leftover,
+        cashLeftover: balance,
         note,
       })
 
@@ -379,7 +392,6 @@ export function useFinancas() {
       actuals.summary,
       cardCycleAccounting.invoiceFormedByCycle.personalTotal,
       cardCycleAccounting.spendingThisCycle.personalByArea,
-      cashFlow.leftover,
       emergencyFund,
       history,
       investmentActuals,

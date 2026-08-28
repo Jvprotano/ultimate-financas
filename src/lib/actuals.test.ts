@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeActuals, summarizeActuals } from './actuals'
-import type { CostItem } from '../types'
+import type { CostItem, WantItem } from '../types'
 
 const costs: CostItem[] = [
   { id: 'aluguel', name: 'Aluguel', value: 2_000, category: 'moradia', paidWith: 'account' },
   { id: 'energia', name: 'Energia', value: 200, category: 'contas', paidWith: 'account' },
   { id: 'mercado', name: 'Mercado', value: 1_300, category: 'alimentacao', paidWith: 'card' },
+]
+
+const wants: WantItem[] = [
+  { id: 'cartao', name: 'Cartão', plannedAmount: 1_000, paidWith: 'card' },
+  { id: 'streaming', name: 'Streaming', plannedAmount: 100, paidWith: 'card' },
+  { id: 'viagem', name: 'Viagem', plannedAmount: 400, paidWith: 'account' },
 ]
 
 describe('summarizeActuals', () => {
@@ -84,6 +90,48 @@ describe('summarizeActuals', () => {
     expect(summary.effectiveCosts).toBe(0)
     expect(summary.rows).toEqual([])
   })
+
+  it('Desejos usam o realizado informado e preservam o plano separadamente', () => {
+    const summary = summarizeActuals(
+      costs,
+      { month: '2026-07', costs: {}, wants: { cartao: 850, viagem: 500 } },
+      '2026-07',
+      wants,
+    )
+
+    expect(summary.plannedWants).toBe(1_400)
+    expect(summary.effectiveWants).toBe(1_350)
+    expect(summary.wantsVariance).toBe(-50)
+    expect(summary.informedWantsCount).toBe(2)
+  })
+
+  it('detalhes dentro do envelope Cartão não são somados novamente', () => {
+    const summary = summarizeActuals(
+      costs,
+      {
+        month: '2026-07',
+        costs: {},
+        wants: { cartao: 850, streaming: 90, viagem: 500 },
+      },
+      '2026-07',
+      wants,
+    )
+
+    expect(summary.effectiveWants).toBe(1_350)
+    expect(summary.wantRows.find((row) => row.want.id === 'streaming')?.countsTowardTotal).toBe(false)
+  })
+
+  it('zero em um Desejo é realizado legítimo', () => {
+    const summary = summarizeActuals(
+      [],
+      { month: '2026-07', costs: {}, wants: { viagem: 0 } },
+      '2026-07',
+      [wants[2]],
+    )
+
+    expect(summary.effectiveWants).toBe(0)
+    expect(summary.wantRows[0].actual).toBe(0)
+  })
 })
 
 describe('normalizeActuals', () => {
@@ -97,6 +145,12 @@ describe('normalizeActuals', () => {
 
   it('preserva o zero', () => {
     expect(normalizeActuals({ month: '2026-07', costs: { a: 0 } }).costs).toEqual({ a: 0 })
+  })
+
+  it('normaliza realizados de Desejos sem aceitar valores inválidos', () => {
+    expect(
+      normalizeActuals({ wants: { viagem: 500, zero: 0, erro: -10 } }).wants,
+    ).toEqual({ viagem: 500, zero: 0 })
   })
 
   it('mês inválido cai no mês corrente', () => {

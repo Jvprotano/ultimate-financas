@@ -1,5 +1,5 @@
-import type { CostCategory, CostItem } from './budget'
-import type { BudgetArea } from './core'
+import type { CostCategory, CostItem, WantItem } from './budget'
+import type { BudgetArea, PaymentMethod } from './core'
 
 export interface ExtraIncomeEntry {
   id: string
@@ -13,6 +13,8 @@ export type ExtraExpenseEntry = ExtraIncomeEntry
 export interface MonthlyActuals {
   month: string
   costs: Record<string, number>
+  /** Valor efetivamente destinado a cada item de Desejos neste ciclo. */
+  wants: Record<string, number>
   extraIncome: ExtraIncomeEntry[]
   extraExpenses: ExtraExpenseEntry[]
 }
@@ -35,6 +37,29 @@ export interface ActualsSummary {
     effective: number
     variance: number
   }[]
+  effectiveWants: number
+  plannedWants: number
+  wantsVariance: number
+  informedWantsCount: number
+  wantRows: {
+    want: WantItem
+    planned: number
+    actual: number | null
+    effective: number
+    variance: number
+    /** Filhos do envelope Cartão são detalhamento e não entram novamente no total. */
+    countsTowardTotal: boolean
+  }[]
+}
+
+export interface WantAllocationSnapshot {
+  id: string
+  name: string
+  planned: number
+  actual: number
+  paidWith?: PaymentMethod
+  /** Evita somar novamente um detalhe que já pertence ao envelope Cartão. */
+  includedInCardPlan: boolean
 }
 
 export interface MonthlySnapshot {
@@ -51,7 +76,10 @@ export interface MonthlySnapshot {
   extraExpenseEntries: ExtraExpenseEntry[]
   costs: number
   costsPlanned: number
+  /** Total efetivamente destinado a Desejos no ciclo. */
   wants: number
+  wantsPlanned: number
+  wantAllocations: WantAllocationSnapshot[]
   /** Previdência descontada em folha, congelada no fechamento do ciclo. */
   payrollInvested: number
   /** Aporte líquido do livro-razão no instante do fechamento, mantido para auditoria. */
@@ -101,6 +129,7 @@ export type SnapshotPatch = Partial<
     | 'costs'
     | 'costsPlanned'
     | 'wants'
+    | 'wantsPlanned'
     | 'payrollInvested'
     | 'investedPlanned'
     | 'grossAssets'

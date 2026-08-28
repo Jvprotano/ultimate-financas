@@ -14,7 +14,7 @@ import { CHART_PALETTE } from '../../types/constants'
 import { formatCurrency, formatCurrencyShort, formatMonthKey } from '../../lib/format'
 import { SegmentedControl } from '../ui'
 
-type Metric = 'costs' | 'card' | 'invested'
+type Metric = 'costs' | 'wants' | 'card' | 'invested'
 
 const METRICS: Record<
   Metric,
@@ -29,6 +29,12 @@ const METRICS: Record<
     label: 'Custos',
     planned: (point) => point.costsPlanned,
     actual: (point) => point.costs,
+    actualIsGood: (planned, actual) => actual <= planned + 0.005,
+  },
+  wants: {
+    label: 'Desejos',
+    planned: (point) => point.wantsPlanned,
+    actual: (point) => point.wants,
     actualIsGood: (planned, actual) => actual <= planned + 0.005,
   },
   card: {
@@ -73,7 +79,7 @@ export function PlanActualChart({ points }: { points: HistoryPoint[] }) {
           }))}
           value={metric}
           onChange={setMetric}
-          className="w-full sm:w-[310px]"
+          className="w-full sm:w-[390px]"
         />
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-dark-text-muted">
           <span className="flex items-center gap-1.5">
@@ -134,7 +140,7 @@ export function PlanActualChart({ points }: { points: HistoryPoint[] }) {
       </div>
       <p className="mt-2 text-[11px] leading-relaxed text-dark-text-muted">
         Últimos {data.length} {data.length === 1 ? 'mês fechado' : 'meses fechados'}. Em investimentos,
-        superar a meta é positivo; em custos e cartão, ficar abaixo do limite é positivo.
+        superar a meta é positivo; em custos, Desejos e cartão, ficar abaixo do limite é positivo.
       </p>
     </div>
   )

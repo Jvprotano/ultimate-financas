@@ -112,11 +112,31 @@ export function useHistory(cycleMonth = monthKey(), investmentSource?: Investmen
                 : item.extraExpenseEntries.length === 1
                   ? [{ ...item.extraExpenseEntries[0], amount: patch.extraExpense }]
                   : [{ id: uid(), name: 'Ajuste manual', amount: patch.extraExpense }]
+          const currentWantAllocations = Array.isArray(item.wantAllocations)
+            ? item.wantAllocations
+            : []
+          const wantAllocations =
+            patch.wants === undefined
+              ? currentWantAllocations
+              : patch.wants <= 0
+                ? []
+                : currentWantAllocations.length === 1
+                  ? [{ ...currentWantAllocations[0], actual: patch.wants }]
+                  : [
+                      {
+                        id: uid(),
+                        name: 'Ajuste manual',
+                        planned: patch.wantsPlanned ?? item.wantsPlanned ?? item.wants,
+                        actual: patch.wants,
+                        includedInCardPlan: false,
+                      },
+                    ]
           const merged = normalizeSnapshot({
             ...item,
             ...patch,
             extraIncomeEntries,
             extraExpenseEntries,
+            wantAllocations,
           })
           const invested = merged.payrollInvested + merged.directInvestedAtClose
           return {

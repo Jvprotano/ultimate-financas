@@ -3,8 +3,9 @@ import type {
   CostCategory,
   CostItem,
   MonthlyActuals,
+  WantItem,
 } from '../types'
-import { personalCostValue } from './scenario'
+import { isWantIncludedInCardPlan, personalCostValue } from './scenario'
 import { finiteNumber, monthKey, normalizeExtraIncomeEntries } from './shared'
 
 // ---------------------------------------------------------------------------
@@ -19,14 +20,19 @@ import { finiteNumber, monthKey, normalizeExtraIncomeEntries } from './shared'
 // ---------------------------------------------------------------------------
 
 export function normalizeActuals(raw: Partial<MonthlyActuals> | undefined): MonthlyActuals {
-  const costs: Record<string, number> = {}
-  if (raw?.costs && typeof raw.costs === 'object') {
-    for (const [id, value] of Object.entries(raw.costs)) {
+  const normalizeAmounts = (source: unknown) => {
+    const amounts: Record<string, number> = {}
+    if (!source || typeof source !== 'object') return amounts
+    for (const [id, value] of Object.entries(source)) {
       const amount = finiteNumber(value, -1)
       // Zero é uma informação legítima ("não paguei este mês"); negativo não é.
-      if (amount >= 0) costs[id] = amount
+      if (amount >= 0) amounts[id] = amount
     }
+    return amounts
   }
+
+  const costs = normalizeAmounts(raw?.costs)
+  const wants = normalizeAmounts(raw?.wants)
 
   const extraIncome = normalizeExtraIncomeEntries(raw?.extraIncome)
   const extraExpenses = normalizeExtraIncomeEntries(raw?.extraExpenses)
@@ -34,6 +40,7 @@ export function normalizeActuals(raw: Partial<MonthlyActuals> | undefined): Mont
   return {
     month: /^\d{4}-\d{2}$/.test(raw?.month ?? '') ? (raw?.month as string) : monthKey(),
     costs,
+    wants,
     extraIncome,
     extraExpenses,
   }
@@ -41,8 +48,9 @@ export function normalizeActuals(raw: Partial<MonthlyActuals> | undefined): Mont
 
 export function summarizeActuals(
   costs: CostItem[],
-  actuals: MonthlyActuals | undefined,
+  actuals: Partial<MonthlyActuals> | undefined,
   month = monthKey(),
+  wants: WantItem[] = [],
 ): ActualsSummary {
   const informed = actuals?.costs ?? {}
   const byCategory = new Map<CostCategory, number>()
@@ -59,6 +67,24 @@ export function summarizeActuals(
 
   const effectiveCosts = rows.reduce((sum, row) => sum + row.effective, 0)
   const plannedCosts = rows.reduce((sum, row) => sum + row.planned, 0)
+  const informedWants = actuals?.wants ?? {}
+  const wantRows = wants.map((want) => {
+    const planned = Math.max(0, finiteNumber(want.plannedAmount))
+    const actual = Object.hasOwn(informedWants, want.id) ? informedWants[want.id] : null
+    const effective = actual ?? planned
+    const countsTowardTotal = !isWantIncludedInCardPlan(want, wants)
+    return {
+      want,
+      planned,
+      actual,
+      effective,
+      variance: effective - planned,
+      countsTowardTotal,
+    }
+  })
+  const countedWantRows = wantRows.filter((row) => row.countsTowardTotal)
+  const effectiveWants = countedWantRows.reduce((sum, row) => sum + row.effective, 0)
+  const plannedWants = countedWantRows.reduce((sum, row) => sum + row.planned, 0)
 
   return {
     month,
@@ -75,5 +101,10 @@ export function summarizeActuals(
     informedCount: rows.filter((row) => row.actual !== null).length,
     byCategory,
     rows,
+    effectiveWants,
+    plannedWants,
+    wantsVariance: effectiveWants - plannedWants,
+    informedWantsCount: wantRows.filter((row) => row.actual !== null).length,
+    wantRows,
   }
 }

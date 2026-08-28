@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import { useLocalStorage } from './useLocalStorage'
-import type { CostItem, ExtraIncomeEntry, MonthlyActuals } from '../types'
+import type { CostItem, ExtraIncomeEntry, MonthlyActuals, WantItem } from '../types'
 import { normalizeActuals, summarizeActuals } from '../lib/actuals'
 import { monthKey, uid } from '../lib/shared'
 
@@ -13,12 +13,14 @@ const sortMonths = (items: MonthlyActuals[]) =>
 const emptyMonth = (month: string): MonthlyActuals => ({
   month,
   costs: {},
+  wants: {},
   extraIncome: [],
   extraExpenses: [],
 })
 
 const hasFacts = (actuals: MonthlyActuals) =>
   Object.keys(actuals.costs).length > 0 ||
+  Object.keys(actuals.wants).length > 0 ||
   actuals.extraIncome.length > 0 ||
   actuals.extraExpenses.length > 0
 
@@ -26,7 +28,11 @@ const hasFacts = (actuals: MonthlyActuals) =>
  * O que de fato foi pago e recebido em cada mês. Guardado por mês (não por
  * cenário): o realizado é um fato, não uma hipótese.
  */
-export function useActuals(costs: CostItem[] = [], month = monthKey()) {
+export function useActuals(
+  costs: CostItem[] = [],
+  wants: WantItem[] = [],
+  month = monthKey(),
+) {
   const [stored, setStored] = useLocalStorage<MonthlyActuals[]>(ACTUALS_STORAGE_KEY, [])
   const months = useMemo(
     () => (Array.isArray(stored) ? stored.map(normalizeActuals) : []),
@@ -37,7 +43,10 @@ export function useActuals(costs: CostItem[] = [], month = monthKey()) {
     () => months.find((item) => item.month === month),
     [months, month],
   )
-  const summary = useMemo(() => summarizeActuals(costs, forMonth, month), [costs, forMonth, month])
+  const summary = useMemo(
+    () => summarizeActuals(costs, forMonth, month, wants),
+    [costs, forMonth, month, wants],
+  )
 
   const updateMonth = useCallback(
     (targetMonth: string, update: (current: MonthlyActuals) => MonthlyActuals) => {
@@ -65,6 +74,19 @@ export function useActuals(costs: CostItem[] = [], month = monthKey()) {
     [month, updateMonth],
   )
 
+  /** Informa quanto foi efetivamente destinado a um item de Desejos. */
+  const setWantActual = useCallback(
+    (wantId: string, amount: number | null, targetMonth = month) => {
+      updateMonth(targetMonth, (current) => {
+        const nextWants = { ...current.wants }
+        if (amount === null) delete nextWants[wantId]
+        else nextWants[wantId] = Math.max(0, amount)
+        return { ...current, wants: nextWants }
+      })
+    },
+    [month, updateMonth],
+  )
+
   /** Preenche todos os itens ainda vazios com o valor planejado. */
   const fillFromPlan = useCallback(
     (targetMonth = month) => {
@@ -73,14 +95,23 @@ export function useActuals(costs: CostItem[] = [], month = monthKey()) {
         for (const row of summary.rows) {
           if (!Object.hasOwn(filled, row.cost.id)) filled[row.cost.id] = row.planned
         }
-        return { ...current, costs: filled }
+        const filledWants = { ...current.wants }
+        for (const row of summary.wantRows) {
+          if (!Object.hasOwn(filledWants, row.want.id)) filledWants[row.want.id] = row.planned
+        }
+        return { ...current, costs: filled, wants: filledWants }
       })
     },
-    [month, summary.rows, updateMonth],
+    [month, summary.rows, summary.wantRows, updateMonth],
   )
 
   const clearCosts = useCallback(
     (targetMonth = month) => updateMonth(targetMonth, (current) => ({ ...current, costs: {} })),
+    [month, updateMonth],
+  )
+
+  const clearWants = useCallback(
+    (targetMonth = month) => updateMonth(targetMonth, (current) => ({ ...current, wants: {} })),
     [month, updateMonth],
   )
 
@@ -179,8 +210,10 @@ export function useActuals(costs: CostItem[] = [], month = monthKey()) {
     month,
     summary,
     setActual,
+    setWantActual,
     fillFromPlan,
     clearCosts,
+    clearWants,
     addExtraIncome,
     addExtraExpense,
     updateExtraIncome,

@@ -41,7 +41,8 @@ function SnapshotEditorContent({ point, onClose }: { point: HistoryPoint; onClos
     { label: 'Saídas extraordinárias', value: point.extraExpense, key: 'extraExpense' },
     { label: 'Custos', value: point.costs, key: 'costs' },
     { label: 'Plano de custos', value: point.costsPlanned, key: 'costsPlanned' },
-    { label: 'Desejos', value: point.wants, key: 'wants' },
+    { label: 'Desejos realizados', value: point.wants, key: 'wants' },
+    { label: 'Plano de Desejos', value: point.wantsPlanned, key: 'wantsPlanned' },
     { label: 'Previdência em folha', value: point.payrollInvested, key: 'payrollInvested' },
     { label: 'Meta de investimento', value: point.investedPlanned, key: 'investedPlanned' },
     { label: 'Ativos financeiros', value: point.grossAssets, key: 'grossAssets' },
@@ -221,6 +222,59 @@ function CompactPlanDelta({
   )
 }
 
+function WantAllocationDetails({
+  point,
+  compact = false,
+}: {
+  point: HistoryPoint
+  compact?: boolean
+}) {
+  if (point.wantAllocations.length === 0) return null
+  const title = point.wantAllocations
+    .map(
+      (allocation) =>
+        `${allocation.includedInCardPlan ? 'Detalhe do Cartão — ' : ''}${allocation.name}: ${formatCurrency(allocation.actual)}`,
+    )
+    .join(' · ')
+
+  if (compact) {
+    return (
+      <span
+        className="mt-0.5 block max-w-52 truncate text-[10px] text-dark-text-muted"
+        title={title}
+      >
+        {point.wantAllocations
+          .map(
+            (allocation) =>
+              `${allocation.includedInCardPlan ? '↳ ' : ''}${allocation.name} ${formatCurrency(allocation.actual)}`,
+          )
+          .join(' · ')}
+      </span>
+    )
+  }
+
+  return (
+    <div className="col-span-2 border-t border-dark-border-subtle pt-2">
+      <span className="text-dark-text-muted">Distribuição de Desejos</span>
+      <ul className="mt-1.5 space-y-1">
+        {point.wantAllocations.map((allocation) => (
+          <li
+            key={allocation.id}
+            className={`flex items-center justify-between gap-3 ${
+              allocation.includedInCardPlan ? 'pl-3 text-dark-text-muted' : 'text-dark-text-secondary'
+            }`}
+          >
+            <span className="min-w-0 truncate">
+              {allocation.includedInCardPlan ? '↳ ' : ''}{allocation.name}
+            </span>
+            <span className="shrink-0 tabular-nums">{formatCurrency(allocation.actual)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function LatestMonthComparison({ points }: { points: HistoryPoint[] }) {
   const latest = points.at(-1)
   if (!latest) return null
@@ -242,6 +296,18 @@ function LatestMonthComparison({ points }: { points: HistoryPoint[] }) {
           current: latest.cardByArea[area] ?? 0,
           delta: (latest.cardByArea[area] ?? 0) - (previous.cardByArea[area] ?? 0),
         })),
+        ...latest.wantAllocations.map((allocation) => {
+          const before = previous.wantAllocations.find(
+            (item) => item.id === allocation.id || item.name === allocation.name,
+          )
+          return {
+            id: `want-${allocation.id}`,
+            group: allocation.includedInCardPlan ? 'Desejo no Cartão' : 'Desejo',
+            label: allocation.name,
+            current: allocation.actual,
+            delta: allocation.actual - (before?.actual ?? 0),
+          }
+        }),
       ]
         .filter((item) => Math.abs(item.delta) > 0.005)
         .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
@@ -255,8 +321,9 @@ function LatestMonthComparison({ points }: { points: HistoryPoint[] }) {
         icon={<ChartColumn size={16} />}
         description="O sinal mostra realizado menos planejado. Em gastos, positivo e vermelho significa estouro; em investimentos, superar a meta é favorável."
       />
-      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <PlanVariance label="Custos" planned={latest.costsPlanned} actual={latest.costs} />
+        <PlanVariance label="Desejos" planned={latest.wantsPlanned} actual={latest.wants} />
         <PlanVariance label="Cartão" planned={latest.cardPlanned} actual={latest.cardPersonalTotal} />
         <PlanVariance
           label="Investimentos"
@@ -428,6 +495,7 @@ export function HistoryView() {
                   <div>
                     <dt className="text-dark-text-muted">Desejos alocados</dt>
                     <dd className="mt-0.5 tabular-nums text-dark-text">{formatCurrency(point.wants)}</dd>
+                    <CompactPlanDelta planned={point.wantsPlanned} actual={point.wants} />
                   </div>
                   <div>
                     <dt className="text-dark-text-muted">Poupança</dt>
@@ -439,6 +507,7 @@ export function HistoryView() {
                     </dt>
                     <dd className="mt-0.5 tabular-nums text-dark-text">{formatCurrency(point.netWorth)}</dd>
                   </div>
+                  <WantAllocationDetails point={point} />
                 </dl>
                 {(point.extraIncome > 0.005 || point.extraExpense > 0.005) && (
                   <div className="mt-3 border-t border-dark-border-subtle pt-2 text-[11px] leading-relaxed">
@@ -549,6 +618,8 @@ export function HistoryView() {
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-dark-text-secondary">
                       {formatCurrency(point.wants)}
+                      <CompactPlanDelta planned={point.wantsPlanned} actual={point.wants} />
+                      <WantAllocationDetails point={point} compact />
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-dark-text-secondary">
                       {formatCurrency(point.invested)}

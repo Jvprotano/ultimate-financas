@@ -33,6 +33,29 @@ export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): Mo
 
   const extraIncomeEntries = normalizeExtraIncomeEntries(raw?.extraIncomeEntries)
   const extraExpenseEntries = normalizeExtraIncomeEntries(raw?.extraExpenseEntries)
+  const wantAllocations = Array.isArray(raw?.wantAllocations)
+    ? raw.wantAllocations
+        .map((allocation) => ({
+          id: typeof allocation?.id === 'string' && allocation.id ? allocation.id : uid(),
+          name:
+            typeof allocation?.name === 'string' && allocation.name.trim()
+              ? allocation.name.trim()
+              : 'Desejo',
+          planned: Math.max(0, finiteNumber(allocation?.planned)),
+          actual: Math.max(0, finiteNumber(allocation?.actual)),
+          paidWith:
+            allocation?.paidWith === 'account' || allocation?.paidWith === 'card'
+              ? allocation.paidWith
+              : undefined,
+          includedInCardPlan: allocation?.includedInCardPlan === true,
+        }))
+    : []
+  const allocationsActual = wantAllocations
+    .filter((allocation) => !allocation.includedInCardPlan)
+    .reduce((sum, allocation) => sum + allocation.actual, 0)
+  const allocationsPlanned = wantAllocations
+    .filter((allocation) => !allocation.includedInCardPlan)
+    .reduce((sum, allocation) => sum + allocation.planned, 0)
   const availableForBudget = finiteNumber(raw?.availableForBudget)
   const paycheckInAccount = finiteNumber(raw?.paycheckInAccount)
   const invested = finiteNumber(raw?.invested)
@@ -75,7 +98,10 @@ export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): Mo
     costs: finiteNumber(raw?.costs),
     // Snapshots antigos não separavam plano de realizado: eram a mesma coisa.
     costsPlanned: finiteNumber(raw?.costsPlanned, finiteNumber(raw?.costs)),
-    wants: finiteNumber(raw?.wants),
+    wants: finiteNumber(raw?.wants, allocationsActual),
+    // Snapshots antigos guardavam somente um total, que era o próprio plano.
+    wantsPlanned: finiteNumber(raw?.wantsPlanned, finiteNumber(raw?.wants, allocationsPlanned)),
+    wantAllocations,
     payrollInvested,
     directInvestedAtClose: finiteNumber(raw?.directInvestedAtClose, invested - payrollInvested),
     investmentProjectionVersion:

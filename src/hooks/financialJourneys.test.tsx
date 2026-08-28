@@ -20,6 +20,17 @@ const snapshot: Omit<MonthlySnapshot, 'id' | 'closedAt'> = {
   costs: 2000,
   costsPlanned: 1900,
   wants: 500,
+  wantsPlanned: 600,
+  wantAllocations: [
+    {
+      id: 'viagem',
+      name: 'Viagem',
+      planned: 600,
+      actual: 500,
+      paidWith: 'account',
+      includedInCardPlan: false,
+    },
+  ],
   payrollInvested: 0,
   directInvestedAtClose: 1000,
   investmentProjectionVersion: 1,

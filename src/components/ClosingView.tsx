@@ -88,6 +88,7 @@ export function ClosingView({
   const persistence = usePersistenceStatus()
 
   const missingActualRows = actuals.summary.rows.filter((row) => row.actual === null)
+  const missingWantActualRows = actuals.summary.wantRows.filter((row) => row.actual === null)
   const closingInvoiceDue = cardCycleAccounting.invoiceFormedByCycle.personalTotal
   const closingInvoiceTotal = cardCycleAccounting.invoiceFormedByCycle.total
   const invoiceKnown = cardCycleAccounting.invoiceFormedByCycle.amountKnown
@@ -141,6 +142,10 @@ export function ClosingView({
     actuals.summary.effectiveCosts,
   )
   const invoiceStatus = evaluateBudgetCeiling(metrics.plannedOnCard, closingInvoiceDue)
+  const wantsStatus = evaluateBudgetCeiling(
+    actuals.summary.plannedWants,
+    actuals.summary.effectiveWants,
+  )
   const investmentStatus = evaluateGoalProgress(
     metrics.totalPlannedInvestment,
     investmentActuals.total,
@@ -304,7 +309,7 @@ export function ClosingView({
           }
         />
 
-        <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
           <StatTile
             label="Movimentos extraordinários"
             value={formatCurrency(
@@ -337,6 +342,25 @@ export function ClosingView({
               />
             }
             tone={costsStatus.tone}
+          />
+          <StatTile
+            label="Desejos alocados"
+            value={formatCurrency(actuals.summary.effectiveWants)}
+            detail={
+              <PlanComparisonDetail
+                comparison={formatPlanComparison(
+                  actuals.summary.plannedWants,
+                  actuals.summary.effectiveWants,
+                )}
+                status={wantsStatus}
+                suffix={
+                  missingWantActualRows.length > 0
+                    ? ` · ${missingWantActualRows.length} sem realizado`
+                    : ''
+                }
+              />
+            }
+            tone={wantsStatus.tone}
           />
           <StatTile
             label="Minha parte da fatura"
@@ -379,7 +403,8 @@ export function ClosingView({
                   Confirmar {formatMonthLong(activeCycle.month)}
                 </h3>
                 <p className="mt-1 text-xs leading-relaxed text-dark-text-muted">
-                  Histórico: custos {formatCurrency(actuals.summary.effectiveCosts)} · fatura pessoal{' '}
+                  Histórico: custos {formatCurrency(actuals.summary.effectiveCosts)} · desejos{' '}
+                  {formatCurrency(actuals.summary.effectiveWants)} · fatura pessoal{' '}
                   {invoiceKnown ? formatCurrency(closingInvoiceDue) : 'não recuperada'} · investido{' '}
                   {formatCurrency(investmentActuals.total)}
                   {actuals.summary.extraIncomeTotal > 0.005 && (
@@ -427,6 +452,13 @@ export function ClosingView({
               <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] px-3 py-2.5 text-xs leading-relaxed text-amber-100/85">
                 <strong className="text-amber-200">Usando o planejamento em:</strong>{' '}
                 {missingActualRows.map((row) => row.cost.name).join(', ')}.
+              </div>
+            )}
+
+            {missingWantActualRows.length > 0 && (
+              <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] px-3 py-2.5 text-xs leading-relaxed text-amber-100/85">
+                <strong className="text-amber-200">Desejos usando o planejamento:</strong>{' '}
+                {missingWantActualRows.map((row) => row.want.name).join(', ')}.
               </div>
             )}
 

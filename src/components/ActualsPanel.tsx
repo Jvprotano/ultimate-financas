@@ -27,6 +27,11 @@ export function ActualsPanel() {
     plannedCosts,
     variance,
     informedCount,
+    effectiveWants,
+    plannedWants,
+    wantsVariance,
+    informedWantsCount,
+    wantRows,
     extraIncome,
     extraExpenses,
   } = summary
@@ -46,7 +51,7 @@ export function ActualsPanel() {
       <PanelHeader
         title={`Realizado de ${formatMonthLong(summary.month)}`}
         icon={<ClipboardCheck size={16} />}
-        description="Registre o que realmente entrou e ajuste o que saiu em débito ou boleto."
+        description="Registre o que entrou, o que saiu e quanto foi destinado a Desejos."
         actions={
           <>
             <span className="text-right">
@@ -96,6 +101,109 @@ export function ActualsPanel() {
           onUpdate={(id, amount) => actuals.updateExtraExpense(id, { amount })}
           onRemove={actuals.removeExtraExpense}
         />
+      </div>
+
+      <div className="mt-5 border-t border-dark-border-subtle pt-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold text-dark-text">Desejos alocados</h3>
+            <p className="mt-0.5 text-xs text-dark-text-muted">
+              Quanto você realmente destinou a cada categoria neste ciclo.
+            </p>
+          </div>
+          {informedWantsCount > 0 && (
+            <SecondaryButton onClick={() => actuals.clearWants()} tone="danger">
+              <RotateCcw size={14} />
+              Limpar desejos
+            </SecondaryButton>
+          )}
+        </div>
+
+        {wantRows.length === 0 ? (
+          <div className="mt-4">
+            <EmptyState icon={<ClipboardCheck size={24} />} title="Nenhum Desejo cadastrado">
+              Cadastre as categorias em Planejar para registrar quanto foi destinado a cada uma
+              neste ciclo.
+            </EmptyState>
+          </div>
+        ) : (
+          <>
+            <ul className="mt-4 space-y-1.5">
+              {wantRows.map((row) => {
+                const off = row.actual !== null && Math.abs(row.variance) > 0.005
+                return (
+                  <li
+                    key={row.want.id}
+                    className={`flex flex-wrap items-center gap-3 rounded-lg bg-dark-surface px-3 py-2 ${
+                      row.countsTowardTotal ? '' : 'ml-3 border-l border-violet-400/20'
+                    }`}
+                  >
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-violet-400" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-dark-text">{row.want.name}</p>
+                      <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-dark-text-muted">
+                        <span>plano {formatCurrency(row.planned)}</span>
+                        {row.want.paidWith === 'account' ? <Tag>em conta</Tag> : <Tag>no cartão</Tag>}
+                        {!row.countsTowardTotal && <Tag>detalhe do envelope</Tag>}
+                      </p>
+                    </div>
+                    {off && (
+                      <span
+                        className={`shrink-0 text-xs font-medium tabular-nums ${
+                          row.variance > 0 ? 'text-rose-400' : 'text-primary-400'
+                        }`}
+                      >
+                        {row.variance > 0 ? '+' : '−'} {formatCurrency(Math.abs(row.variance))}
+                      </span>
+                    )}
+                    <div className="w-32 shrink-0">
+                      <CurrencyInput
+                        value={row.actual ?? 0}
+                        onChange={(value) => actuals.setWantActual(row.want.id, value)}
+                        placeholder={row.planned.toLocaleString('pt-BR', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                        className="!py-1.5"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => actuals.setWantActual(row.want.id, null)}
+                      disabled={row.actual === null}
+                      className="shrink-0 rounded-md p-1.5 text-dark-text-muted transition-colors hover:text-dark-text disabled:opacity-0"
+                      title="Voltar a usar o valor planejado"
+                      aria-label={`Limpar o realizado de ${row.want.name}`}
+                    >
+                      <RotateCcw size={13} />
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+
+            <p className="mt-3 border-t border-dark-border-subtle pt-3 text-xs leading-relaxed text-dark-text-muted">
+              {informedWantsCount === 0 ? (
+                <>
+                  Nenhum valor informado ainda — o fechamento vai usar os{' '}
+                  {formatCurrency(plannedWants)} do plano.
+                </>
+              ) : (
+                <>
+                  {informedWantsCount} de {wantRows.length}{' '}
+                  {wantRows.length === 1 ? 'item informado' : 'itens informados'}. Total do ciclo{' '}
+                  <strong className="text-dark-text">{formatCurrency(effectiveWants)}</strong>,{' '}
+                  <strong className={wantsVariance > 0 ? 'text-rose-400' : 'text-primary-400'}>
+                    {Math.abs(wantsVariance) <= 0.005
+                      ? 'igual ao plano'
+                      : `${wantsVariance > 0 ? 'acima' : 'abaixo'} em ${formatCurrency(Math.abs(wantsVariance))}`}
+                  </strong>
+                  . Detalhes do envelope Cartão ficam no histórico, mas não são somados novamente.
+                </>
+              )}
+            </p>
+          </>
+        )}
       </div>
 
       <div className="mt-5 border-t border-dark-border-subtle pt-4">
