@@ -1,4 +1,14 @@
-import { BanknoteArrowDown, BanknoteArrowUp, ClipboardCheck, RotateCcw, Wand2 } from 'lucide-react'
+import { useState, type FormEvent } from 'react'
+import {
+  BanknoteArrowDown,
+  BanknoteArrowUp,
+  Check,
+  ClipboardCheck,
+  Minus,
+  Plus,
+  RotateCcw,
+  Wand2,
+} from 'lucide-react'
 import { CurrencyInput } from './CurrencyInput'
 import { EmptyState, Panel, PanelHeader, SecondaryButton, Tag } from './ui'
 import { formatCurrency, formatMonthLong } from '../lib/format'
@@ -16,6 +26,87 @@ import { ActualCashEntries } from './ActualCashEntries'
 //
 // Campo vazio significa "não sei ainda, use o planejado" — nunca zero.
 // ---------------------------------------------------------------------------
+
+type AdjustmentMode = 'add' | 'subtract'
+
+export function CostAdjustmentControl({
+  costName,
+  onAdjust,
+}: {
+  costName: string
+  onAdjust: (delta: number) => void
+}) {
+  const [mode, setMode] = useState<AdjustmentMode | null>(null)
+  const [amount, setAmount] = useState(0)
+
+  const open = (nextMode: AdjustmentMode) => {
+    setAmount(0)
+    setMode((current) => (current === nextMode ? null : nextMode))
+  }
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!mode || amount <= 0) return
+    onAdjust(mode === 'add' ? amount : -amount)
+    setAmount(0)
+    setMode(null)
+  }
+
+  const action = mode === 'add' ? 'adicionar' : 'diminuir'
+
+  return (
+    <div className="flex shrink-0 items-center gap-1">
+      {mode && (
+        <form onSubmit={submit} className="flex items-center gap-1">
+          <div className="w-24">
+            <CurrencyInput
+              value={amount}
+              onChange={setAmount}
+              placeholder="0,00"
+              className="!py-1 !pl-8 !pr-1.5 !text-xs"
+              autoFocus
+              ariaLabel={`Valor para ${action} em ${costName}`}
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={amount <= 0}
+            className="inline-flex h-7 items-center justify-center gap-1 rounded-md border border-dark-border-subtle bg-dark-input px-1.5 text-[10px] font-semibold text-dark-text-secondary transition-colors hover:border-primary-500/40 hover:text-primary-300 disabled:cursor-not-allowed disabled:opacity-35"
+            aria-label={`Confirmar valor para ${action} em ${costName}`}
+            title="Confirmar ajuste"
+          >
+            <Check size={11} />
+            OK
+          </button>
+        </form>
+      )}
+      <button
+        type="button"
+        onClick={() => open('add')}
+        className={`inline-flex h-7 w-7 items-center justify-center rounded-md text-primary-400 transition-colors hover:bg-primary-500/10 ${
+          mode === 'add' ? 'bg-primary-500/10 ring-1 ring-primary-500/30' : ''
+        }`}
+        aria-label={`Adicionar valor a ${costName}`}
+        title="Adicionar ao custo"
+        aria-pressed={mode === 'add'}
+      >
+        <Plus size={14} />
+      </button>
+      <button
+        type="button"
+        onClick={() => open('subtract')}
+        className={`inline-flex h-7 w-7 items-center justify-center rounded-md text-rose-400 transition-colors hover:bg-rose-500/10 ${
+          mode === 'subtract' ? 'bg-rose-500/10 ring-1 ring-rose-500/30' : ''
+        }`}
+        aria-label={`Diminuir valor de ${costName}`}
+        title="Diminuir do custo"
+        aria-pressed={mode === 'subtract'}
+      >
+        <Minus size={14} />
+      </button>
+    </div>
+  )
+}
 
 export function ActualsPanel() {
   const actuals = useActualsStore()
@@ -249,27 +340,35 @@ export function ActualsPanel() {
                       {row.variance > 0 ? '+' : '−'} {formatCurrency(Math.abs(row.variance))}
                     </span>
                   )}
-                  <div className="w-32 shrink-0">
-                    <CurrencyInput
-                      value={row.actual ?? 0}
-                      onChange={(value) => actuals.setActual(row.cost.id, value)}
-                      placeholder={row.planned.toLocaleString('pt-BR', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                      className="!py-1.5"
+                  <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1.5">
+                    <div className="w-32 shrink-0">
+                      <CurrencyInput
+                        value={row.actual ?? 0}
+                        onChange={(value) => actuals.setActual(row.cost.id, value)}
+                        placeholder={row.planned.toLocaleString('pt-BR', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                        className="!py-1.5"
+                      />
+                    </div>
+                    <CostAdjustmentControl
+                      costName={row.cost.name}
+                      onAdjust={(delta) =>
+                        actuals.setActual(row.cost.id, Math.max(0, (row.actual ?? 0) + delta))
+                      }
                     />
+                    <button
+                      type="button"
+                      onClick={() => actuals.setActual(row.cost.id, null)}
+                      disabled={row.actual === null}
+                      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-dark-text-muted transition-colors hover:bg-white/[0.04] hover:text-dark-text disabled:opacity-0"
+                      title="Voltar a usar o valor planejado"
+                      aria-label={`Limpar o realizado de ${row.cost.name}`}
+                    >
+                      <RotateCcw size={13} />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => actuals.setActual(row.cost.id, null)}
-                    disabled={row.actual === null}
-                    className="shrink-0 rounded-md p-1.5 text-dark-text-muted transition-colors hover:text-dark-text disabled:opacity-0"
-                    title="Voltar a usar o valor planejado"
-                    aria-label={`Limpar o realizado de ${row.cost.name}`}
-                  >
-                    <RotateCcw size={13} />
-                  </button>
                 </li>
               )
             })}

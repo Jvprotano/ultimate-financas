@@ -7,6 +7,8 @@ interface CurrencyInputProps {
   className?: string
   id?: string
   onBlur?: () => void
+  autoFocus?: boolean
+  ariaLabel?: string
 }
 
 export function CurrencyInput({
@@ -16,6 +18,8 @@ export function CurrencyInput({
   className = '',
   id,
   onBlur,
+  autoFocus = false,
+  ariaLabel,
 }: CurrencyInputProps) {
   const formatDisplay = (val: number): string => {
     if (val === 0) return ''
@@ -43,6 +47,8 @@ export function CurrencyInput({
         value={formatDisplay(value)}
         onChange={handleChange}
         onBlur={onBlur}
+        autoFocus={autoFocus}
+        aria-label={ariaLabel}
         placeholder={placeholder}
         className={`app-field w-full py-2.5 pl-10 pr-3 text-right text-sm font-medium tabular-nums placeholder:text-dark-text-muted ${className}`}
       />
