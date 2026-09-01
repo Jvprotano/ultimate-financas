@@ -112,7 +112,9 @@ export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): Mo
       : finiteNumber(raw?.wantsPlanned, finiteNumber(raw?.wants)),
     wantAllocations,
     payrollInvested,
+    employerInvested: Math.max(0, finiteNumber(raw?.employerInvested)),
     directInvestedAtClose: finiteNumber(raw?.directInvestedAtClose, invested - payrollInvested),
+    openingBalance: Math.max(0, finiteNumber(raw?.openingBalance)),
     investmentProjectionVersion:
       finiteNumber(raw?.investmentProjectionVersion) >= INVESTMENT_PROJECTION_VERSION
         ? INVESTMENT_PROJECTION_VERSION
@@ -175,13 +177,15 @@ export function projectHistoryInvestments(
     const directInvested = calculateMonthlyInvestmentActuals({
       ...source,
       month: snapshot.month,
-    }).directNet
-    const invested = snapshot.payrollInvested + directInvested
+    })
+    const invested = snapshot.payrollInvested + directInvested.directNet
     const incomeBase = snapshot.availableForBudget + snapshot.extraIncome
 
     return {
       ...snapshot,
       invested,
+      directInvestedAtClose: directInvested.directNet,
+      openingBalance: directInvested.openingBalance,
       investedPlanned: snapshot.investmentPlanCaptured ? snapshot.investedPlanned : invested,
       savingsRate: incomeBase > 0 ? (invested / incomeBase) * 100 : 0,
       balance:
@@ -190,7 +194,7 @@ export function projectHistoryInvestments(
         snapshot.extraExpense -
         snapshot.costs -
         snapshot.wants -
-        directInvested,
+        directInvested.directNet,
     }
   })
 }

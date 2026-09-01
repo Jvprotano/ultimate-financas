@@ -63,6 +63,22 @@ describe('normalizeScenario — forma de pagamento', () => {
 })
 
 describe('calculateScenario — base do orçamento', () => {
+  it('preserva a relação opcional entre previdência e posição patrimonial', () => {
+    const normalized = scenario({
+      deductions: [
+        {
+          id: 'd1',
+          name: 'PGBL',
+          value: 500,
+          type: 'previdencia_privada',
+          linkedHoldingId: 'holding-pgbl',
+        },
+      ],
+    })
+
+    expect(normalized.deductions[0].linkedHoldingId).toBe('holding-pgbl')
+  })
+
   it('benefícios saem da base; previdência em folha continua contando', () => {
     const metrics = calculateScenario(
       scenario({

@@ -468,9 +468,27 @@ export function CreditCardManager() {
                   parcela{anticipateCount > 1 ? 's' : ''} ·{' '}
                   {formatCurrency(anticipateCount * anticipatingEntry.amount)}
                 </span>
+                {anticipateMax > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setAnticipateCount(anticipateMax)}
+                    aria-pressed={anticipateCount === anticipateMax}
+                    className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                      anticipateCount === anticipateMax
+                        ? 'border-amber-400/35 bg-amber-400/10 text-amber-200'
+                        : 'border-dark-border bg-dark-surface/70 text-dark-text-muted hover:border-amber-400/30 hover:text-amber-200'
+                    }`}
+                  >
+                    Todas ({anticipateMax})
+                  </button>
+                )}
               </div>
               <div className="ml-auto flex items-center gap-2">
-                <SecondaryButton onClick={handleAnticipate}>Antecipar</SecondaryButton>
+                <SecondaryButton onClick={handleAnticipate}>
+                  {anticipateCount === anticipateMax && anticipateMax > 1
+                    ? 'Antecipar todas'
+                    : 'Antecipar'}
+                </SecondaryButton>
                 <button
                   type="button"
                   onClick={() => setAnticipateId(null)}

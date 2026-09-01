@@ -186,9 +186,9 @@ export function ClosingView({
             tone={financialCycle.discretionaryShortfall > 0 ? 'negative' : 'accent'}
           />
           <StatTile
-            label="Depois dos Desejos planejados"
+            label="Depois dos Desejos realizados"
             value={currentInvoiceKnown ? formatCurrency(financialCycle.cashAfterDue) : '—'}
-            detail={`${formatCurrency(cashFlow.wantsOnAccount)} já alocados fora do cartão`}
+            detail={`${formatCurrency(cashFlow.wantsOnAccount)} efetivamente destinados fora do cartão`}
             tone={financialCycle.cashAfterDue < -0.005 ? 'negative' : 'positive'}
           />
         </div>
@@ -204,7 +204,7 @@ export function ClosingView({
               <dd className="tabular-nums text-dark-text">{formatCurrency(cashFlow.costsOnAccount)}</dd>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <dt className="text-dark-text-muted">Aporte programado</dt>
+              <dt className="text-dark-text-muted">Aporte realizado pela conta</dt>
               <dd className="tabular-nums text-dark-text">{formatCurrency(cashFlow.directInvestment)}</dd>
             </div>
             <div className="flex items-center justify-between gap-3">
@@ -388,7 +388,7 @@ export function ClosingView({
                   investmentActuals.total,
                 )}
                 status={investmentStatus}
-                suffix={` · ${investmentActuals.savingsRate.toFixed(1)}% da base`}
+                suffix={` · ${investmentActuals.savingsRate.toFixed(1)}% da base · empresa ${formatCurrency(investmentActuals.employer)} · creditado ${formatCurrency(investmentActuals.creditedTotal)}`}
               />
             }
             tone={investmentStatus.tone}
@@ -407,6 +407,12 @@ export function ClosingView({
                   do cartão {formatCurrency(actuals.summary.effectiveWants)} · fatura pessoal{' '}
                   {invoiceKnown ? formatCurrency(closingInvoiceDue) : 'não recuperada'} · investido{' '}
                   {formatCurrency(investmentActuals.total)}
+                  {investmentActuals.employer > 0.005 && (
+                    <>
+                      {' '}· empresa {formatCurrency(investmentActuals.employer)} · total creditado{' '}
+                      {formatCurrency(investmentActuals.creditedTotal)}
+                    </>
+                  )}
                   {actuals.summary.extraIncomeTotal > 0.005 && (
                     <> · extras recebidos {formatCurrency(actuals.summary.extraIncomeTotal)}</>
                   )}

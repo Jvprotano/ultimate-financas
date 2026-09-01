@@ -13,6 +13,8 @@ export interface MonthlyInvestmentActuals {
   goalsNet: number
   /** Movimentação líquida feita pela conta: aportes − retiradas. */
   directNet: number
+  /** Posição já existente ao iniciar o controle; patrimônio, não fluxo do mês. */
+  openingBalance: number
 }
 
 export interface InvestmentLedgerSource {
@@ -25,7 +27,7 @@ export interface InvestmentLedgerSource {
  * Entradas criadas ao cadastrar um saldo que já existia não são poupança do mês.
  * Elas servem apenas para abrir o livro-razão no saldo correto.
  */
-function isOpeningBalance(entry: LedgerEntry) {
+export function isOpeningBalance(entry: LedgerEntry) {
   const note = normalizeText(entry.note ?? '')
   return note === 'saldo inicial' || note === 'aporte inicial'
 }
@@ -34,6 +36,13 @@ function monthlyLedgerNet(entries: LedgerEntry[], month: string) {
   return entries.reduce((sum, entry) => {
     if (ledgerEntryCycleMonth(entry) !== month || isOpeningBalance(entry)) return sum
     return sum + entry.amount
+  }, 0)
+}
+
+function monthlyOpeningBalance(entries: LedgerEntry[], month: string) {
+  return entries.reduce((sum, entry) => {
+    if (ledgerEntryCycleMonth(entry) !== month || !isOpeningBalance(entry)) return sum
+    return sum + Math.max(0, entry.amount)
   }, 0)
 }
 
@@ -95,6 +104,13 @@ export function calculateMonthlyInvestmentActuals(input: InvestmentLedgerSource 
     (sum, goal) => sum + monthlyLedgerNet(goal.transactions, input.month),
     0,
   )
+  const openingBalance = monthlyOpeningBalance([
+    ...(reserveHoldings.length > 0
+      ? reserveHoldings.flatMap((holding) => holding.transactions)
+      : input.emergencyFund.transactions),
+    ...portfolioHoldings.flatMap((holding) => holding.transactions),
+    ...input.goals.flatMap((goal) => goal.transactions),
+  ], input.month)
 
   return {
     month: input.month,
@@ -102,5 +118,6 @@ export function calculateMonthlyInvestmentActuals(input: InvestmentLedgerSource 
     holdingsNet,
     goalsNet,
     directNet: reserveNet + holdingsNet + goalsNet,
+    openingBalance,
   }
 }

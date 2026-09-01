@@ -62,6 +62,7 @@ describe('calculateMonthlyInvestmentActuals', () => {
       holdingsNet: 500,
       goalsNet: 300,
       directNet: 1_600,
+      openingBalance: 0,
     })
   })
 
@@ -144,6 +145,7 @@ describe('calculateMonthlyInvestmentActuals', () => {
     })
 
     expect(result.directNet).toBe(0)
+    expect(result.openingBalance).toBe(7_000)
   })
 
   it('transferência entre livros se anula no total realizado', () => {

@@ -43,6 +43,8 @@ export interface DeductionItem {
   value: number
   type: DeductionType
   employerContribution?: number
+  /** Relação opcional com a posição que guarda o saldo patrimonial acumulado. */
+  linkedHoldingId?: string
 }
 
 export interface BudgetModel {

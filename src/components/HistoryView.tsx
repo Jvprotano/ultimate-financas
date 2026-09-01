@@ -44,6 +44,11 @@ function SnapshotEditorContent({ point, onClose }: { point: HistoryPoint; onClos
     { label: 'Desejos fora do cartão', value: point.wants, key: 'wants' },
     { label: 'Plano fora do cartão', value: point.wantsPlanned, key: 'wantsPlanned' },
     { label: 'Previdência em folha', value: point.payrollInvested, key: 'payrollInvested' },
+    {
+      label: 'Contrapartida da empresa',
+      value: point.employerInvested,
+      key: 'employerInvested',
+    },
     { label: 'Meta de investimento', value: point.investedPlanned, key: 'investedPlanned' },
     { label: 'Ativos financeiros', value: point.grossAssets, key: 'grossAssets' },
     { label: 'Bens', value: point.physicalAssets, key: 'physicalAssets' },
@@ -90,7 +95,7 @@ function SnapshotEditorContent({ point, onClose }: { point: HistoryPoint; onClos
         </div>
         <p className="mt-2.5 text-[11px] leading-relaxed text-dark-text-muted">
           Aportes e resgates seguem a competência do livro-razão em Patrimônio. Aqui você
-          corrige a previdência em folha e os valores congelados no fechamento. A taxa de
+          corrige a previdência em folha, a contrapartida da empresa e os valores congelados no fechamento. A taxa de
           poupança, o saldo e o patrimônio líquido são recalculados a partir dessas fontes.
           “Fatura do ciclo” é a sua parte efetivamente paga na fatura usada para encerrar o mês.
           Valores antecipados já retirados da fatura não são somados novamente. Financeiro: {formatCurrency(point.financialNetWorth)} · líquido total:{' '}

@@ -9,7 +9,7 @@ import { useHistory } from './useHistory'
 import { useForecast } from './useForecast'
 import { useActuals } from './useActuals'
 import { calculateScenario } from '../lib/scenario'
-import { calculateCashFlow } from '../lib/cashflow'
+import { buildCurrentCycleFacts } from '../lib/currentCycleFacts'
 import { calculateAllocationPreview, calculateFinancialCycle } from '../lib/financialCycle'
 import { calculateCardCycleAccounting } from '../lib/cardCycleAccounting'
 import { calculateMonthlyInvestmentActuals } from '../lib/investmentActuals'
@@ -118,17 +118,29 @@ export function useFinancas() {
       goals: investments.goals,
     })
     const payroll = metrics.investmentDeductions
-    const total = payroll + ledger.directNet
+    const employer = metrics.employerInvestmentContributions
+    const personalTotal = payroll + ledger.directNet
+    const creditedTotal = personalTotal + employer
     const realizedIncomeBase = metrics.availableForBudget + actuals.summary.extraIncomeTotal
-    const savingsRate = realizedIncomeBase > 0 ? (total / realizedIncomeBase) * 100 : 0
+    const savingsRate = realizedIncomeBase > 0 ? (personalTotal / realizedIncomeBase) * 100 : 0
 
-    return { ...ledger, payroll, total, savingsRate }
+    return {
+      ...ledger,
+      payroll,
+      employer,
+      personalTotal,
+      creditedTotal,
+      // Alias compatível: `total` continua sendo o esforço pessoal, sem bônus.
+      total: personalTotal,
+      savingsRate,
+    }
   }, [
     activeCycle.month,
     emergencyFund,
     investments.goals,
     investments.holdings,
     metrics.availableForBudget,
+    metrics.employerInvestmentContributions,
     metrics.investmentDeductions,
     actuals.summary.extraIncomeTotal,
   ])
@@ -151,31 +163,46 @@ export function useFinancas() {
     [scenarios.scenarios, emergencyFund],
   )
 
-  /** O mês visto pelo extrato: o que entra, o que vence e o que sobra. */
-  const cashFlow = useMemo(() => {
+  /**
+   * Consulta canônica do ciclo: plano e realizado continuam lado a lado, mas o
+   * caixa usa somente fatos efetivos. Previdência em folha não sai da conta de
+   * novo; só o aporte direto do livro-razão entra como saída bancária.
+   */
+  const currentCycleFacts = useMemo(() => {
     const invoiceToPay = cardCycleAccounting.invoiceThisCycle.personalTotal
     const costsOnAccount = actuals.summary.rows
       .filter((row) => row.cost.paidWith !== 'card')
       .reduce((sum, row) => sum + row.effective, 0)
+    const costsOnAccountPlanned = actuals.summary.rows
+      .filter((row) => row.cost.paidWith !== 'card')
+      .reduce((sum, row) => sum + row.planned, 0)
 
-    return calculateCashFlow({
+    return buildCurrentCycleFacts({
+      month: activeCycle.month,
       paycheck: metrics.paycheckInAccount,
       extraIncome: actuals.summary.extraIncomeTotal,
       extraExpense: actuals.summary.extraExpenseTotal,
-      costsOnAccount,
-      costsOnCard: metrics.costsOnCard,
-      wantsOnAccount: metrics.wantsOnAccount,
-      wantsOnCard: metrics.wantsOnCard,
-      directInvestment: metrics.directInvestmentTarget,
+      costsOnAccountActual: costsOnAccount,
+      costsPlanned: costsOnAccountPlanned,
+      wantsOnAccountActual: actuals.summary.effectiveWants,
+      wantsPlanned: actuals.summary.plannedWants,
+      costsOnCardPlanned: metrics.costsOnCard,
+      wantsOnCardPlanned: metrics.wantsOnCard,
+      directInvestmentActual: investmentActuals.directNet,
+      directInvestmentPlanned: metrics.directInvestmentTarget,
+      payrollInvestment: investmentActuals.payroll,
+      employerInvestment: investmentActuals.employer,
+      totalInvestmentPlanned: metrics.totalPlannedInvestment,
       invoiceToPay,
     })
   }, [
+    activeCycle.month,
     metrics,
-    actuals.summary.extraIncomeTotal,
-    actuals.summary.extraExpenseTotal,
-    actuals.summary.rows,
+    actuals.summary,
     cardCycleAccounting.invoiceThisCycle.personalTotal,
+    investmentActuals,
   ])
+  const cashFlow = currentCycleFacts.cash
 
   const financialCycle = useMemo(
     () =>
@@ -355,7 +382,9 @@ export function useFinancas() {
           includedInCardPlan: false,
         })),
         payrollInvested: investmentActuals.payroll,
+        employerInvested: investmentActuals.employer,
         directInvestedAtClose: investmentActuals.directNet,
+        openingBalance: investmentActuals.openingBalance,
         investmentProjectionVersion: 1,
         invested: investmentActuals.total,
         investmentPlanCaptured: true,
@@ -374,7 +403,7 @@ export function useFinancas() {
         cardPersonalTotal: cardCycleAccounting.invoiceFormedByCycle.personalTotal,
         cardPlanned: metrics.plannedOnCard,
         cardByArea,
-        cashLeftover: balance,
+        cashLeftover: currentCycleFacts.cash.leftover,
         note,
       })
 
@@ -392,6 +421,7 @@ export function useFinancas() {
       actuals.summary,
       cardCycleAccounting.invoiceFormedByCycle.personalTotal,
       cardCycleAccounting.spendingThisCycle.personalByArea,
+      currentCycleFacts.cash.leftover,
       emergencyFund,
       history,
       investmentActuals,
@@ -414,6 +444,7 @@ export function useFinancas() {
     actuals,
     metrics,
     cashFlow,
+    currentCycleFacts,
     financialCycle,
     nextCycleAllocation,
     projection,

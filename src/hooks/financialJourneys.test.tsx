@@ -32,7 +32,9 @@ const snapshot: Omit<MonthlySnapshot, 'id' | 'closedAt'> = {
     },
   ],
   payrollInvested: 0,
+  employerInvested: 0,
   directInvestedAtClose: 1000,
+  openingBalance: 0,
   investmentProjectionVersion: 1,
   invested: 1000,
   investmentPlanCaptured: true,
@@ -110,6 +112,37 @@ describe('jornadas financeiras persistidas', () => {
     expect(cards.result.current.summary.currentPersonalTotal).toBe(0)
     expect(cards.result.current.lastPaidInvoice?.personalTotal).toBe(300)
     expect(localStorage.getItem('uf_history_v1')).toBeNull()
+  })
+
+  it('antecipa de uma vez todas as parcelas restantes do cartão', () => {
+    const cards = renderHook(() => useCreditCards())
+    act(() => {
+      cards.result.current.addEntry({
+        cycle: 'current',
+        description: 'Notebook',
+        purchaseDate: '10/08',
+        cardName: 'Itaú',
+        amount: 400,
+        personalAmount: 400,
+        remainingAmount: 1_200,
+        installmentCurrent: 2,
+        installmentTotal: 5,
+      })
+    })
+
+    const entryId = cards.result.current.entries.find(
+      (entry) => entry.description === 'Notebook' && entry.installmentCurrent === 2,
+    )?.id
+    expect(entryId).toBeTruthy()
+
+    act(() => cards.result.current.anticipateInstallments(entryId!, 3))
+
+    const installments = cards.result.current.entries
+      .filter((entry) => entry.description === 'Notebook' && entry.cycle === 'current')
+      .sort((a, b) => (a.installmentCurrent ?? 0) - (b.installmentCurrent ?? 0))
+    expect(installments.map((entry) => entry.installmentCurrent)).toEqual([2, 3, 4, 5])
+    expect(installments.every((entry) => entry.remainingAmount === 0)).toBe(true)
+    expect(cards.result.current.summary.currentPersonalTotal).toBe(1_600)
   })
 
   it('grava aportes no ciclo ativo e permite escolher outra competência', () => {

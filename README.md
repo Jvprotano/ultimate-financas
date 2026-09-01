@@ -24,6 +24,7 @@ Planejamento financeiro pessoal: orçamento do mês, patrimônio, cartões e o h
 - **Competência × caixa** — o orçamento mede o mês em que você *gastou*; o painel de caixa mede o mês em que o dinheiro *se move*. Uma compra de agosto é gasto de agosto, mesmo que a fatura seja paga em setembro. São duas leituras do mesmo dinheiro — nunca uma soma.
 - **Forma de pagamento** — cada custo fixo e cada desejo é "conta" ou "cartão". É o que permite ao caixa descontar a fatura em vez de descontar as compras novamente.
 - **Base do orçamento** — a renda que vira meta. Benefícios saem porque não são dinheiro livre; previdência descontada em folha continua contando, porque é investimento seu.
+- **Previdência em folha** — a contribuição do usuário é investimento realizado, mas já foi descontada antes do salário cair na conta; nunca sai do caixa uma segunda vez. A contrapartida da empresa aumenta o total creditado sem reduzir renda ou caixa.
 - **Custo pessoal** — contas divididas entram no orçamento só pela sua parte; o valor cheio permanece visível para conferência.
 - **Área do orçamento no cartão** — cada compra pode ser marcada como necessidade, desejo ou investimento. Isso classifica o realizado sem criar gasto novo.
 - **Reserva: classe × finalidade** — a reserva de emergência é um ativo financeiro investido, mas sua finalidade é segurança/liquidez. Cada aplicação da reserva tem produto, instituição, classe de ativo, referência (ex. 100% CDI), liquidez, saldo e livro-razão. Ela conta no patrimônio e nos aportes realizados, mas fica fora do rebalanceamento da carteira de longo prazo.
@@ -34,6 +35,7 @@ Planejamento financeiro pessoal: orçamento do mês, patrimônio, cartões e o h
 - **A parcela não é toda despesa** — em um financiamento, só o juro é despesa; amortização aumenta seu equity no bem.
 - **Meta de poupança × meta de patrimônio** — a primeira guarda dinheiro próprio em livro-razão; a segunda pode apenas englobar saldos existentes sem duplicá-los.
 - **Investimento planejado × realizado** — o plano diz quanto deveria ser investido; o fechamento soma o que realmente foi aportado em folha, reserva, posições e metas, líquido de retiradas. Marcação a mercado não é aporte.
+- **Saldo inicial × aporte** — saldo inicial abre uma posição patrimonial no valor correto, mas não representa dinheiro investido naquele ciclo. O Histórico o identifica separadamente sem inflar aportes ou taxa de poupança.
 - **Eventos esperados** — entradas e saídas fora do mês a mês, com mês, recorrência e a fatia que você guarda. Alimentam a projeção e a prévia dos próximos ciclos.
 - **Entrada prevista × recebida** — “Futuro” antecipa bônus, 13º e outros eventos; só o que for marcado como recebido no Realizado vira caixa, entra no fechamento e fica identificado no Histórico.
 - **Realizado do mês** — o que de fato foi pago/usado no ciclo. Onde não houver realizado informado, o plano funciona como fallback.
@@ -42,6 +44,22 @@ Planejamento financeiro pessoal: orçamento do mês, patrimônio, cartões e o h
 - **Fechamento do ciclo** — registra o mês vivido e avança para o próximo. Pagar uma fatura não fecha o ciclo automaticamente.
 
 Veja também [`docs/ciclo-financeiro.md`](docs/ciclo-financeiro.md) para a regra temporal completa de salário, vencimentos, cartão e fechamento.
+
+## Fontes financeiras
+
+O estado persistido é tratado como tabelas/coleções de domínio. Componentes não mantêm cópias próprias dos totais; eles consomem projeções calculadas em `src/lib` e compostas por `useFinancas`.
+
+| Fato | Fonte canônica | Leitura derivada |
+| --- | --- | --- |
+| Plano de renda, folha, custos e desejos | cenário ativo | metas e prévias |
+| Custos, desejos e extras realizados | realizados por competência | caixa e fechamento |
+| Compras e faturas | lançamentos do cartão | fatura pessoal por ciclo |
+| Aportes e resgates diretos | livros-razão de posições/metas | aporte por competência |
+| Previdência do usuário e empresa | ocorrência de folha congelada no fechamento | histórico de contribuições |
+| Saldo atual dos investimentos | posições patrimoniais | patrimônio atual |
+| Fechamento mensal | snapshot de fatos imutáveis + referências aos livros-razão | Histórico |
+
+`currentCycleFacts.ts` é a consulta reconciliada do ciclo ativo: plano e realizado permanecem separados, e apenas movimentos bancários efetivos entram no caixa. Snapshots não são uma segunda base editável para aportes diretos; eles preservam somente fatos de fechamento que não podem ser reconstruídos depois, como a folha daquele mês.
 
 ## Como rodar
 
@@ -69,6 +87,7 @@ src/
     scenario.ts      # orçamento do mês, normalização e migração v2→v3
     investments.ts   # carteira, reserva por posições, TIR e balanço
     investmentActuals.ts # aportes líquidos realizados no ciclo
+    currentCycleFacts.ts # consulta reconciliada de plano, realizado, caixa e folha
     assets.ts        # bens: equity, valorização, ser dono × alugar
     debts.ts         # saldo, juros, prazo, amortizar × investir, garantia
     goals.ts         # metas: livro-razão próprio × saldos englobados

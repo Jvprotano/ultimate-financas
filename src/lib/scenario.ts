@@ -147,6 +147,10 @@ export function normalizeScenario(scenario: FinanceScenario): FinanceScenario {
           ...deduction,
           value: finiteNumber(deduction.value),
           employerContribution: finiteNumber(deduction.employerContribution),
+          linkedHoldingId:
+            typeof deduction.linkedHoldingId === 'string' && deduction.linkedHoldingId.trim()
+              ? deduction.linkedHoldingId
+              : undefined,
         }))
       : [],
     selectedModelId: BUDGET_MODELS.some((m) => m.id === scenario.selectedModelId)

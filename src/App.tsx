@@ -21,6 +21,7 @@ import {
   Landmark,
   MoreVertical,
   RotateCcw,
+  Sparkles,
   SlidersHorizontal,
   Trash2,
   Upload,
@@ -36,6 +37,7 @@ import { CostManager } from './components/CostManager'
 import { WantsManager } from './components/WantsManager'
 import { InvestmentPlan } from './components/InvestmentPlan'
 import { ClosingView } from './components/ClosingView'
+import { AIAnalysisDialog } from './components/AIAnalysisDialog'
 import { ScenarioSwitcher } from './components/ScenarioSwitcher'
 import { CycleSwitcher } from './components/CycleSwitcher'
 import { ConfirmationDialog } from './components/ui'
@@ -296,6 +298,7 @@ function AppShell() {
   const importInputRef = useRef<HTMLInputElement>(null)
   const [activeView, setActiveView] = useState<View>('closing')
   const [showShortcuts, setShowShortcuts] = useState(false)
+  const [showAIAnalysis, setShowAIAnalysis] = useState(false)
   const [dialog, setDialog] = useState<AppDialogState | null>(null)
   const scenarios = useScenarioStore()
   const persistence = usePersistenceStatus()
@@ -410,9 +413,6 @@ function AppShell() {
       <header className="sticky top-0 z-40 border-b border-dark-border-subtle bg-dark-bg/78 shadow-[0_1px_0_rgba(255,255,255,0.015)] backdrop-blur-2xl">
         <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-3 px-4 py-2 sm:px-6">
           <h1 className="flex shrink-0 items-center gap-2.5 truncate text-[15px] font-semibold tracking-tight text-dark-text">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-primary-400/15 bg-primary-500/[0.08] text-sm font-bold text-primary-300 shadow-inner shadow-primary-300/[0.04]">
-              F
-            </span>
             <span className="hidden sm:inline">FinTano</span>
           </h1>
 
@@ -423,6 +423,16 @@ function AppShell() {
               <CycleSwitcher />
             </div>
             <ScenarioSwitcher />
+            <button
+              type="button"
+              onClick={() => setShowAIAnalysis(true)}
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-primary-400/15 bg-primary-500/[0.06] px-3 text-primary-200 shadow-sm shadow-black/15 transition-colors hover:border-primary-400/30 hover:bg-primary-500/[0.1] hover:text-primary-100"
+              aria-label="Pedir análise do cenário à IA"
+              title="Pedir análise do cenário à IA"
+            >
+              <Sparkles size={15} />
+              <span className="hidden xl:inline text-xs font-semibold">Analisar</span>
+            </button>
             <AppMenu
               onExport={downloadBackup}
               onImport={() => importInputRef.current?.click()}
@@ -513,6 +523,7 @@ function AppShell() {
       </footer>
 
       {showShortcuts && <ShortcutsOverlay onClose={() => setShowShortcuts(false)} />}
+      <AIAnalysisDialog open={showAIAnalysis} onClose={() => setShowAIAnalysis(false)} />
       <ConfirmationDialog
         open={dialog !== null}
         title={dialog?.title ?? ''}

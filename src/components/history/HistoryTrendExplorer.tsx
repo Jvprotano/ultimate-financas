@@ -24,7 +24,7 @@ import {
 import { Panel, PanelHeader, SegmentedControl } from '../ui'
 
 type TrendView = 'cycle' | 'cumulative' | 'rate'
-type CurrencySeries = 'invested' | 'costs' | 'card' | 'wants'
+type CurrencySeries = 'invested' | 'employerInvested' | 'costs' | 'card' | 'wants'
 
 interface SeriesDefinition {
   id: CurrencySeries
@@ -33,7 +33,8 @@ interface SeriesDefinition {
 }
 
 const CURRENCY_SERIES: SeriesDefinition[] = [
-  { id: 'invested', label: 'Aportes', color: CHART_PALETTE.aqua },
+  { id: 'invested', label: 'Aportes pessoais', color: CHART_PALETTE.aqua },
+  { id: 'employerInvested', label: 'Contrapartida', color: CHART_PALETTE.green },
   { id: 'costs', label: 'Custos', color: CHART_PALETTE.blue },
   { id: 'card', label: 'Fatura', color: CHART_PALETTE.muted },
   { id: 'wants', label: 'Desejos em conta', color: CHART_PALETTE.violet },
@@ -61,7 +62,7 @@ function chartDomain(values: number[]): [number, number] {
 
 function viewDescription(view: TrendView) {
   if (view === 'cumulative') {
-    return 'Soma dos aportes líquidos por competência. Não inclui valorização nem saldo inicial.'
+    return 'Total creditado acumulado: aportes pessoais mais contrapartida. Não inclui valorização nem saldo inicial.'
   }
   if (view === 'rate') {
     return 'Percentual da renda do ciclo destinado a aportes, incluindo previdência em folha.'
@@ -72,12 +73,15 @@ function viewDescription(view: TrendView) {
 export function HistoryTrendExplorer({ points }: { points: HistoryPoint[] }) {
   const [view, setView] = useState<TrendView>('cycle')
   const [period, setPeriod] = useState<HistoryTrendPeriod>(12)
-  const [selectedSeries, setSelectedSeries] = useState<CurrencySeries[]>(['invested'])
+  const [selectedSeries, setSelectedSeries] = useState<CurrencySeries[]>([
+    'invested',
+    'employerInvested',
+  ])
   const data = useMemo(() => buildHistoryTrendPoints(points, period), [period, points])
 
   const activeSeries = useMemo(() => {
     if (view === 'cumulative') {
-      return [{ id: 'cumulativeInvested', label: 'Aportes acumulados', color: CHART_PALETTE.aqua }]
+      return [{ id: 'cumulativeCredited', label: 'Total creditado acumulado', color: CHART_PALETTE.aqua }]
     }
     if (view === 'rate') {
       return [{ id: 'savingsRate', label: '% da renda', color: CHART_PALETTE.aqua }]
@@ -209,8 +213,8 @@ export function HistoryTrendExplorer({ points }: { points: HistoryPoint[] }) {
                 dataKey={series.id}
                 name={series.label}
                 stroke={series.color}
-                strokeWidth={series.id === 'invested' || view !== 'cycle' ? 2.6 : 1.8}
-                strokeOpacity={series.id === 'invested' || view !== 'cycle' ? 1 : 0.78}
+                strokeWidth={series.id === 'invested' || series.id === 'employerInvested' || view !== 'cycle' ? 2.6 : 1.8}
+                strokeOpacity={series.id === 'invested' || series.id === 'employerInvested' || view !== 'cycle' ? 1 : 0.78}
                 dot={{ r: 3, fill: series.color, strokeWidth: 0 }}
                 activeDot={{ r: 5 }}
                 connectNulls={false}

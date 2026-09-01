@@ -288,12 +288,18 @@ export function useScenarios() {
   // Descontos em folha -------------------------------------------------------
 
   const addDeduction = useCallback(
-    (name: string, value: number, type: DeductionType, employerContribution = 0) => {
+    (
+      name: string,
+      value: number,
+      type: DeductionType,
+      employerContribution = 0,
+      linkedHoldingId?: string,
+    ) => {
       updateActiveScenario((scenario) => ({
         ...scenario,
         deductions: [
           ...scenario.deductions,
-          { id: uid(), name, value, type, employerContribution },
+          { id: uid(), name, value, type, employerContribution, linkedHoldingId },
         ],
       }))
     },
@@ -316,6 +322,18 @@ export function useScenarios() {
         ...scenario,
         deductions: scenario.deductions.map((d) =>
           d.id === id ? { ...d, employerContribution: Math.max(0, employerContribution) } : d,
+        ),
+      }))
+    },
+    [updateActiveScenario],
+  )
+
+  const updateDeductionHolding = useCallback(
+    (id: string, linkedHoldingId?: string) => {
+      updateActiveScenario((scenario) => ({
+        ...scenario,
+        deductions: scenario.deductions.map((deduction) =>
+          deduction.id === id ? { ...deduction, linkedHoldingId } : deduction,
         ),
       }))
     },
@@ -433,6 +451,7 @@ export function useScenarios() {
     addDeduction,
     removeDeduction,
     updateDeductionEmployerContribution,
+    updateDeductionHolding,
     selectedModelId: activeScenario.selectedModelId,
     setSelectedModelId: useCallback(
       (id: string) => setScenarioField('selectedModelId', id),

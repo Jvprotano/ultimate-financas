@@ -5,7 +5,7 @@ import { CurrencyInput } from './CurrencyInput'
 import { HeaderMetric } from './HeaderMetric'
 import { PrimaryButton, SegmentedControl } from './ui'
 import { formatCurrency, inputClass, selectClass } from '../lib/format'
-import { useMetrics, useScenarioStore } from '../context/financasStore'
+import { useInvestmentsStore, useMetrics, useScenarioStore } from '../context/financasStore'
 import type { DeductionType } from '../types'
 import { DEDUCTION_TYPE_LABELS, INVESTMENT_DEDUCTION_TYPES } from '../types/constants'
 
@@ -21,22 +21,32 @@ export function IncomePanel() {
     addDeduction,
     removeDeduction,
     updateDeductionEmployerContribution,
+    updateDeductionHolding,
   } = useScenarioStore()
+  const { summary: investmentsSummary } = useInvestmentsStore()
   const { paycheckInAccount, totalDeductions, availableForBudget } = useMetrics()
 
   const [name, setName] = useState('')
   const [value, setValue] = useState(0)
   const [employerContribution, setEmployerContribution] = useState(0)
+  const [linkedHoldingId, setLinkedHoldingId] = useState('')
   const [type, setType] = useState<DeductionType>('previdencia_privada')
   const isTakeHome = salaryInputMode === 'take_home'
   const isInvestment = isInvestmentType(type)
 
   const handleAdd = () => {
     if (!name.trim() || value <= 0) return
-    addDeduction(name.trim(), value, type, isInvestment ? employerContribution : 0)
+    addDeduction(
+      name.trim(),
+      value,
+      type,
+      isInvestment ? employerContribution : 0,
+      isInvestment && linkedHoldingId ? linkedHoldingId : undefined,
+    )
     setName('')
     setValue(0)
     setEmployerContribution(0)
+    setLinkedHoldingId('')
   }
 
   return (
@@ -123,21 +133,36 @@ export function IncomePanel() {
                       </div>
                     </div>
                     {investment && (
-                      <div className="mt-2 flex items-center justify-between gap-3 border-t border-dark-border-subtle pt-2 text-xs">
-                        <label className="flex items-center gap-2 text-dark-text-muted">
-                          Empresa contribui
-                          <span className="w-28">
-                            <CurrencyInput
-                              value={contribution}
-                              onChange={(next) =>
-                                updateDeductionEmployerContribution(deduction.id, next)
-                              }
-                              className="!py-1.5 !text-xs"
-                            />
-                          </span>
+                      <div className="mt-2 grid gap-2 border-t border-dark-border-subtle pt-2 text-xs sm:grid-cols-2">
+                        <label className="text-dark-text-muted">
+                          <span className="mb-1 block">Empresa contribui</span>
+                          <CurrencyInput
+                            value={contribution}
+                            onChange={(next) =>
+                              updateDeductionEmployerContribution(deduction.id, next)
+                            }
+                            className="!py-1.5 !text-xs"
+                          />
                         </label>
-                        <span className="tabular-nums text-dark-text-secondary">
-                          Total:{' '}
+                        <label className="text-dark-text-muted">
+                          <span className="mb-1 block">Posição patrimonial</span>
+                          <select
+                            value={deduction.linkedHoldingId ?? ''}
+                            onChange={(event) =>
+                              updateDeductionHolding(deduction.id, event.target.value || undefined)
+                            }
+                            className={`${selectClass} !py-1.5 !text-xs`}
+                          >
+                            <option value="">Não vinculada</option>
+                            {investmentsSummary.allHoldings.map((holding) => (
+                              <option key={holding.id} value={holding.id}>
+                                {holding.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <span className="tabular-nums text-dark-text-secondary sm:col-span-2">
+                          Total creditado/mês:{' '}
                           <strong className="text-dark-text">
                             {formatCurrency(deduction.value + contribution)}
                           </strong>
@@ -175,11 +200,26 @@ export function IncomePanel() {
               </select>
               <CurrencyInput value={value} onChange={setValue} placeholder="Seu desconto" />
               {isInvestment && (
-                <CurrencyInput
-                  value={employerContribution}
-                  onChange={setEmployerContribution}
-                  placeholder="Contrapartida da empresa"
-                />
+                <>
+                  <CurrencyInput
+                    value={employerContribution}
+                    onChange={setEmployerContribution}
+                    placeholder="Contrapartida da empresa"
+                  />
+                  <select
+                    value={linkedHoldingId}
+                    onChange={(event) => setLinkedHoldingId(event.target.value)}
+                    className={selectClass}
+                    aria-label="Posição patrimonial vinculada"
+                  >
+                    <option value="">Posição patrimonial (opcional)</option>
+                    {investmentsSummary.allHoldings.map((holding) => (
+                      <option key={holding.id} value={holding.id}>
+                        {holding.name}
+                      </option>
+                    ))}
+                  </select>
+                </>
               )}
             </div>
             <PrimaryButton

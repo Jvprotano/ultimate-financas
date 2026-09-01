@@ -20,8 +20,9 @@ function ContributionRow({
   scale: number
   latest: boolean
 }) {
-  const width = Math.min(100, (Math.abs(point.invested) / scale) * 100)
-  const isWithdrawal = point.invested < -0.005
+  const credited = point.invested + point.employerInvested
+  const width = Math.min(100, (Math.abs(credited) / scale) * 100)
+  const isWithdrawal = credited < -0.005
 
   return (
     <div
@@ -39,24 +40,31 @@ function ContributionRow({
               isWithdrawal ? 'text-rose-300' : 'text-dark-text'
             }`}
           >
-            {formatCurrency(point.invested)}
+            {formatCurrency(credited)}
           </strong>
           <span className="text-[10px] tabular-nums text-dark-text-muted">
-            custos {formatCurrency(point.costs)} · {point.savingsRate.toFixed(1)}% da renda
+            pessoal {formatCurrency(point.invested)} · empresa {formatCurrency(point.employerInvested)}
           </span>
         </div>
         <div
           className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-dark-border-subtle"
           role="img"
-          aria-label={`${formatMonthKey(point.month)}: aporte líquido de ${formatCurrency(point.invested)}`}
+          aria-label={`${formatMonthKey(point.month)}: total creditado de ${formatCurrency(credited)}`}
         >
           <span
             className={`block h-full rounded-full ${
               isWithdrawal ? 'bg-rose-400/75' : 'bg-primary-400/80'
             }`}
-            style={{ width: `${Math.max(point.invested === 0 ? 0 : 3, width)}%` }}
+            style={{ width: `${Math.max(credited === 0 ? 0 : 3, width)}%` }}
           />
         </div>
+        <span className="mt-1 block text-[10px] text-dark-text-muted">
+          folha {formatCurrency(point.payrollInvested)} · conta{' '}
+          {formatCurrency(point.directInvestedAtClose)} · {point.savingsRate.toFixed(1)}% da renda
+          {point.openingBalance > 0.005 && (
+            <> · posição inicial {formatCurrency(point.openingBalance)} (não é aporte)</>
+          )}
+        </span>
       </div>
     </div>
   )
@@ -102,7 +110,7 @@ export function HistoryOverview({
   const visiblePoints = points.slice(-6)
   const contributionScale = Math.max(
     1,
-    ...visiblePoints.map((point) => Math.abs(point.invested)),
+    ...visiblePoints.map((point) => Math.abs(point.invested + point.employerInvested)),
   )
   const unsecuredLiabilities = Math.max(
     0,
@@ -114,9 +122,9 @@ export function HistoryOverview({
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.8fr)]">
       <Panel className="min-w-0">
         <PanelHeader
-          title="Aportes por ciclo"
+          title="Investimentos por ciclo"
           icon={<ChartColumn size={16} />}
-          description="Previdência em folha mais aportes e resgates do livro-razão, sempre pela competência atual."
+          description="Total creditado: recursos pessoais mais contrapartida da empresa, com a composição de cada ciclo."
         />
         <div className="mt-3 space-y-1.5">
           {visiblePoints.map((point, index) => (
@@ -130,7 +138,8 @@ export function HistoryOverview({
         </div>
         <p className="mt-2.5 text-[10px] leading-relaxed text-dark-text-muted">
           Alterar a competência de uma movimentação atualiza estes ciclos imediatamente. Saldos
-          iniciais não contam como aporte.
+          iniciais aparecem como posição de abertura, mas não contam como aporte. Meses antigos sem
+          contrapartida registrada permanecem em zero até serem corrigidos no fechamento.
         </p>
       </Panel>
 

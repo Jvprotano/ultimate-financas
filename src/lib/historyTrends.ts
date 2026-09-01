@@ -5,10 +5,13 @@ export type HistoryTrendPeriod = 6 | 12 | 'all'
 export interface HistoryTrendPoint {
   month: string
   invested: number
+  employerInvested: number
+  creditedInvested: number
   costs: number
   card: number
   wants: number
   cumulativeInvested: number
+  cumulativeCredited: number
   savingsRate: number
 }
 
@@ -22,15 +25,21 @@ export function buildHistoryTrendPoints(
   period: HistoryTrendPeriod,
 ): HistoryTrendPoint[] {
   let cumulativeInvested = 0
+  let cumulativeCredited = 0
   const allPoints = points.map((point) => {
     cumulativeInvested += point.invested
+    const creditedInvested = point.invested + point.employerInvested
+    cumulativeCredited += creditedInvested
     return {
       month: point.month,
       invested: point.invested,
+      employerInvested: point.employerInvested,
+      creditedInvested,
       costs: point.costs,
       card: point.cardPersonalTotal,
       wants: point.wants,
       cumulativeInvested,
+      cumulativeCredited,
       savingsRate: point.savingsRate,
     }
   })

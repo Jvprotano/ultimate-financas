@@ -80,8 +80,12 @@ export interface MonthlySnapshot {
   wantAllocations: WantAllocationSnapshot[]
   /** Previdência descontada em folha, congelada no fechamento do ciclo. */
   payrollInvested: number
+  /** Contrapartida da empresa creditada na previdência; não reduz o caixa. */
+  employerInvested: number
   /** Aporte líquido do livro-razão no instante do fechamento, mantido para auditoria. */
   directInvestedAtClose: number
+  /** Posição de abertura registrada no mês; patrimônio, não aporte do ciclo. */
+  openingBalance: number
   /** A partir da versão 1, o realizado direto é projetado do livro-razão atual. */
   investmentProjectionVersion: number
   invested: number
@@ -129,6 +133,7 @@ export type SnapshotPatch = Partial<
     | 'wants'
     | 'wantsPlanned'
     | 'payrollInvested'
+    | 'employerInvested'
     | 'investedPlanned'
     | 'grossAssets'
     | 'physicalAssets'

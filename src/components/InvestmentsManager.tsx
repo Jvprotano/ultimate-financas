@@ -34,7 +34,11 @@ import { formatCurrency, inputClass } from '../lib/format'
 import { useFinancasStore, useInvestmentsStore } from '../context/financasStore'
 import type { FinancialHoldingSummary, InvestmentPurpose } from '../lib/investments'
 import { holdingPurpose } from '../lib/investments'
-import { CHART_PALETTE, INVESTMENT_CLASS_PRESET_COLORS } from '../types/constants'
+import {
+  CHART_PALETTE,
+  INVESTMENT_CLASS_PRESET_COLORS,
+  INVESTMENT_DEDUCTION_TYPES,
+} from '../types/constants'
 
 type Section = 'overview' | 'holdings' | 'reserve' | 'assets' | 'debts'
 
@@ -207,6 +211,95 @@ function BalanceEquation({ financialAssets, physicalAssets, liabilities, netWort
   </Panel>
 }
 
+function PayrollInvestmentsPanel({ onNavigate }: { onNavigate: (section: Section) => void }) {
+  const { scenarios, currentCycleFacts } = useFinancasStore()
+  const { summary } = useInvestmentsStore()
+  const payrollInvestments = scenarios.activeScenario.deductions.filter((deduction) =>
+    INVESTMENT_DEDUCTION_TYPES.includes(deduction.type),
+  )
+
+  if (payrollInvestments.length === 0) return null
+
+  return (
+    <Panel>
+      <PanelHeader
+        title="Previdência em folha"
+        icon={<CircleDollarSign size={16} />}
+        description="Contribuições recorrentes do cenário ativo. São fluxo do ciclo; o saldo acumulado pertence a uma posição patrimonial."
+        actions={
+          <SecondaryButton onClick={() => onNavigate('holdings')}>
+            Conferir posições
+          </SecondaryButton>
+        }
+      />
+      <div className="mt-4 space-y-2">
+        {payrollInvestments.map((deduction) => {
+          const employer = deduction.employerContribution ?? 0
+          const linkedHolding = summary.allHoldings.find(
+            (holding) => holding.id === deduction.linkedHoldingId,
+          )
+          return (
+            <div
+              key={deduction.id}
+              className="grid gap-2 rounded-xl border border-dark-border-subtle bg-dark-input/25 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_repeat(3,minmax(7rem,auto))] sm:items-center"
+            >
+              <div className="min-w-0">
+                <strong className="block truncate text-sm text-dark-text">{deduction.name}</strong>
+                <span className="text-[10px] text-dark-text-muted">
+                  {linkedHolding
+                    ? `${linkedHolding.name}: ${formatCurrency(linkedHolding.marketValue)}`
+                    : 'Sem posição patrimonial vinculada'}
+                </span>
+              </div>
+              <span className="text-xs text-dark-text-secondary">
+                <span className="block text-[10px] text-dark-text-muted">Você</span>
+                {formatCurrency(deduction.value)}
+              </span>
+              <span className="text-xs text-dark-text-secondary">
+                <span className="block text-[10px] text-dark-text-muted">Empresa</span>
+                {formatCurrency(employer)}
+              </span>
+              <strong className="text-xs text-primary-300">
+                <span className="block text-[10px] font-normal text-dark-text-muted">Creditado/mês</span>
+                {formatCurrency(deduction.value + employer)}
+              </strong>
+            </div>
+          )
+        })}
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <StatTile
+          label="Recursos pessoais no ciclo"
+          value={formatCurrency(currentCycleFacts.actual.personalInvestment)}
+          detail={`${formatCurrency(currentCycleFacts.actual.payrollInvestment)} via folha + ${formatCurrency(currentCycleFacts.actual.directInvestment)} pela conta`}
+        />
+        <StatTile
+          label="Contrapartida no ciclo"
+          value={formatCurrency(currentCycleFacts.actual.employerInvestment)}
+          detail="bônus da empresa; não reduz o caixa"
+          tone="positive"
+        />
+        <StatTile
+          label="Total creditado no ciclo"
+          value={formatCurrency(currentCycleFacts.actual.creditedInvestment)}
+          detail="pessoal + empresa"
+          tone="accent"
+        />
+      </div>
+      {payrollInvestments.some(
+        (deduction) =>
+          !summary.allHoldings.some((holding) => holding.id === deduction.linkedHoldingId),
+      ) && (
+        <p className="mt-3 rounded-lg border border-amber-500/15 bg-amber-500/[0.045] px-3 py-2 text-[10px] leading-relaxed text-dark-text-muted">
+          Vincule cada previdência, em Planejar, a uma posição com seu saldo atual. O FinTano não
+          inventa o patrimônio acumulado a partir da contribuição mensal nem lança o aporte duas
+          vezes.
+        </p>
+      )}
+    </Panel>
+  )
+}
+
 function Overview({ onNavigate }: { onNavigate: (section: Section) => void }) {
   const { summary, goals } = useInvestmentsStore()
   const institutionSegments = useMemo(() => {
@@ -235,6 +328,8 @@ function Overview({ onNavigate }: { onNavigate: (section: Section) => void }) {
       <Panel><PanelHeader title="Onde está seu dinheiro" icon={<Building2 size={16} />} description="Distribuição por instituição, com valor e percentual visíveis." /><div className="mt-5"><DonutChart segments={institutionSegments} centerLabel="Financeiro" centerValue={formatCurrency(summary.financialAssets)} /></div></Panel>
       <Panel><PanelHeader title="Para que ele existe" icon={<CircleDollarSign size={16} />} description="Reserva, objetivos e carteira livre sem criar patrimônio em duplicidade." /><div className="mt-5"><DonutChart segments={purposeSegments} total={summary.financialAssets} centerLabel="Finalidades" centerValue={formatCurrency(summary.financialAssets)} /></div></Panel>
     </div> : <EmptyState icon={<Landmark size={26} />} title="Comece pelas posições" action={<PrimaryButton onClick={() => onNavigate('holdings')}><Plus size={15} /> Cadastrar posição</PrimaryButton>}>Cadastre onde seu dinheiro está. Depois você poderá separar o que é reserva e ligar valores específicos às metas.</EmptyState>}
+
+    <PayrollInvestmentsPanel onNavigate={onNavigate} />
 
     <BalanceEquation financialAssets={summary.financialAssets} physicalAssets={summary.physicalAssets} liabilities={summary.liabilities} netWorth={summary.netWorth} />
 
