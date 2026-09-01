@@ -1,10 +1,8 @@
 import { useCallback, useMemo } from 'react'
-import { useLocalStorage } from './useLocalStorage'
+import { useRepositoryState } from '../data/repository'
 import type { Asset, CostItem, Debt, DebtKind } from '../types'
 import { calculateDebtsSummary, normalizeDebt } from '../lib/debts'
 import { finiteNumber, ledgerBalance, nowIso, uid } from '../lib/shared'
-
-const DEBTS_STORAGE_KEY = 'uf_debts_v1'
 
 /**
  * Dívidas. Recebe os custos do cenário ativo só para conferir se a parcela
@@ -14,7 +12,7 @@ const DEBTS_STORAGE_KEY = 'uf_debts_v1'
  * não é a mesma coisa que um rotativo.
  */
 export function useDebts(costs: CostItem[] = [], assets: Asset[] = []) {
-  const [stored, setStored] = useLocalStorage<Debt[]>(DEBTS_STORAGE_KEY, [])
+  const [stored, setStored] = useRepositoryState<Debt[]>('debts', [])
   const debts = useMemo(
     () => (Array.isArray(stored) ? stored.map(normalizeDebt) : []),
     [stored],

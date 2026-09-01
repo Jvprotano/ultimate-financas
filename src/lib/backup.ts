@@ -1,80 +1,62 @@
-// ---------------------------------------------------------------------------
-// Backup dos dados locais.
-// As cópias automáticas usam o prefixo `ufbk_` justamente para NÃO casarem com
-// `uf_`: senão cada backup entraria no backup seguinte e o storage cresceria
-// sozinho até estourar a cota.
-//
-// O prefixo `uf_` é mantido mesmo após o rename para FinTano: trocar as chaves
-// apagaria, na prática, os dados existentes de quem já usa o app.
-// ---------------------------------------------------------------------------
+import {
+  backupV7ToRepository,
+  inspectBackupPayload,
+  repositoryToBackupV7,
+  type LegacyBackupPayloadLike,
+} from '../data/backupV7'
+import type { BackupInspection, FinTanoBackupV7 } from '../data/backupSchemaV7'
+import {
+  LEGACY_DOMAIN_KEYS,
+  REPOSITORY_STORAGE_KEY,
+  readRepositoryDocument,
+  removeLegacyDomainKeys,
+  writeRepositoryDocument,
+} from '../data/repository'
 
 export const APP_STORAGE_PREFIX = 'uf_'
 export const BACKUP_STORAGE_PREFIX = 'ufbk_'
-export const AUTO_BACKUP_KEY = 'ufbk_auto_v1'
+export const AUTO_BACKUP_KEY = 'ufbk_auto_v2'
 const AUTO_BACKUP_INTERVAL_DAYS = 7
 const AUTO_BACKUP_KEEP = 3
 const RESTORE_PROBE_KEY = 'fintano_restore_probe'
 const MAX_BACKUP_BYTES = 4 * 1024 * 1024
 
-export interface BackupPayload {
-  app?: string
-  version?: number
-  exportedAt?: string
-  localStorage?: Record<string, string>
-}
+export type BackupPayload = FinTanoBackupV7 | LegacyBackupPayloadLike
 
 export interface AutoBackup {
   createdAt: string
-  entries: Record<string, string>
+  backup: FinTanoBackupV7
 }
 
 export interface RestoreResult {
   ok: boolean
-  restoredKeys: number
+  restoredRecords: number
   error?: string
 }
 
-export function getAppStorageEntries(storage: Storage = localStorage): Record<string, string> {
-  const entries: Record<string, string> = {}
-
-  for (let index = 0; index < storage.length; index += 1) {
-    const key = storage.key(index)
-    if (key?.startsWith(APP_STORAGE_PREFIX)) {
-      entries[key] = storage.getItem(key) ?? ''
-    }
-  }
-
-  return entries
+function backupRecordCount(inspection: BackupInspection): number {
+  const counts = inspection.counts
+  return (
+    counts.planningTemplates +
+    counts.cyclePlans +
+    counts.cyclesWithActuals +
+    counts.cardCharges +
+    counts.holdings +
+    counts.valuations +
+    counts.ledgerEntries +
+    counts.closures
+  )
 }
 
-function removeByPrefixes(prefixes: string[], storage: Storage): void {
-  const keysToRemove: string[] = []
-
-  for (let index = 0; index < storage.length; index += 1) {
-    const key = storage.key(index)
-    if (key && prefixes.some((prefix) => key.startsWith(prefix))) keysToRemove.push(key)
-  }
-
-  keysToRemove.forEach((key) => storage.removeItem(key))
+function byteSize(value: unknown): number {
+  return new Blob([JSON.stringify(value)]).size
 }
 
-/** Limpa o estado atual, mas preserva as cópias automáticas de recuperação. */
-export function clearAppStorage(storage: Storage = localStorage): void {
-  removeByPrefixes([APP_STORAGE_PREFIX], storage)
-}
-
-/** Remove estado atual e cópias automáticas deste navegador. */
-export function clearAllFinTanoStorage(storage: Storage = localStorage): void {
-  removeByPrefixes([APP_STORAGE_PREFIX, BACKUP_STORAGE_PREFIX], storage)
-}
-
-export function buildBackupPayload(): BackupPayload {
-  return {
-    app: 'fintano',
-    version: 6,
-    exportedAt: new Date().toISOString(),
-    localStorage: getAppStorageEntries(),
-  }
+export function buildBackupPayload(
+  storage: Storage = localStorage,
+  exportedAt = new Date().toISOString(),
+): FinTanoBackupV7 {
+  return repositoryToBackupV7(readRepositoryDocument(storage), exportedAt)
 }
 
 export function downloadBackup() {
@@ -83,47 +65,48 @@ export function downloadBackup() {
   })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
-
   link.href = url
-  link.download = `fintano-backup-${new Date().toISOString().slice(0, 10)}.json`
+  link.download = `fintano-backup-v7-${new Date().toISOString().slice(0, 10)}.json`
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
 }
 
-/**
- * A importação é deliberadamente tolerante ao campo `app`: backups antigos
- * identificados como `ultimate-financas` continuam válidos porque a fonte da
- * verdade são as chaves `uf_`.
- */
-export function readBackupEntries(payload: BackupPayload): [string, string][] {
-  const storage = payload.localStorage
-  if (!storage || typeof storage !== 'object') return []
-  const entries = Object.entries(storage).filter(
-    ([key, value]) => key.startsWith(APP_STORAGE_PREFIX) && typeof value === 'string',
-  )
-  if (entries.length === 0) return []
-
-  const serializedBytes = new Blob(entries.map(([key, value]) => `${key}${value}`)).size
-  if (serializedBytes > MAX_BACKUP_BYTES) throw new Error('Backup excede o limite de 4 MB.')
-
-  for (const [, value] of entries) {
-    JSON.parse(value)
+function removeByPrefixes(prefixes: string[], storage: Storage): void {
+  const keys: string[] = []
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index)
+    if (key && prefixes.some((prefix) => key.startsWith(prefix))) keys.push(key)
   }
-  return entries
+  keys.forEach((key) => storage.removeItem(key))
 }
 
-function writeEntries(entries: [string, string][], storage: Storage): void {
-  for (const [key, value] of entries) storage.setItem(key, value)
+/** Limpa os dados financeiros, preservando preferências visuais e cópias automáticas. */
+export function clearAppStorage(storage: Storage = localStorage): void {
+  storage.removeItem(REPOSITORY_STORAGE_KEY)
+  removeLegacyDomainKeys(storage)
+}
+
+/** Remove dados, preferências locais e cópias automáticas. */
+export function clearAllFinTanoStorage(storage: Storage = localStorage): void {
+  clearAppStorage(storage)
+  removeByPrefixes([APP_STORAGE_PREFIX, BACKUP_STORAGE_PREFIX], storage)
+}
+
+export function inspectBackup(payload: unknown): BackupInspection {
+  const inspection = inspectBackupPayload(payload)
+  if (byteSize(inspection.backup) > MAX_BACKUP_BYTES) {
+    throw new Error('Backup excede o limite de 4 MB.')
+  }
+  return inspection
 }
 
 function createAutoBackupNow(storage: Storage): boolean {
-  const entries = getAppStorageEntries(storage)
-  if (Object.keys(entries).length === 0) return true
   try {
+    const current = buildBackupPayload(storage)
     const backups = listAutoBackups(storage)
-    const next = [{ createdAt: new Date().toISOString(), entries }, ...backups].slice(
+    const next = [{ createdAt: new Date().toISOString(), backup: current }, ...backups].slice(
       0,
       AUTO_BACKUP_KEEP,
     )
@@ -134,62 +117,57 @@ function createAutoBackupNow(storage: Storage): boolean {
   }
 }
 
-/**
- * Restaura com pré-validação, cópia de segurança e rollback. Nenhum dado atual
- * é removido antes de o payload inteiro provar que é JSON válido e cabe no storage.
- */
-export function restoreEntries(
-  entries: [string, string][],
+export function restoreBackup(
+  payload: unknown,
   storage: Storage = localStorage,
 ): RestoreResult {
+  let inspection: BackupInspection
   try {
-    if (entries.length === 0) throw new Error('Backup sem dados do FinTano.')
-    for (const [key, value] of entries) {
-      if (!key.startsWith(APP_STORAGE_PREFIX) || typeof value !== 'string') {
-        throw new Error('Backup contém uma chave inválida.')
-      }
-      JSON.parse(value)
-    }
-
-    // Prova de capacidade conservadora: o payload cabe mesmo ao lado dos dados atuais.
-    storage.setItem(RESTORE_PROBE_KEY, JSON.stringify(Object.fromEntries(entries)))
+    inspection = inspectBackup(payload)
+    const errors = inspection.issues.filter((issue) => issue.severity === 'error')
+    if (errors.length) throw new Error(errors.map((issue) => issue.message).join(' '))
+    const repository = backupV7ToRepository(inspection.backup)
+    storage.setItem(RESTORE_PROBE_KEY, JSON.stringify(repository))
     storage.removeItem(RESTORE_PROBE_KEY)
   } catch (error) {
     storage.removeItem(RESTORE_PROBE_KEY)
     return {
       ok: false,
-      restoredKeys: 0,
+      restoredRecords: 0,
       error: error instanceof Error ? error.message : 'Não foi possível validar o backup.',
     }
   }
 
-  const previous = Object.entries(getAppStorageEntries(storage))
-  if (!createAutoBackupNow(storage)) {
-    return { ok: false, restoredKeys: 0, error: 'Não foi possível criar a cópia de segurança.' }
+  const previousRepository = storage.getItem(REPOSITORY_STORAGE_KEY)
+  const previousLegacy: Record<string, string> = {}
+  for (const key of Object.values(LEGACY_DOMAIN_KEYS)) {
+    const value = storage.getItem(key)
+    if (value !== null) previousLegacy[key] = value
+  }
+  if ((previousRepository || Object.keys(previousLegacy).length) && !createAutoBackupNow(storage)) {
+    return {
+      ok: false,
+      restoredRecords: 0,
+      error: 'Não foi possível criar a cópia de segurança.',
+    }
   }
 
   try {
-    clearAppStorage(storage)
-    writeEntries(entries, storage)
-    const restored = getAppStorageEntries(storage)
-    if (Object.keys(restored).length !== entries.length) {
-      throw new Error('A restauração ficou incompleta.')
+    const repository = backupV7ToRepository(inspection.backup)
+    if (!writeRepositoryDocument(repository, storage)) {
+      throw new Error('O navegador recusou a gravação do documento v7.')
     }
-    return { ok: true, restoredKeys: entries.length }
+    removeLegacyDomainKeys(storage)
+    const restored = readRepositoryDocument(storage)
+    if (restored.schemaVersion !== 7) throw new Error('A restauração ficou incompleta.')
+    return { ok: true, restoredRecords: backupRecordCount(inspection) }
   } catch (error) {
-    try {
-      clearAppStorage(storage)
-      writeEntries(previous, storage)
-    } catch {
-      return {
-        ok: false,
-        restoredKeys: 0,
-        error: 'A restauração falhou e o navegador também recusou o rollback.',
-      }
-    }
+    storage.removeItem(REPOSITORY_STORAGE_KEY)
+    if (previousRepository !== null) storage.setItem(REPOSITORY_STORAGE_KEY, previousRepository)
+    for (const [key, value] of Object.entries(previousLegacy)) storage.setItem(key, value)
     return {
       ok: false,
-      restoredKeys: 0,
+      restoredRecords: 0,
       error:
         error instanceof Error
           ? `Restauração cancelada: ${error.message}`
@@ -198,43 +176,31 @@ export function restoreEntries(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Cópias automáticas
-// ---------------------------------------------------------------------------
-
 export function listAutoBackups(storage: Storage = localStorage): AutoBackup[] {
   try {
     const raw = storage.getItem(AUTO_BACKUP_KEY)
     const parsed = raw ? (JSON.parse(raw) as AutoBackup[]) : []
-    return Array.isArray(parsed) ? parsed : []
+    return Array.isArray(parsed)
+      ? parsed.filter((item) => item && typeof item.createdAt === 'string' && item.backup)
+      : []
   } catch {
     return []
   }
 }
 
-/**
- * Guarda uma cópia se a última tiver mais de uma semana. Chamado no mount —
- * silencioso por design: se a cota estourar, o app continua funcionando.
- */
 export function maybeCreateAutoBackup(storage: Storage = localStorage): void {
   try {
-    const entries = getAppStorageEntries(storage)
-    if (Object.keys(entries).length === 0) return
-
+    if (storage.getItem(REPOSITORY_STORAGE_KEY) === null) return
     const backups = listAutoBackups(storage)
-    const last = backups[0]
-    if (last) {
-      const ageDays = (Date.now() - new Date(last.createdAt).getTime()) / (24 * 60 * 60 * 1000)
+    const latest = backups[0]
+    if (latest) {
+      const ageDays =
+        (Date.now() - new Date(latest.createdAt).getTime()) / (24 * 60 * 60 * 1000)
       if (ageDays < AUTO_BACKUP_INTERVAL_DAYS) return
     }
-
-    const next = [{ createdAt: new Date().toISOString(), entries }, ...backups].slice(
-      0,
-      AUTO_BACKUP_KEEP,
-    )
-    storage.setItem(AUTO_BACKUP_KEY, JSON.stringify(next))
+    createAutoBackupNow(storage)
   } catch {
-    // cota cheia ou storage indisponível — backup automático é best-effort
+    // Backup automático é best-effort; nunca bloqueia o uso do aplicativo.
   }
 }
 
@@ -242,7 +208,7 @@ export function restoreAutoBackup(
   createdAt: string,
   storage: Storage = localStorage,
 ): RestoreResult {
-  const backup = listAutoBackups(storage).find((item) => item.createdAt === createdAt)
-  if (!backup) return { ok: false, restoredKeys: 0, error: 'Cópia não encontrada.' }
-  return restoreEntries(Object.entries(backup.entries), storage)
+  const item = listAutoBackups(storage).find((backup) => backup.createdAt === createdAt)
+  if (!item) return { ok: false, restoredRecords: 0, error: 'Cópia não encontrada.' }
+  return restoreBackup(item.backup, storage)
 }

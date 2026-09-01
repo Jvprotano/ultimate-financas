@@ -7,7 +7,17 @@ import {
   monthsBetween,
   normalizeLedger,
   normalizeText,
+  uid,
 } from './shared'
+
+describe('uid', () => {
+  it('gera identificadores UUID estáveis para persistência e relações', () => {
+    const first = uid()
+    const second = uid()
+    expect(first).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    expect(second).not.toBe(first)
+  })
+})
 
 describe('addMonths', () => {
   it('anda dentro do ano', () => {

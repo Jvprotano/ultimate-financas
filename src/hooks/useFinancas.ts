@@ -383,6 +383,7 @@ export function useFinancas() {
         })),
         payrollInvested: investmentActuals.payroll,
         employerInvested: investmentActuals.employer,
+        employerInvestmentKnown: true,
         directInvestedAtClose: investmentActuals.directNet,
         openingBalance: investmentActuals.openingBalance,
         investmentProjectionVersion: 1,

@@ -89,9 +89,9 @@ export function HistoryTrendExplorer({ points }: { points: HistoryPoint[] }) {
     return CURRENCY_SERIES.filter((series) => selectedSeries.includes(series.id))
   }, [selectedSeries, view])
 
-  const values = data.flatMap((point) =>
-    activeSeries.map((series) => point[series.id as keyof HistoryTrendPoint] as number),
-  )
+  const values = data
+    .flatMap((point) => activeSeries.map((series) => point[series.id as keyof HistoryTrendPoint]))
+    .filter((value): value is number => typeof value === 'number')
   const domain = chartDomain(values)
   const isRate = view === 'rate'
 

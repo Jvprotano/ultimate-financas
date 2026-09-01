@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react'
-import { useLocalStorage } from './useLocalStorage'
+import { useRepositoryState } from '../data/repository'
 import type {
   CostCategory,
   CostItem,
@@ -12,50 +12,28 @@ import type {
 } from '../types'
 import {
   cloneScenario,
-  convertLegacyScenario,
   createDefaultScenario,
   moveWantInPlanningOrder,
   normalizeScenario,
-  type LegacyScenario,
 } from '../lib/scenario'
-import { nowIso, readJson, uid } from '../lib/shared'
-
-export const SCENARIOS_STORAGE_KEY = 'uf_scenarios_v3'
-export const ACTIVE_SCENARIO_STORAGE_KEY = 'uf_active_scenario_v3'
-const LEGACY_SCENARIOS_KEY = 'uf_scenarios_v2'
-const LEGACY_ACTIVE_SCENARIO_KEY = 'uf_active_scenario_v2'
+import { nowIso, uid } from '../lib/shared'
 
 function loadInitialScenarios(): FinanceScenario[] {
-  const existing = readJson<FinanceScenario[] | null>(SCENARIOS_STORAGE_KEY, null)
-  if (existing?.length) return existing.map(normalizeScenario)
-
-  const legacy = readJson<LegacyScenario[] | null>(LEGACY_SCENARIOS_KEY, null)
-  if (legacy?.length) return legacy.map(convertLegacyScenario)
-
   return [createDefaultScenario('Atual')]
 }
 
-function loadInitialActiveScenarioId(): string {
-  const scenarios = loadInitialScenarios()
-  const stored = readJson<string>(ACTIVE_SCENARIO_STORAGE_KEY, '')
-  if (scenarios.some((scenario) => scenario.id === stored)) return stored
-  const legacyActive = readJson<string>(LEGACY_ACTIVE_SCENARIO_KEY, '')
-  if (scenarios.some((scenario) => scenario.id === legacyActive)) return legacyActive
-  return scenarios[0]?.id ?? ''
-}
-
 export function useScenarios() {
-  const [storedScenarios, setScenarios] = useLocalStorage<FinanceScenario[]>(
-    SCENARIOS_STORAGE_KEY,
+  const [storedScenarios, setScenarios] = useRepositoryState<FinanceScenario[]>(
+    'scenarios',
     loadInitialScenarios,
   )
   const scenarios = useMemo(
     () => (Array.isArray(storedScenarios) ? storedScenarios.map(normalizeScenario) : []),
     [storedScenarios],
   )
-  const [activeScenarioId, setActiveScenarioId] = useLocalStorage<string>(
-    ACTIVE_SCENARIO_STORAGE_KEY,
-    loadInitialActiveScenarioId,
+  const [activeScenarioId, setActiveScenarioId] = useRepositoryState<string>(
+    'activeScenarioId',
+    '',
   )
 
   useEffect(() => {

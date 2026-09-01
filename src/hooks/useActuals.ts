@@ -1,10 +1,9 @@
 import { useCallback, useMemo } from 'react'
-import { useLocalStorage } from './useLocalStorage'
+import { useRepositoryState } from '../data/repository'
 import type { CostItem, ExtraIncomeEntry, MonthlyActuals, WantItem } from '../types'
 import { normalizeActuals, summarizeActuals } from '../lib/actuals'
 import { monthKey, uid } from '../lib/shared'
 
-const ACTUALS_STORAGE_KEY = 'uf_actuals_v1'
 type CashEntryField = 'extraIncome' | 'extraExpenses'
 
 const sortMonths = (items: MonthlyActuals[]) =>
@@ -33,7 +32,7 @@ export function useActuals(
   wants: WantItem[] = [],
   month = monthKey(),
 ) {
-  const [stored, setStored] = useLocalStorage<MonthlyActuals[]>(ACTUALS_STORAGE_KEY, [])
+  const [stored, setStored] = useRepositoryState<MonthlyActuals[]>('actuals', [])
   const months = useMemo(
     () => (Array.isArray(stored) ? stored.map(normalizeActuals) : []),
     [stored],

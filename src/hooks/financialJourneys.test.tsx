@@ -6,6 +6,7 @@ import { useHistory } from './useHistory'
 import { useInvestments } from './useInvestments'
 import type { MonthlySnapshot } from '../types'
 import type { InvestmentLedgerSource } from '../lib/investmentActuals'
+import { readRepositoryDocument } from '../data/repository'
 
 const snapshot: Omit<MonthlySnapshot, 'id' | 'closedAt'> = {
   month: '2026-08',
@@ -33,6 +34,7 @@ const snapshot: Omit<MonthlySnapshot, 'id' | 'closedAt'> = {
   ],
   payrollInvested: 0,
   employerInvested: 0,
+  employerInvestmentKnown: true,
   directInvestedAtClose: 1000,
   openingBalance: 0,
   investmentProjectionVersion: 1,
@@ -201,9 +203,8 @@ describe('jornadas financeiras persistidas', () => {
     )
 
     expect(history.result.current.points[0].invested).toBe(1_540)
-    expect(
-      JSON.parse(localStorage.getItem('uf_history_v1') ?? '[]')[0].investmentProjectionVersion,
-    ).toBe(1)
+    const persisted = readRepositoryDocument().collections.history as MonthlySnapshot[]
+    expect(persisted[0].investmentProjectionVersion).toBe(1)
 
     history.rerender({ cycleMonth: '2026-09' })
     expect(history.result.current.points[0].invested).toBe(540)

@@ -82,6 +82,8 @@ export interface MonthlySnapshot {
   payrollInvested: number
   /** Contrapartida da empresa creditada na previdência; não reduz o caixa. */
   employerInvested: number
+  /** Ausente em fechamentos antigos: zero conhecido não é o mesmo que dado desconhecido. */
+  employerInvestmentKnown: boolean
   /** Aporte líquido do livro-razão no instante do fechamento, mantido para auditoria. */
   directInvestedAtClose: number
   /** Posição de abertura registrada no mês; patrimônio, não aporte do ciclo. */

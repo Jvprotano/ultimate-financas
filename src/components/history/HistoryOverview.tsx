@@ -20,7 +20,8 @@ function ContributionRow({
   scale: number
   latest: boolean
 }) {
-  const credited = point.invested + point.employerInvested
+  const employer = point.employerInvestmentKnown ? point.employerInvested : null
+  const credited = point.invested + (employer ?? 0)
   const width = Math.min(100, (Math.abs(credited) / scale) * 100)
   const isWithdrawal = credited < -0.005
 
@@ -43,7 +44,8 @@ function ContributionRow({
             {formatCurrency(credited)}
           </strong>
           <span className="text-[10px] tabular-nums text-dark-text-muted">
-            pessoal {formatCurrency(point.invested)} · empresa {formatCurrency(point.employerInvested)}
+            pessoal {formatCurrency(point.invested)} · empresa{' '}
+            {employer === null ? 'não informada' : formatCurrency(employer)}
           </span>
         </div>
         <div
@@ -110,7 +112,9 @@ export function HistoryOverview({
   const visiblePoints = points.slice(-6)
   const contributionScale = Math.max(
     1,
-    ...visiblePoints.map((point) => Math.abs(point.invested + point.employerInvested)),
+    ...visiblePoints.map((point) =>
+      Math.abs(point.invested + (point.employerInvestmentKnown ? point.employerInvested : 0)),
+    ),
   )
   const unsecuredLiabilities = Math.max(
     0,
@@ -139,7 +143,7 @@ export function HistoryOverview({
         <p className="mt-2.5 text-[10px] leading-relaxed text-dark-text-muted">
           Alterar a competência de uma movimentação atualiza estes ciclos imediatamente. Saldos
           iniciais aparecem como posição de abertura, mas não contam como aporte. Meses antigos sem
-          contrapartida registrada permanecem em zero até serem corrigidos no fechamento.
+          contrapartida registrada aparecem como “não informada”, sem fingir que o valor foi zero.
         </p>
       </Panel>
 

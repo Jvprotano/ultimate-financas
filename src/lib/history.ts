@@ -113,6 +113,10 @@ export function normalizeSnapshot(raw: Partial<MonthlySnapshot> | undefined): Mo
     wantAllocations,
     payrollInvested,
     employerInvested: Math.max(0, finiteNumber(raw?.employerInvested)),
+    employerInvestmentKnown:
+      raw?.employerInvestmentKnown === false
+        ? false
+        : raw?.employerInvestmentKnown === true || typeof raw?.employerInvested === 'number',
     directInvestedAtClose: finiteNumber(raw?.directInvestedAtClose, invested - payrollInvested),
     openingBalance: Math.max(0, finiteNumber(raw?.openingBalance)),
     investmentProjectionVersion:

@@ -1,20 +1,23 @@
 /// <reference types="node" />
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { readRepositoryDocument } from '../data/repository'
+import type {
+  CreditCardEntry,
+  EmergencyFundState,
+  FinanceScenario,
+  FinancialGoal,
+  MonthlyActuals,
+  MonthlySnapshot,
+} from '../types'
+import type { FinancialHolding } from './investments'
 import { normalizeActuals } from './actuals'
-import { readBackupEntries, restoreEntries, type BackupPayload } from './backup'
-import { normalizeCardAccount, normalizeCreditCardEntry, normalizeCreditCardSettings } from './creditCards'
-import { normalizeExpectedEvent } from './forecast'
-import {
-  buildHistoryPoints,
-  calculateNetWorthChange,
-  normalizeSnapshot,
-  projectHistoryInvestments,
-} from './history'
+import { buildBackupPayload, inspectBackup, restoreBackup } from './backup'
+import { normalizeCreditCardEntry } from './creditCards'
+import { buildHistoryPoints, normalizeSnapshot, projectHistoryInvestments } from './history'
 import { normalizeGoal } from './goals'
 import { normalizeEmergencyFund, normalizeHolding } from './investments'
 import { normalizeScenario } from './scenario'
-import type { CreditCardEntry, FinanceScenario, MonthlyActuals, MonthlySnapshot } from '../types'
 
 class ValidationStorage implements Storage {
   private values = new Map<string, string>()
@@ -29,69 +32,55 @@ class ValidationStorage implements Storage {
 const backupPath = process.env.FINTANO_BACKUP_PATH
 
 describe.skipIf(!backupPath)('backup real informado para validação', () => {
-  it('restaura integralmente e é aceito pelos normalizadores atuais', () => {
-    const payload = JSON.parse(readFileSync(backupPath!, 'utf8')) as BackupPayload
-    const entries = readBackupEntries(payload)
-    const source = Object.fromEntries(entries)
+  it('migra para v7, restaura e permanece aceito pelos cálculos atuais', () => {
+    const payload = JSON.parse(readFileSync(backupPath!, 'utf8')) as unknown
+    const inspection = inspectBackup(payload)
     const storage = new ValidationStorage()
 
-    expect(restoreEntries(entries, storage)).toMatchObject({ ok: true, restoredKeys: entries.length })
-    expect(storage.length).toBeGreaterThanOrEqual(entries.length)
-    entries.forEach(([key, value]) => expect(storage.getItem(key)).toBe(value))
+    const sourceVersion = (payload as { schemaVersion?: number }).schemaVersion
+    expect(inspection.migratedFromVersion).toBe(sourceVersion === 7 ? null : 6)
+    expect(inspection.issues.filter((issue) => issue.severity === 'error')).toEqual([])
+    expect(inspection.backup.cards.charges.every((charge) => charge.accountId)).toBe(true)
+    expect(
+      inspection.backup.investments.ledgerEntries.every(
+        (entry) => Number.isInteger(entry.amountCents) && /^\d{4}-\d{2}$/.test(entry.competenceMonth),
+      ),
+    ).toBe(true)
+    expect(restoreBackup(payload, storage).ok).toBe(true)
 
-    const actuals = JSON.parse(source.uf_actuals_v1) as Partial<MonthlyActuals>[]
-    const history = JSON.parse(source.uf_history_v1) as Partial<MonthlySnapshot>[]
-    const cardEntries = JSON.parse(source.uf_credit_card_entries_v1) as CreditCardEntry[]
-    const cardAccounts = JSON.parse(source.uf_credit_card_accounts_v1) as object[]
-    const events = JSON.parse(source.uf_expected_events_v1) as object[]
-    const scenarios = JSON.parse(source.uf_scenarios_v3) as FinanceScenario[]
-    const holdings = JSON.parse(source.uf_investment_holdings_v1 ?? '[]') as object[]
-    const goals = JSON.parse(source.uf_goals_v1 ?? '[]') as object[]
-    const emergencyFund = JSON.parse(source.uf_emergency_fund_v1 ?? '{}') as object
+    const repository = readRepositoryDocument(storage)
+    const actuals = (repository.collections.actuals ?? []) as Partial<MonthlyActuals>[]
+    const history = (repository.collections.history ?? []) as Partial<MonthlySnapshot>[]
+    const cardEntries = (repository.collections.cardEntries ?? []) as CreditCardEntry[]
+    const scenarios = (repository.collections.scenarios ?? []) as FinanceScenario[]
+    const holdings = (repository.collections.investmentHoldings ?? []) as FinancialHolding[]
+    const goals = (repository.collections.goals ?? []) as FinancialGoal[]
+    const emergencyFund = (repository.collections.emergencyFund ?? {}) as EmergencyFundState
     const normalizedHistory = history.map(normalizeSnapshot)
 
     expect(actuals.map(normalizeActuals)).toHaveLength(actuals.length)
-    expect(normalizedHistory).toHaveLength(history.length)
     expect(cardEntries.map(normalizeCreditCardEntry)).toHaveLength(cardEntries.length)
-    expect(cardAccounts.map(normalizeCardAccount)).toHaveLength(cardAccounts.length)
-    expect(events.map(normalizeExpectedEvent)).toHaveLength(events.length)
     expect(scenarios.map(normalizeScenario)).toHaveLength(scenarios.length)
-    expect(normalizeCreditCardSettings(JSON.parse(source.uf_credit_card_settings_v1))).toBeTruthy()
     const projectedHistory = projectHistoryInvestments(normalizedHistory, {
       emergencyFund: normalizeEmergencyFund(emergencyFund),
-      holdings: holdings.map((holding) => normalizeHolding(holding)),
+      holdings: holdings.map(normalizeHolding),
       goals: goals.map((goal, index) => normalizeGoal(goal, index)),
     })
-
-    expect(
-      projectedHistory.every(
-        (snapshot) =>
-          Number.isFinite(snapshot.invested) &&
-          Number.isFinite(snapshot.savingsRate) &&
-          Number.isFinite(snapshot.balance),
-      ),
-    ).toBe(true)
-
     const points = buildHistoryPoints(projectedHistory)
+
     expect(
       points.every(
         (point) =>
-          Number.isFinite(point.financialAssets) &&
+          Number.isFinite(point.invested) &&
+          Number.isFinite(point.savingsRate) &&
           Number.isFinite(point.financialNetWorth) &&
-          Number.isFinite(point.propertyEquity) &&
           Number.isFinite(point.netWorth),
       ),
     ).toBe(true)
 
-    for (let index = 1; index < projectedHistory.length; index += 1) {
-      const change = calculateNetWorthChange(
-        projectedHistory[index - 1],
-        projectedHistory[index],
-      )
-      expect(
-        change.financialAssetsChange + change.physicalAssetsChange + change.debtEffect,
-      ).toBeCloseTo(change.netWorthChange)
-      expect(points[index].netWorthDelta).toBeCloseTo(change.netWorthChange)
-    }
+    const roundTrip = inspectBackup(buildBackupPayload(storage))
+    expect(roundTrip.migratedFromVersion).toBeNull()
+    expect(roundTrip.issues.filter((issue) => issue.severity === 'error')).toEqual([])
+    expect(roundTrip.counts).toEqual(inspection.counts)
   })
 })

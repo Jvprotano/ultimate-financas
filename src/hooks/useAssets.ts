@@ -1,17 +1,15 @@
 import { useCallback, useMemo } from 'react'
-import { useLocalStorage } from './useLocalStorage'
+import { useRepositoryState } from '../data/repository'
 import type { Asset, AssetKind } from '../types'
 import { defaultAppreciationFor, normalizeAsset } from '../lib/assets'
 import { finiteNumber, nowIso, uid } from '../lib/shared'
-
-const ASSETS_STORAGE_KEY = 'uf_assets_v1'
 
 /**
  * Bens. Guarda só a lista — o resumo (equity, juros do mês) depende das
  * dívidas e é montado em `useFinancas`, onde os dois módulos se encontram.
  */
 export function useAssets() {
-  const [stored, setStored] = useLocalStorage<Asset[]>(ASSETS_STORAGE_KEY, [])
+  const [stored, setStored] = useRepositoryState<Asset[]>('assets', [])
   const assets = useMemo(
     () => (Array.isArray(stored) ? stored.map(normalizeAsset) : []),
     [stored],

@@ -98,24 +98,40 @@ src/
     cardCycleAccounting.ts # competência do cartão × caixa da fatura
     cardImport.ts    # leitura de planilha colada
     history.ts       # snapshots mensais e estatísticas
-    backup.ts        # exportação, importação e cópias automáticas
+    backup.ts        # exportação/importação transacional e cópias automáticas
     format.ts        # moeda, meses, datas
     shared.ts        # ids, datas, livro-razão
   hooks/             # estado por domínio
     useScenarios.ts  useCreditCards.ts  useInvestments.ts  useDebts.ts
     useAssets.ts     useHistory.ts      useForecast.ts     useActuals.ts
     useFinancas.ts   # compõe os domínios e calcula o que cruza entre eles
-    useLocalStorage.ts  useKeyboardShortcuts.ts
+    useKeyboardShortcuts.ts
+  data/
+    repository.ts    # documento persistido único e acesso reativo às coleções
+    backupSchemaV7.ts # contrato público do backup, valores monetários em centavos
+    backupV7.ts      # conversores, migração e validação referencial
   context/           # FinancasProvider + hooks de leitura
   components/        # ui.tsx é o design system; um arquivo por módulo
   types/             # modelo de dados e constantes
 ```
 
-## Persistência e compatibilidade
+## Persistência, backup e migração
 
-Tudo vive no `localStorage` deste navegador — nenhum dado sai da máquina. As chaves continuam em `uf_*` mesmo após o rename para FinTano para não perder dados existentes; as cópias automáticas semanais ficam em `ufbk_*`.
+Tudo continua local ao navegador. O estado financeiro é persistido como um documento único em `fintano_data_v7`; os hooks acessam coleções desse repositório e não mantêm chaves de domínio independentes. Preferências de interface e até três cópias automáticas ficam separadas porque não fazem parte dos fatos financeiros.
 
-Backups novos são identificados como `fintano` e usam o nome `fintano-backup-AAAA-MM-DD.json`. Backups antigos do Ultimate Finanças continuam importáveis. A migração da reserva antiga cria uma posição de reserva com o mesmo saldo/livro-razão sem duplicar patrimônio.
+O backup público v7 não é um despejo do `localStorage`. Ele é um contrato de domínio legível, identificado por `app: "fintano"` e `schemaVersion: 7`, com:
+
+- valores monetários como inteiros em centavos;
+- datas em ISO e competências no formato `AAAA-MM`;
+- IDs estáveis e relações explícitas entre cartões, posições, previdência e livros-razão;
+- modelos reutilizáveis separados dos planos mensais;
+- posições de investimento separadas de suas avaliações;
+- saldos iniciais classificados sem inflar aportes;
+- fechamentos com plano, caixa, folha e marca patrimonial separados.
+
+Antes de importar, a aplicação apresenta a contagem das entidades, converte backups v6 em memória e bloqueia referências inválidas. A gravação só começa depois de validar espaço e criar uma cópia automática; falhas restauram o documento anterior. Backups novos usam o nome `fintano-backup-v7-AAAA-MM-DD.json`.
+
+O contrato completo e as regras de migração estão em [`docs/modelo-de-dados-v7.md`](docs/modelo-de-dados-v7.md).
 
 ## Licença
 

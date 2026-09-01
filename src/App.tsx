@@ -46,11 +46,10 @@ import {
   clearAppStorage,
   clearAllFinTanoStorage,
   downloadBackup,
+  inspectBackup,
   listAutoBackups,
-  readBackupEntries,
+  restoreBackup,
   restoreAutoBackup,
-  restoreEntries,
-  type BackupPayload,
 } from './lib/backup'
 
 type View = 'closing' | 'planning' | 'cards' | 'investments' | 'history' | 'forecast'
@@ -345,16 +344,41 @@ function AppShell() {
     }
 
     try {
-      const payload = JSON.parse(await file.text()) as BackupPayload
-      const entries = readBackupEntries(payload)
-      if (!entries.length) throw new Error('No FinTano keys found')
+      const payload = JSON.parse(await file.text()) as unknown
+      const inspection = inspectBackup(payload)
+      const errors = inspection.issues.filter((issue) => issue.severity === 'error')
+      if (errors.length) throw new Error(errors.map((issue) => issue.message).join(' '))
+      const warnings = inspection.issues.filter((issue) => issue.severity === 'warning')
+      const { counts } = inspection
 
       setDialog({
         title: 'Importar este backup?',
-        description: `O arquivo contém ${entries.length} registros do FinTano. Os dados atuais serão substituídos, mas uma cópia de segurança será criada antes.`,
+        description: (
+          <span className="space-y-2">
+            <span className="block">
+              {counts.planningTemplates} modelos, {counts.cyclePlans} planos mensais,{' '}
+              {counts.cardCharges} cobranças, {counts.holdings} posições e{' '}
+              {counts.closures} fechamentos foram validados.
+            </span>
+            {inspection.migratedFromVersion !== null && (
+              <span className="block text-amber-200">
+                O formato v{inspection.migratedFromVersion} será convertido para v7 antes da
+                gravação.
+              </span>
+            )}
+            {warnings.length > 0 && (
+              <span className="block text-amber-200">
+                {warnings.length} {warnings.length === 1 ? 'aviso será preservado' : 'avisos serão preservados'} no relatório de integridade.
+              </span>
+            )}
+            <span className="block">
+              Os dados atuais serão substituídos depois de uma cópia automática de segurança.
+            </span>
+          </span>
+        ),
         confirmLabel: 'Importar backup',
         onConfirm: () => {
-          const result = restoreEntries(entries)
+          const result = restoreBackup(payload)
           if (result.ok) window.location.reload()
           else showNotice('Não foi possível importar', result.error ?? 'O backup não foi restaurado.')
         },

@@ -45,7 +45,9 @@ function SnapshotEditorContent({ point, onClose }: { point: HistoryPoint; onClos
     { label: 'Plano fora do cartão', value: point.wantsPlanned, key: 'wantsPlanned' },
     { label: 'Previdência em folha', value: point.payrollInvested, key: 'payrollInvested' },
     {
-      label: 'Contrapartida da empresa',
+      label: point.employerInvestmentKnown
+        ? 'Contrapartida da empresa'
+        : 'Contrapartida da empresa (não informada)',
       value: point.employerInvested,
       key: 'employerInvested',
     },

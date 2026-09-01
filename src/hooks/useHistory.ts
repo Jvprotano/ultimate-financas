@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react'
-import { useLocalStorage } from './useLocalStorage'
+import { useRepositoryState } from '../data/repository'
 import type { MonthlySnapshot, SnapshotPatch } from '../types'
 import {
   averageMonthlyCosts,
@@ -15,10 +15,8 @@ import {
 } from '../lib/investmentActuals'
 import { monthKey, nowIso, uid } from '../lib/shared'
 
-const HISTORY_STORAGE_KEY = 'uf_history_v1'
-
 export function useHistory(cycleMonth = monthKey(), investmentSource?: InvestmentLedgerSource) {
-  const [stored, setStored] = useLocalStorage<MonthlySnapshot[]>(HISTORY_STORAGE_KEY, [])
+  const [stored, setStored] = useRepositoryState<MonthlySnapshot[]>('history', [])
   const snapshots = useMemo(
     () => (Array.isArray(stored) ? stored.map(normalizeSnapshot) : []),
     [stored],
@@ -134,6 +132,8 @@ export function useHistory(cycleMonth = monthKey(), investmentSource?: Investmen
           const merged = normalizeSnapshot({
             ...item,
             ...patch,
+            employerInvestmentKnown:
+              patch.employerInvested === undefined ? item.employerInvestmentKnown : true,
             extraIncomeEntries,
             extraExpenseEntries,
             wantAllocations,

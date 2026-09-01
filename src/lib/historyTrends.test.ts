@@ -8,6 +8,7 @@ function point(month: string, invested: number, overrides: Partial<HistoryPoint>
     month,
     invested,
     employerInvested: 0,
+    employerInvestmentKnown: true,
     costs: 4_000,
     cardPersonalTotal: 2_000,
     wants: 1_000,
@@ -92,5 +93,15 @@ describe('buildHistoryTrendPoints', () => {
     expect(visible.employerInvested).toBe(540)
     expect(visible.creditedInvested).toBe(2_230)
     expect(visible.cumulativeCredited).toBe(2_230)
+  })
+
+  it('não transforma contrapartida histórica desconhecida em zero confirmado', () => {
+    const [visible] = buildHistoryTrendPoints([
+      point('2026-07', 540, { employerInvestmentKnown: false }),
+    ], 'all')
+
+    expect(visible.employerInvested).toBeNull()
+    expect(visible.creditedInvested).toBeNull()
+    expect(visible.cumulativeCredited).toBeNull()
   })
 })

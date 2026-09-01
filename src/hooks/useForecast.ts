@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { useLocalStorage } from './useLocalStorage'
+import { useRepositoryState } from '../data/repository'
 import type { ExpectedEvent, ForecastAssumptions } from '../types'
 import {
   DEFAULT_ASSUMPTIONS,
@@ -10,12 +10,9 @@ import {
 } from '../lib/forecast'
 import { monthKey, uid } from '../lib/shared'
 
-const EVENTS_STORAGE_KEY = 'uf_expected_events_v1'
-const ASSUMPTIONS_STORAGE_KEY = 'uf_forecast_assumptions_v1'
-
 /** Eventos esperados (13º, bônus, IPVA…) e as premissas da projeção. */
 export function useForecast(cycleMonth = monthKey()) {
-  const [storedEvents, setEvents] = useLocalStorage<ExpectedEvent[]>(EVENTS_STORAGE_KEY, [])
+  const [storedEvents, setEvents] = useRepositoryState<ExpectedEvent[]>('forecastEvents', [])
   const events = useMemo(
     () =>
       (Array.isArray(storedEvents) ? storedEvents.map(normalizeExpectedEvent) : []).sort((a, b) =>
@@ -24,8 +21,8 @@ export function useForecast(cycleMonth = monthKey()) {
     [storedEvents],
   )
 
-  const [storedAssumptions, setStoredAssumptions] = useLocalStorage<ForecastAssumptions>(
-    ASSUMPTIONS_STORAGE_KEY,
+  const [storedAssumptions, setStoredAssumptions] = useRepositoryState<ForecastAssumptions>(
+    'forecastAssumptions',
     DEFAULT_ASSUMPTIONS,
   )
   const assumptions = useMemo(
