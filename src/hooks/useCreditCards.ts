@@ -52,7 +52,11 @@ function normalizeEntriesForDueMonth(entries: CreditCardEntry[], currentDueMonth
 
 function syncEntriesForDueMonth(entries: CreditCardEntry[], currentDueMonth: string) {
   const normalized = normalizeEntriesForDueMonth(entries, currentDueMonth)
-  return normalizeEntriesForDueMonth(syncGeneratedNextEntries(normalized), currentDueMonth)
+  // A próxima fatura é formada no mês em que a fatura atual vence.
+  return normalizeEntriesForDueMonth(
+    syncGeneratedNextEntries(normalized, currentDueMonth),
+    currentDueMonth,
+  )
 }
 
 /**

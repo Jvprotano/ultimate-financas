@@ -116,6 +116,50 @@ describe('jornadas financeiras persistidas', () => {
     expect(localStorage.getItem('uf_history_v1')).toBeNull()
   })
 
+  it('mantém a data da assinatura sincronizada ao editar e virar a fatura', () => {
+    const cards = renderHook(() => useCreditCards())
+    act(() => {
+      cards.result.current.setSettings({
+        paymentDate: '05/10',
+        personalSpendingLimit: 1_500,
+        currentDueMonth: '2026-10',
+      })
+    })
+    act(() => {
+      cards.result.current.addEntry({
+        cycle: 'current',
+        description: 'YouTube Premium',
+        purchaseDate: '01/09',
+        cardName: 'Itaú',
+        amount: 24.9,
+        personalAmount: 24.9,
+        remainingAmount: 0,
+        isRecurring: true,
+      })
+    })
+
+    const currentId = cards.result.current.entries.find(
+      (entry) => entry.cycle === 'current' && entry.description === 'YouTube Premium',
+    )?.id
+    expect(currentId).toBeTruthy()
+    expect(
+      cards.result.current.entries.find((entry) => entry.cycle === 'next')?.purchaseDate,
+    ).toBe('01/10')
+
+    act(() => cards.result.current.updateEntry(currentId!, { purchaseDate: '15/09' }))
+    expect(
+      cards.result.current.entries.find((entry) => entry.cycle === 'next')?.purchaseDate,
+    ).toBe('15/10')
+
+    act(() => cards.result.current.payInvoice())
+    expect(
+      cards.result.current.entries.find((entry) => entry.cycle === 'current')?.purchaseDate,
+    ).toBe('15/10')
+    expect(
+      cards.result.current.entries.find((entry) => entry.cycle === 'next')?.purchaseDate,
+    ).toBe('15/11')
+  })
+
   it('antecipa de uma vez todas as parcelas restantes do cartão', () => {
     const cards = renderHook(() => useCreditCards())
     act(() => {
